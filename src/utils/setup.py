@@ -1,5 +1,3 @@
-from typing import Union
-
 import os
 
 from omegaconf import DictConfig, OmegaConf
@@ -17,8 +15,6 @@ from transformers import (
 )
 
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
-
-from ..models import *
 
 
 class SetUp:
@@ -53,32 +49,17 @@ class SetUp:
 
     def get_model(
         self,
-    ) -> Union[MixLlamaForCausalLM, DeepMixLlamaForCausalLM, PreTrainedModel]:
+    ) -> PreTrainedModel:
+        device_map = None
         quantization_config = None
         if self.config.is_quantized:
             quantization_config = BitsAndBytesConfig(**self.config.quantization_config)
 
-        if self.config.mix_type == "mix":
-            model = MixLlamaForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=self.config.model_path,
-                model_names=self.config.model_names,
-                initialize=self.config.initialize,
-                quantization_config=quantization_config,
-            )
-        elif self.config.mix_type == "deep_mix":
-            model = DeepMixLlamaForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=self.config.model_path,
-                model_names=self.config.model_names,
-                initialize=self.config.initialize,
-                mix_interval=self.config.mix_interval,
-                quantization_config=quantization_config,
-            )
-        else:
-            model = AutoModelForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=self.config.pretrained_model_name,
-                device_map=None,
-                quantization_config=quantization_config,
-            )
+        model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=self.config.pretrained_model_name,
+            device_map=device_map,
+            quantization_config=quantization_config,
+        )
 
         if self.config.is_quantized and self.config.quantization_config.get(
             "load_in_4bit",
