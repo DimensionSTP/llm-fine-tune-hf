@@ -53,6 +53,9 @@ class SetUp:
         device_map = None
         quantization_config = None
         if self.config.is_quantized:
+            device_map = {
+                "": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))
+            }
             quantization_config = BitsAndBytesConfig(**self.config.quantization_config)
 
         model = AutoModelForCausalLM.from_pretrained(
