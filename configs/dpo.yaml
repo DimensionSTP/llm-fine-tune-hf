@@ -6,7 +6,7 @@ defaults:
   - deepspeed: ds_config
   - hydra: hydra
 
-package_name: merge-up-slm
+package_name: llm-fine-tune-hf
 project_dir: ${oc.env:PROJECT_DIR}/${package_name}
 connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
 
@@ -46,16 +46,9 @@ merged_model_path: ${connected_dir}/merged/models/${pretrained_model_name}
 max_length: 4096
 
 user_name: ${oc.env:USER_NAME}
-model_detail: SmolLM2-135M-135M-Instruct
-upload_tag: merge-up
-
-mix_type: mix
+model_detail: ${model_type}
+upload_tag: dpo
 model_path: ${user_name}/${model_detail}-${upload_tag}
-model_names:
-  - ${pretrained_model_name}
-  - HuggingFaceTB/SmolLM2-135M-Instruct
-initialize: true
-mix_interval: 3
 
 is_quantized: false
 quantization_config:
@@ -104,7 +97,7 @@ length_info: max_length=${max_length}
 save_detail: ${model_detail}-is_sft=${is_sft}-is_quantized=${is_quantized}-is_peft=${is_peft}-${length_info}-${total_batch_size}
 logging_name: ${save_detail}-lr${lr}
 
-output_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${mix_type}/${save_detail}
+output_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}
 save_strategy: steps
 save_total_limit: -1
 
