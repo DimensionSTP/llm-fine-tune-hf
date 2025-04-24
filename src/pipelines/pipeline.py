@@ -15,10 +15,12 @@ from ..utils import SetUp
 def train(
     config: DictConfig,
 ) -> None:
-    wandb.init(
-        project=config.project_name,
-        name=config.logging_name,
-    )
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    if local_rank == 0:
+        wandb.init(
+            project=config.project_name,
+            name=config.logging_name,
+        )
 
     if "seed" in config:
         set_seed(config.seed)
@@ -74,15 +76,17 @@ def train(
         )
         trainer.save_model()
 
-        wandb.run.alert(
-            title="Training Complete",
-            text="Training process has successfully finished.",
-            level="INFO",
-        )
+        if local_rank == 0:
+            wandb.run.alert(
+                title="Training Complete",
+                text="Training process has successfully finished.",
+                level="INFO",
+            )
     except Exception as e:
-        wandb.run.alert(
-            title="Training Error",
-            text="An error occurred during training",
-            level="ERROR",
-        )
+        if local_rank == 0:
+            wandb.run.alert(
+                title="Training Error",
+                text="An error occurred during training",
+                level="ERROR",
+            )
         raise e
