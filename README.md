@@ -3,14 +3,14 @@
 ## For (s)LLM model scaling
 
 ### Dataset
-Tulu sampling dataset(preprocessed as instruction, input, and response)
+Any Structured Datasets
 
 ### Quick setup
 
 ```bash
 # clone project
-git clone https://github.com/DimensionSTP/merge-up-slm.git
-cd merge-up-slm
+git clone https://github.com/DimensionSTP/llm-fine-tune-hf.git
+cd llm-fine-tune-hf
 
 # [OPTIONAL] create conda environment
 conda create -n myenv python=3.10 -y
