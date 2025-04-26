@@ -1,5 +1,5 @@
 _target_: trl.DPOConfig
-use_liger_kernel: true
+use_liger_kernel: false
 max_length: ${max_length}
 output_dir: ${output_dir}
 do_eval: ${use_validation}
