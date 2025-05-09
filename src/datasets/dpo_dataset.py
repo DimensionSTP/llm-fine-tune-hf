@@ -16,6 +16,7 @@ class StructuralDataset(Dataset):
         data_path: str,
         split: str,
         split_ratio: float,
+        is_strict_split: bool,
         seed: int,
         dataset_name: str,
         dataset_format: str,
@@ -39,6 +40,7 @@ class StructuralDataset(Dataset):
         self.data_path = data_path
         self.split = split
         self.split_ratio = split_ratio
+        self.is_strict_split = is_strict_split
         self.seed = seed
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
@@ -173,17 +175,19 @@ class StructuralDataset(Dataset):
             )
             data = pd.read_parquet(full_data_path)
             data = data.fillna("_")
-        else:
-            raise ValueError(f"Inavalid split: {self.split}")
 
-        if self.split == "val":
-            _, val_data = train_test_split(
+            train_data, val_data = train_test_split(
                 data,
                 test_size=self.split_ratio,
                 random_state=self.seed,
                 shuffle=True,
             )
-            data = val_data
+            if self.split == "train" and self.is_strict_split:
+                data = train_data
+            else:
+                data = val_data
+        else:
+            raise ValueError(f"Inavalid split: {self.split}")
 
         instructions = (
             data[self.instruction_column_name].apply(lambda x: x.strip()).tolist()
@@ -307,6 +311,7 @@ class ConversationalDataset(StructuralDataset):
         data_path: str,
         split: str,
         split_ratio: float,
+        is_strict_split: bool,
         seed: int,
         dataset_name: str,
         dataset_format: str,
@@ -328,6 +333,7 @@ class ConversationalDataset(StructuralDataset):
         self.data_path = data_path
         self.split = split
         self.split_ratio = split_ratio
+        self.is_strict_split = is_strict_split
         self.seed = seed
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
@@ -454,17 +460,19 @@ class ConversationalDataset(StructuralDataset):
             )
             data = pd.read_parquet(full_data_path)
             data = data.fillna("_")
-        else:
-            raise ValueError(f"Inavalid split: {self.split}")
 
-        if self.split == "val":
-            _, val_data = train_test_split(
+            train_data, val_data = train_test_split(
                 data,
                 test_size=self.split_ratio,
                 random_state=self.seed,
                 shuffle=True,
             )
-            data = val_data
+            if self.split == "train" and self.is_strict_split:
+                data = train_data
+            else:
+                data = val_data
+        else:
+            raise ValueError(f"Inavalid split: {self.split}")
 
         choices = data[self.chosen_column_name].tolist()
         rejections = data[self.rejected_column_name].tolist()
