@@ -3,6 +3,7 @@ structural:
   data_path: ${connected_dir}/data
   split: ${split.train}
   split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
@@ -27,6 +28,7 @@ conversational:
   data_path: ${connected_dir}/data
   split: ${split.train}
   split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
