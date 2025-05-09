@@ -12,7 +12,7 @@ module add compilers/cuda/12.4 compilers/gcc/10.2.0 libraries/nccl/2.21.5
 source activate myenv
 
 data_type="structural"
-split_ratio=1e-4
+split_ratio=1e-2
 dataset_name="tulu"
 is_sft=False
 is_preprocessed=False

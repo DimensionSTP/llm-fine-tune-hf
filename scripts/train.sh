@@ -1,7 +1,7 @@
 #!/bin/bash
 
 data_type="structural"
-split_ratio=1e-4
+split_ratio=1e-2
 dataset_name="tulu"
 is_sft=False
 is_preprocessed=False
