@@ -24,6 +24,7 @@ workers_ratio: 8
 use_all_workers: false
 
 split_ratio: 1e-2
+is_strict_split: true
 
 dataset_name: tulu
 dataset_format: parquet
