@@ -13,26 +13,28 @@ source activate myenv
 
 data_type="structural"
 split_ratio=1e-2
+is_strict_split=False
 dataset_name="tulu"
 is_sft=False
 is_preprocessed=False
 strategy="deepspeed"
-upload_user="HuggingFaceTB"
-model_type="SmolLM2-135M-Instruct"
-left_padding=False
+upload_user="Qwen"
+model_type="Qwen3-8B"
+left_padding=True
+is_enable_thinking=False
 is_quantized=False
 is_peft=False
-max_length=4096
+max_length=2048
 is_bf16=True
-batch_size=4
-eval_batch_size=4
-gradient_accumulation_steps=4
-dpo_beta=0.5
-lr=3e-7
+batch_size=8
+eval_batch_size=8
+gradient_accumulation_steps=2
+dpo_beta=0.1
+lr=5e-7
 weight_decay=1e-1
 warmup_ratio=5e-2
-epoch=5
-step=100
+epoch=2
+step=250
 workers_ratio=8
 use_all_workers=False
 
@@ -40,6 +42,7 @@ if [ "$strategy" = "deepspeed" ]; then
     deepspeed main.py --config-name=dpo.yaml mode=train \
         data_type=$data_type \
         split_ratio=$split_ratio \
+        is_strict_split=$is_strict_split \
         dataset_name=$dataset_name \
         is_sft=$is_sft \
         is_preprocessed=$is_preprocessed \
@@ -47,6 +50,7 @@ if [ "$strategy" = "deepspeed" ]; then
         upload_user=$upload_user \
         model_type=$model_type \
         left_padding=$left_padding \
+        is_enable_thinking=$is_enable_thinking \
         is_quantized=$is_quantized \
         is_peft=$is_peft \
         max_length=$max_length \
@@ -66,6 +70,7 @@ else
     python main.py --config-name=dpo.yaml mode=train \
         data_type=$data_type \
         split_ratio=$split_ratio \
+        is_strict_split=$is_strict_split \
         dataset_name=$dataset_name \
         is_sft=$is_sft \
         is_preprocessed=$is_preprocessed \
@@ -73,6 +78,7 @@ else
         upload_user=$upload_user \
         model_type=$model_type \
         left_padding=$left_padding \
+        is_enable_thinking=$is_enable_thinking \
         is_quantized=$is_quantized \
         is_peft=$is_peft \
         max_length=$max_length \

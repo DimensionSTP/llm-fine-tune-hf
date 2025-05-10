@@ -5,15 +5,15 @@ dataset_name="tulu"
 is_sft=False
 is_preprocessed=False
 strategy="deepspeed"
-upload_user="HuggingFaceTB"
-model_type="SmolLM2-135M-Instruct"
-model_detail="SmolLM2-135M-Instruct"
-upload_tag="merge-up"
+upload_user="Qwen"
+model_type="Qwen3-8B"
+model_detail="Qwen3-8B"
+upload_tag="sft"
 is_quantized=False
 is_peft=False
 max_length=4096
 batch_size=16
-gradient_accumulation_steps=8
+gradient_accumulation_steps=1
 
 python $path/upload_all_to_hf_hub.py \
     dataset_name=$dataset_name \
