@@ -35,6 +35,7 @@ class StructuralDataset(Dataset):
         custom_data_encoder_path: str,
         reference_data_encoder_name: str,
         left_padding: bool,
+        is_enable_thinking: bool,
         max_length: int,
     ) -> None:
         self.data_path = data_path
@@ -56,6 +57,7 @@ class StructuralDataset(Dataset):
         self.num_devices = num_devices
         self.batch_size = batch_size
         self.pretrained_model_name = pretrained_model_name
+
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
         else:
@@ -73,10 +75,13 @@ class StructuralDataset(Dataset):
 
         if self.data_encoder.pad_token_id is None:
             self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
+
         if left_padding:
             self.data_encoder.padding_side = "left"
         else:
             self.data_encoder.padding_side = "right"
+
+        self.is_enable_thinking = is_enable_thinking
 
         dataset = self.get_dataset()
         self.instructions = dataset["instructions"]
@@ -230,6 +235,7 @@ class StructuralDataset(Dataset):
             conversation=conversation,
             tokenize=False,
             add_generation_prompt=False,
+            enable_thinking=self.is_enable_thinking,
         )
         return prompt
 
@@ -328,6 +334,7 @@ class ConversationalDataset(StructuralDataset):
         custom_data_encoder_path: str,
         reference_data_encoder_name: str,
         left_padding: bool,
+        is_enable_thinking: bool,
         max_length: int,
     ) -> None:
         self.data_path = data_path
@@ -347,6 +354,7 @@ class ConversationalDataset(StructuralDataset):
         self.num_devices = num_devices
         self.batch_size = batch_size
         self.pretrained_model_name = pretrained_model_name
+
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
         else:
@@ -364,10 +372,13 @@ class ConversationalDataset(StructuralDataset):
 
         if self.data_encoder.pad_token_id is None:
             self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
+
         if left_padding:
             self.data_encoder.padding_side = "left"
         else:
             self.data_encoder.padding_side = "right"
+
+        self.is_enable_thinking = is_enable_thinking
 
         dataset = self.get_dataset()
         self.choices = dataset["choices"]
@@ -508,5 +519,6 @@ class ConversationalDataset(StructuralDataset):
             conversation=preprocessed_conversation,
             tokenize=False,
             add_generation_prompt=False,
+            enable_thinking=self.is_enable_thinking,
         )
         return prompt
