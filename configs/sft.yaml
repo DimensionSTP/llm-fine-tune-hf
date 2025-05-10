@@ -24,7 +24,7 @@ workers_ratio: 8
 use_all_workers: false
 
 split_ratio: 1e-2
-is_strict_split: true
+is_strict_split: false
 
 dataset_name: tulu
 dataset_format: parquet
@@ -37,12 +37,13 @@ conversation_column_name: messages
 role_column_name: role
 content_column_name: content
 assistant_column_name: assistant
-upload_user: HuggingFaceTB
-model_type: SmolLM2-135M-Instruct
+upload_user: Qwen
+model_type: Qwen3-8B
 pretrained_model_name: ${upload_user}/${model_type}
 custom_data_encoder_path: ${connected_dir}/merged/data_encoders/${pretrained_model_name}
-reference_data_encoder_name: HuggingFaceTB/SmolLM2-135M-Instruct
-left_padding: false
+reference_data_encoder_name: Qwen/Qwen3-8B
+left_padding: true
+is_enable_thinking: false
 merged_model_path: ${connected_dir}/merged/models/${pretrained_model_name}
 max_length: 4096
 
@@ -72,7 +73,7 @@ gradient_checkpointing_kwargs:
   use_reentrant: false
 
 optim: paged_adamw_32bit
-lr: 3e-5
+lr: 5e-6
 weight_decay: 1e-1
 
 scheduler_type: cosine
@@ -82,10 +83,10 @@ devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
 logging_steps: 10
 is_bf16: true
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 1
 max_grad_norm: 1
-epoch: 5
-step: 100
+epoch: 2
+step: 250
 
 model_name: CausalLM-CPT
 mode: train
