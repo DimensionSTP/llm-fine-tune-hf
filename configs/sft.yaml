@@ -88,7 +88,7 @@ max_grad_norm: 1
 epoch: 2
 step: 250
 
-model_name: CausalLM-CPT
+model_name: CausalLM-SFT
 mode: train
 
 project_name: ${model_name}-${dataset_name}-${mode}
