@@ -1,5 +1,5 @@
 structural:
-  _target_: src.datasets.CPTStructuralDataset
+  _target_: src.datasets.SFTStructuralDataset
   data_path: ${connected_dir}/data
   split: ${split.train}
   split_ratio: ${split_ratio}
@@ -25,7 +25,7 @@ structural:
   max_length: ${max_length}
 
 conversational:
-  _target_: src.datasets.CPTConversationalDataset
+  _target_: src.datasets.SFTConversationalDataset
   data_path: ${connected_dir}/data
   split: ${split.train}
   split_ratio: ${split_ratio}
