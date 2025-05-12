@@ -140,7 +140,7 @@ class StructuralDataset(Dataset):
             )
             if self.split == "train" and self.is_strict_split:
                 data = train_data
-            else:
+            if self.split == "val":
                 data = val_data
         else:
             raise ValueError(f"Inavalid split: {self.split}")
@@ -382,7 +382,7 @@ class ConversationalDataset(StructuralDataset):
             )
             if self.split == "train" and self.is_strict_split:
                 data = train_data
-            else:
+            if self.split == "val":
                 data = val_data
         else:
             raise ValueError(f"Inavalid split: {self.split}")
