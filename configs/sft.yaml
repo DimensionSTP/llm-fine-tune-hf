@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - dataset: cpt_dataset
+  - dataset: sft_dataset
   - training_arguments: sft_config
   - trainer: sft_trainer
   - deepspeed: ds_config
