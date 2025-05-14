@@ -108,7 +108,11 @@ resume_from_checkpoint: null
 use_validation: true
 eval_strategy: epoch
 
-dus_hidden_layers: 36
+precision: bf16
+dus_hidden_layers: 42
+wus_hidden_scale: 2
+num_safetensors: 5
+
 korean_model_name: beomi/OPEN-SOLAR-KO-10.7B
 reasoning_model_name: Qwen/QwQ-32B
 reasoning_tokens:
