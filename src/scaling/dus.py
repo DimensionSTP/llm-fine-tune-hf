@@ -139,7 +139,7 @@ def depth_upscale(
     api.upload_folder(
         repo_id=repo_id,
         folder_path=save_dir,
-        commit_message=f"Upload DUS-{dus_hiddens}layers model",
+        commit_message=f"Upload {model_name} model",
         token=token,
         repo_type="model",
     )
