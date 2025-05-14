@@ -64,7 +64,6 @@ def depth_upscale(
 
     model_config._name_or_path = repo_id
     model_config.torch_dtype = torch_dtype
-
     model_config.num_hidden_layers = dus_hiddens
     model_config.save_pretrained(save_dir)
 
