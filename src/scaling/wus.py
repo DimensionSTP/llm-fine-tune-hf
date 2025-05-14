@@ -36,7 +36,9 @@ def width_upscale(
     config: DictConfig,
 ) -> None:
     scaling_factor = config.wus_hidden_scale
-    model_name = f"{config.model_type}-WUS-{scaling_factor}x"
+    scaling_method = config.wus_scaling_method
+    attention_scaling = config.wus_attention_scaling
+    model_name = f"{config.model_type}-WUS-{scaling_method}-{attention_scaling}-{scaling_factor}x"
     repo_id = f"{config.user_name}/{model_name}"
 
     save_dir = f"{config.connected_dir}/wus/{model_name}"
@@ -72,8 +74,19 @@ def width_upscale(
 
     scaled_hidden_size = int(original_hidden_size * scaling_factor)
     scaled_intermediate_size = int(original_intermediate_size * scaling_factor)
-    scaled_num_attention_heads = int(original_num_attention_heads * scaling_factor)
-    scaled_num_key_value_heads = int(original_num_key_value_heads * scaling_factor)
+
+    if attention_scaling == "heads":
+        scaled_num_attention_heads = int(original_num_attention_heads * scaling_factor)
+        scaled_num_key_value_heads = int(original_num_key_value_heads * scaling_factor)
+        head_dim = original_hidden_size // original_num_attention_heads
+    elif attention_scaling == "dims":
+        scaled_num_attention_heads = original_num_attention_heads
+        scaled_num_key_value_heads = original_num_key_value_heads
+        head_dim = int(
+            (original_hidden_size // original_num_attention_heads) * scaling_factor
+        )
+    else:
+        raise ValueError(f"Invalid attention scaling method: {attention_scaling}")
 
     model_config._name_or_path = repo_id
     model_config.torch_dtype = torch_dtype
@@ -81,6 +94,10 @@ def width_upscale(
     model_config.intermediate_size = scaled_intermediate_size
     model_config.num_attention_heads = scaled_num_attention_heads
     model_config.num_key_value_heads = scaled_num_key_value_heads
+
+    if hasattr(model_config, "head_dim"):
+        model_config.head_dim = head_dim
+
     model_config.save_pretrained(save_dir)
 
     model = AutoModelForCausalLM.from_pretrained(config.pretrained_model_name)
@@ -97,9 +114,17 @@ def width_upscale(
                     device=tensor.device,
                 )
 
-                for i in range(original_hidden_size):
-                    for j in range(int(scaling_factor)):
-                        new_tensor[:, i * int(scaling_factor) + j] = tensor[:, i]
+                if scaling_method == "interleaving":
+                    for i in range(original_hidden_size):
+                        for j in range(int(scaling_factor)):
+                            new_tensor[:, i * int(scaling_factor) + j] = tensor[:, i]
+                elif scaling_method == "concat":
+                    for i in range(int(scaling_factor)):
+                        new_tensor[
+                            :, i * original_hidden_size : (i + 1) * original_hidden_size
+                        ] = tensor
+                else:
+                    raise ValueError(f"Invalid scaling method: {scaling_method}")
             else:
                 new_tensor = tensor.clone()
 
@@ -123,12 +148,24 @@ def width_upscale(
                 device=tensor.device,
             )
 
-            for i in range(int(scaling_factor)):
-                for j in range(int(scaling_factor)):
-                    new_tensor[
-                        i * old_out_dim : (i + 1) * old_out_dim,
-                        j * old_in_dim : (j + 1) * old_in_dim,
-                    ] = tensor
+            if scaling_method == "interleaving":
+                for i in range(old_out_dim):
+                    for j in range(old_in_dim):
+                        for s_i in range(int(scaling_factor)):
+                            for s_j in range(int(scaling_factor)):
+                                new_tensor[
+                                    i * int(scaling_factor) + s_i,
+                                    j * int(scaling_factor) + s_j,
+                                ] = tensor[i, j]
+            elif scaling_method == "concat":
+                for i in range(int(scaling_factor)):
+                    for j in range(int(scaling_factor)):
+                        new_tensor[
+                            i * old_out_dim : (i + 1) * old_out_dim,
+                            j * old_in_dim : (j + 1) * old_in_dim,
+                        ] = tensor
+            else:
+                raise ValueError(f"Invalid scaling method: {scaling_method}")
 
         elif tensor.dim() == 1:
             new_size = int(tensor.size(0) * scaling_factor)
@@ -138,9 +175,15 @@ def width_upscale(
                 device=tensor.device,
             )
 
-            for i in range(tensor.size(0)):
-                for j in range(int(scaling_factor)):
-                    new_tensor[i * int(scaling_factor) + j] = tensor[i]
+            if scaling_method == "interleaving":
+                for i in range(tensor.size(0)):
+                    for j in range(int(scaling_factor)):
+                        new_tensor[i * int(scaling_factor) + j] = tensor[i]
+            elif scaling_method == "concat":
+                for i in range(int(scaling_factor)):
+                    new_tensor[i * tensor.size(0) : (i + 1) * tensor.size(0)] = tensor
+            else:
+                raise ValueError(f"Invalid scaling method: {scaling_method}")
 
         else:
             new_tensor = tensor.clone()
@@ -199,7 +242,7 @@ def width_upscale(
     api.upload_folder(
         repo_id=repo_id,
         folder_path=save_dir,
-        commit_message=f"Upload WUS-{scaling_factor}x model",
+        commit_message=f"Upload {model_name} model",
         token=token,
         repo_type="model",
     )
