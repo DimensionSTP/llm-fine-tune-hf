@@ -35,7 +35,11 @@ from omegaconf import DictConfig
 def depth_upscale(
     config: DictConfig,
 ) -> None:
-    save_dir = f"{config.connected_dir}/dus/{config.model_detail}"
+    dus_hiddens = config.dus_hidden_layers
+    model_name = f"{config.model_type}-DUS-{dus_hiddens}layers"
+    repo_id = f"{config.user_name}/{model_name}"
+
+    save_dir = f"{config.connected_dir}/dus/{model_name}"
     os.makedirs(
         save_dir,
         exist_ok=True,
@@ -57,16 +61,16 @@ def depth_upscale(
     tokenizer.save_pretrained(save_dir)
     model_config = AutoConfig.from_pretrained(config.pretrained_model_name)
     original_hidden_layers = model_config.num_hidden_layers
-    model_config._name_or_path = (
-        f"{config.user_name}/{config.model_detail}-DUS-{config.dus_hidden_layers}layers"
-    )
+
+    model_config._name_or_path = repo_id
     model_config.torch_dtype = torch_dtype
-    model_config.num_hidden_layers = config.dus_hidden_layers
+
+    model_config.num_hidden_layers = dus_hiddens
     model_config.save_pretrained(save_dir)
 
     model = AutoModelForCausalLM.from_pretrained(config.pretrained_model_name)
 
-    difference = config.dus_hidden_layers - original_hidden_layers
+    difference = dus_hiddens - original_hidden_layers
     lower_arrangement = list(range(0, (original_hidden_layers + difference) // 2))
     upper_arrangement = list(
         range((original_hidden_layers - difference) // 2, original_hidden_layers)
@@ -85,7 +89,7 @@ def depth_upscale(
             ]
 
     keys = list(state_dict.keys())
-    num_splits = config.num_safetensors
+    num_splits = config.num_safetensors if hasattr(config, "num_safetensors") else 1
     split_size = len(keys) // num_splits
     total_size = sum(
         param.numel() * param.element_size() for param in state_dict.values()
@@ -125,9 +129,6 @@ def depth_upscale(
     api = HfApi()
     token = HfFolder.get_token()
 
-    repo_id = (
-        f"{config.user_name}/{config.model_detail}-DUS-{config.dus_hidden_layers}layers"
-    )
     api.create_repo(
         repo_id=repo_id,
         token=token,
@@ -137,9 +138,9 @@ def depth_upscale(
     )
 
     api.upload_folder(
-        repo_id=f"{config.user_name}/{config.model_detail}-DUS-{config.dus_hidden_layers}layers",
+        repo_id=repo_id,
         folder_path=save_dir,
-        commit_message=f"Upload DUS-{config.dus_hidden_layers}layers model",
+        commit_message=f"Upload DUS-{dus_hiddens}layers model",
         token=token,
         repo_type="model",
     )
