@@ -109,6 +109,8 @@ eval_strategy: epoch
 precision: bf16
 dus_hidden_layers: 42
 wus_hidden_scale: 2
+wus_scaling_method: interleaving
+wus_attention_scaling: heads
 num_safetensors: 5
 
 korean_model_name: beomi/OPEN-SOLAR-KO-10.7B
