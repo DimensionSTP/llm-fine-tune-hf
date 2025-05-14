@@ -1,10 +1,10 @@
 #!/bin/bash
 
 path="src/scaling"
-upload_user="HuggingFaceTB"
-model_type="SmolLM2-360M-Instruct"
+upload_user="Qwen"
+model_type="Qwen3-8B"
 precision="bf16"
-dus_hidden_layers=36
+dus_hidden_layers=42
 num_safetensors=1
 
 python $path/dus.py \
