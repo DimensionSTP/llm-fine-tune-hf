@@ -68,23 +68,20 @@ def width_upscale(
         "num_key_value_heads",
         model_config.num_attention_heads,
     )
+    original_vocab_size = model_config.vocab_size
 
     model_config._name_or_path = repo_id
     model_config.torch_dtype = torch_dtype
 
-    model_config.hidden_size = int(original_hidden_size * scaling_factor)
-    model_config.intermediate_size = int(original_intermediate_size * scaling_factor)
-    model_config.num_attention_heads = int(
-        original_num_attention_heads * scaling_factor
-    )
-    model_config.num_key_value_heads = int(
-        original_num_key_value_heads * scaling_factor
-    )
+    scaled_hidden_size = int(original_hidden_size * scaling_factor)
+    scaled_intermediate_size = int(original_intermediate_size * scaling_factor)
+    scaled_num_attention_heads = int(original_num_attention_heads * scaling_factor)
+    scaled_num_key_value_heads = int(original_num_key_value_heads * scaling_factor)
 
-    if hasattr(model_config, "head_dim"):
-        model_config.head_dim = (
-            model_config.hidden_size // model_config.num_attention_heads
-        )
+    model_config.hidden_size = scaled_hidden_size
+    model_config.intermediate_size = scaled_intermediate_size
+    model_config.num_attention_heads = scaled_num_attention_heads
+    model_config.num_key_value_heads = scaled_num_key_value_heads
 
     model_config.save_pretrained(save_dir)
 
@@ -95,29 +92,26 @@ def width_upscale(
     for key, tensor in tqdm(state_dict.items(), desc="Scaling weights"):
         if "embed_tokens" in key or "lm_head" in key:
             if tensor.dim() == 2:
-                hidden_dim = tensor.size(1) if "embed_tokens" in key else tensor.size(0)
-                new_hidden_dim = int(hidden_dim * scaling_factor)
-
                 if "embed_tokens" in key:
                     new_tensor = torch.zeros(
-                        tensor.size(0),
-                        new_hidden_dim,
+                        original_vocab_size,
+                        scaled_hidden_size,
                         dtype=tensor.dtype,
                         device=tensor.device,
                     )
-                    for i in range(hidden_dim):
+                    for i in range(original_hidden_size):
                         for j in range(int(scaling_factor)):
                             new_tensor[:, i * int(scaling_factor) + j] = tensor[:, i]
                 else:
                     new_tensor = torch.zeros(
-                        new_hidden_dim,
-                        tensor.size(1),
+                        original_vocab_size,
+                        scaled_hidden_size,
                         dtype=tensor.dtype,
                         device=tensor.device,
                     )
-                    for i in range(hidden_dim):
+                    for i in range(original_hidden_size):
                         for j in range(int(scaling_factor)):
-                            new_tensor[i * int(scaling_factor) + j, :] = tensor[i, :]
+                            new_tensor[:, i * int(scaling_factor) + j] = tensor[:, i]
             else:
                 new_tensor = tensor.clone()
 
