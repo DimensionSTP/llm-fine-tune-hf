@@ -115,14 +115,23 @@ def width_upscale(
                 )
 
                 if scaling_method == "interleaving":
-                    for i in range(original_hidden_size):
-                        for j in range(int(scaling_factor)):
-                            new_tensor[:, i * int(scaling_factor) + j] = tensor[:, i]
+                    new_tensor = (
+                        tensor.unsqueeze(-1)
+                        .expand(
+                            -1,
+                            -1,
+                            int(scaling_factor),
+                        )
+                        .reshape(
+                            tensor.shape[0],
+                            -1,
+                        )
+                    )
                 elif scaling_method == "concat":
-                    for i in range(int(scaling_factor)):
-                        new_tensor[
-                            :, i * original_hidden_size : (i + 1) * original_hidden_size
-                        ] = tensor
+                    new_tensor = torch.cat(
+                        [tensor] * int(scaling_factor),
+                        dim=1,
+                    )
                 else:
                     raise ValueError(f"Invalid scaling method: {scaling_method}")
             else:
@@ -149,21 +158,31 @@ def width_upscale(
             )
 
             if scaling_method == "interleaving":
-                for i in range(old_out_dim):
-                    for j in range(old_in_dim):
-                        for s_i in range(int(scaling_factor)):
-                            for s_j in range(int(scaling_factor)):
-                                new_tensor[
-                                    i * int(scaling_factor) + s_i,
-                                    j * int(scaling_factor) + s_j,
-                                ] = tensor[i, j]
+                new_tensor = (
+                    tensor.unsqueeze(-1)
+                    .unsqueeze(-1)
+                    .expand(
+                        -1,
+                        -1,
+                        int(scaling_factor),
+                        int(scaling_factor),
+                    )
+                    .reshape(
+                        new_out_dim,
+                        new_in_dim,
+                    )
+                )
             elif scaling_method == "concat":
-                for i in range(int(scaling_factor)):
-                    for j in range(int(scaling_factor)):
-                        new_tensor[
-                            i * old_out_dim : (i + 1) * old_out_dim,
-                            j * old_in_dim : (j + 1) * old_in_dim,
-                        ] = tensor
+                new_tensor = torch.cat(
+                    [
+                        torch.cat(
+                            [tensor] * int(scaling_factor),
+                            dim=1,
+                        )
+                    ]
+                    * int(scaling_factor),
+                    dim=0,
+                )
             else:
                 raise ValueError(f"Invalid scaling method: {scaling_method}")
 
@@ -176,12 +195,16 @@ def width_upscale(
             )
 
             if scaling_method == "interleaving":
-                for i in range(tensor.size(0)):
-                    for j in range(int(scaling_factor)):
-                        new_tensor[i * int(scaling_factor) + j] = tensor[i]
+                new_tensor = (
+                    tensor.unsqueeze(-1)
+                    .expand(
+                        -1,
+                        int(scaling_factor),
+                    )
+                    .reshape(-1)
+                )
             elif scaling_method == "concat":
-                for i in range(int(scaling_factor)):
-                    new_tensor[i * tensor.size(0) : (i + 1) * tensor.size(0)] = tensor
+                new_tensor = torch.cat([tensor] * int(scaling_factor))
             else:
                 raise ValueError(f"Invalid scaling method: {scaling_method}")
 
