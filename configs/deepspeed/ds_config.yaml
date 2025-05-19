@@ -26,5 +26,5 @@ checkpoint:
   tag_validation: ignore
   load_universal: true
   save_universal: true
-save_16bit_model: true
-save_full_weights: true
+save_16bit_model: false
+save_full_weights: false
