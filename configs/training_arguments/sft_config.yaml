@@ -14,6 +14,8 @@ dataloader_num_workers: ${workers_ratio}
 dataloader_pin_memory: true
 num_train_epochs: ${epoch}
 bf16: ${is_bf16}
+bf16_full_eval: ${is_bf16}
+fp16_full_eval: false
 report_to: wandb
 remove_unused_columns: false
 gradient_accumulation_steps: ${gradient_accumulation_steps}
