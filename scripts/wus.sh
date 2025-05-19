@@ -5,7 +5,7 @@ upload_user="Qwen"
 model_type="Qwen3-8B"
 precision="bf16"
 wus_hidden_scale=2
-wus_scaling_method="interleaving"
+wus_scaling_method="concat"
 wus_attention_scaling="heads"
 num_safetensors=5
 
