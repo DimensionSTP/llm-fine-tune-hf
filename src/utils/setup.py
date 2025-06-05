@@ -3,6 +3,7 @@ import os
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 
+import torch
 from torch.utils.data import Dataset
 
 from transformers import (
@@ -33,6 +34,15 @@ class SetUp:
             self.num_cpus if config.use_all_workers else self.num_fit_workers
         )
 
+        if config.precision in [32, "32"]:
+            self.torch_dtype = torch.float32
+        elif config.precision in [16, "16"]:
+            self.torch_dtype = torch.float16
+        elif config.precision == "bf16":
+            self.torch_dtype = torch.bfloat16
+        else:
+            self.torch_dtype = "auto"
+
     def get_train_dataset(self) -> Dataset:
         train_dataset: Dataset = instantiate(
             self.config.dataset[self.data_type],
@@ -47,19 +57,20 @@ class SetUp:
         )
         return val_dataset
 
-    def get_model(
-        self,
-    ) -> PreTrainedModel:
-        device_map = None
+    def get_model(self) -> PreTrainedModel:
         quantization_config = None
+        device_map = None
         if self.config.is_quantized:
-            device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
             quantization_config = BitsAndBytesConfig(**self.config.quantization_config)
+            device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
 
         model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=self.config.pretrained_model_name,
-            device_map=device_map,
+            output_hidden_states=False,
+            torch_dtype=self.torch_dtype,
+            attn_implementation=self.config.attn_implementation,
             quantization_config=quantization_config,
+            device_map=device_map,
         )
 
         if self.config.is_quantized and self.config.quantization_config.get(
