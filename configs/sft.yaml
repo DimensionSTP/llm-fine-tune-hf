@@ -52,6 +52,9 @@ model_detail: ${model_type}
 upload_tag: sft
 model_path: ${user_name}/${model_detail}-${upload_tag}
 
+precision: bf16
+attn_implementation: flash_attention_2
+
 is_quantized: false
 quantization_config:
   load_in_4bit: true
@@ -106,7 +109,6 @@ resume_from_checkpoint: null
 use_validation: true
 eval_strategy: epoch
 
-precision: bf16
 dus_hidden_layers: 42
 wus_hidden_scale: 2
 wus_scaling_method: concat
