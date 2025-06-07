@@ -110,6 +110,9 @@ resume_from_checkpoint: null
 use_validation: true
 eval_strategy: epoch
 
+max_new_tokens: 512
+test_output_path: ${connected_dir}/tests/${model_detail}/${dataset_name}.csv
+
 dus_hidden_layers: 54
 wus_hidden_scale: 2
 wus_scaling_method: concat
