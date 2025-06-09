@@ -11,7 +11,7 @@ cd ~/llm-fine-tune
 module add compilers/cuda/12.4 compilers/gcc/10.2.0 libraries/nccl/2.21.5
 source activate myenv
 
-data_type="structural"
+data_type="conversational"
 split_ratio=1e-2
 is_strict_split=False
 dataset_name="tulu"
