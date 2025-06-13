@@ -34,9 +34,6 @@ model_types=(
     "Qwen3-4B"
     "Qwen3-8B"
     "Qwen3-14B"
-    "Qwen3-32B"
-    "Qwen3-30B-A3B"
-    "Qwen3-235B-A22B"
 )
 
 left_padding=True
