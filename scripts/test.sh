@@ -6,6 +6,7 @@ is_preprocessed=False
 upload_user="Qwen"
 model_type="Qwen3-8B"
 left_padding=True
+max_length=4096
 max_new_tokens=512
 eval_batch_size=128
 workers_ratio=8
@@ -19,6 +20,7 @@ torchrun --nproc_per_node=$num_gpus main.py mode=test \
     upload_user=$upload_user \
     model_type=$model_type \
     left_padding=$left_padding \
+    max_length=$max_length \
     max_new_tokens=$max_new_tokens \
     eval_batch_size=$eval_batch_size \
     workers_ratio=$workers_ratio \
