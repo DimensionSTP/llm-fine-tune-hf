@@ -40,9 +40,9 @@ model_types=(
 )
 
 left_padding=True
-max_length=4096
-max_new_tokens=512
-eval_batch_size=128
+max_length=2048
+max_new_tokens=256
+eval_batch_size=16
 workers_ratio=8
 use_all_workers=False
 num_gpus=$(nvidia-smi -L | wc -l)
