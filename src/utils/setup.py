@@ -68,7 +68,11 @@ class SetUp:
         device_map = None
         if self.config.is_quantized:
             quantization_config = BitsAndBytesConfig(**self.config.quantization_config)
-            device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
+            if device_map is None:
+                device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
+
+        if getattr(self.config, "mode", "train") == "test_large":
+            device_map = "auto"
 
         model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=self.config.pretrained_model_name,
