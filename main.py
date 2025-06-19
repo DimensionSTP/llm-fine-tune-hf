@@ -48,6 +48,8 @@ def main(
         return test(config)
     elif config.mode == "test_large":
         return test_large(config)
+    elif config.mode == "test_vllm":
+        return test_vllm(config)
     else:
         raise ValueError(f"Invalid execution mode: {config.mode}")
 
