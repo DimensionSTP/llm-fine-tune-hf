@@ -25,6 +25,7 @@ class SetUp:
     ) -> None:
         self.config = config
         self.data_type = self.config.data_type
+        self.revision = self.config.revision
         self.num_cpus = os.cpu_count()
         self.num_fit_workers = min(
             self.num_cpus,
@@ -81,6 +82,7 @@ class SetUp:
             attn_implementation=self.config.attn_implementation,
             quantization_config=quantization_config,
             device_map=device_map,
+            revision=self.revision,
         )
 
         if self.config.is_quantized and self.config.quantization_config.get(
@@ -104,6 +106,7 @@ class SetUp:
         data_encoder = AutoTokenizer.from_pretrained(
             self.config.pretrained_model_name,
             use_fast=True,
+            revision=self.revision,
         )
 
         if data_encoder.chat_template is None:
