@@ -17,6 +17,8 @@ import wandb
 
 from tqdm import tqdm
 
+from vllm import LLM, SamplingParams
+
 from ..utils import SetUp
 
 
@@ -344,6 +346,147 @@ def test_large(
     except Exception as e:
         wandb.run.alert(
             title="Large Model Testing Error",
+            text=f"An error occurred during testing on {config.dataset_name}: {e}",
+            level="ERROR",
+        )
+        raise e
+
+
+def test_vllm(
+    config: DictConfig,
+) -> None:
+    wandb.init(
+        project=config.project_name,
+        name=config.model_detail,
+    )
+
+    if "seed" in config:
+        set_seed(config.seed)
+
+    setup = SetUp(config)
+
+    data_encoder = setup.get_data_encoder()
+
+    num_gpus = torch.cuda.device_count()
+
+    llm = LLM(
+        model=config.pretrained_model_name,
+        revision=config.revision,
+        tensor_parallel_size=num_gpus,
+        seed=config.seed,
+    )
+
+    sampling_params = SamplingParams(
+        temperature=0,
+        top_p=1,
+        skip_special_tokens=True,
+        max_tokens=config.max_new_tokens,
+        stop_token_ids=[data_encoder.eos_token_id],
+    )
+
+    file_name = f"{config.dataset_name}.{config.dataset_format}"
+    full_data_path = os.path.join(
+        config.connected_dir,
+        "data",
+        config.test_data_dir,
+        file_name,
+    )
+    df = pd.read_parquet(full_data_path)
+    df = df.fillna("_")
+
+    prompts = []
+    labels = []
+
+    if config.data_type == "conversational":
+        for _, row in df.iterrows():
+            conversation = row[config.conversation_column_name]
+            preprocessed_conversation = [
+                {
+                    config.role_column_name: turn[config.role_column_name],
+                    config.content_column_name: turn[config.content_column_name],
+                }
+                for turn in conversation
+            ]
+            label = preprocessed_conversation.pop()[config.content_column_name]
+
+            prompt = data_encoder.apply_chat_template(
+                conversation=preprocessed_conversation,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            prompts.append(prompt)
+            labels.append(label)
+
+    elif config.data_type == "structural":
+        for _, row in df.iterrows():
+            instruction = row[config.instruction_column_name].strip()
+            data = row[config.data_column_name].strip()
+            label = row[config.target_column_name].strip()
+
+            conversation = [
+                {
+                    config.role_column_name: "system",
+                    config.content_column_name: instruction,
+                },
+                {
+                    config.role_column_name: "user",
+                    config.content_column_name: data,
+                },
+            ]
+
+            prompt = data_encoder.apply_chat_template(
+                conversation=conversation,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            prompts.append(prompt)
+            labels.append(label)
+
+    try:
+        outputs = llm.generate(
+            prompts=prompts,
+            sampling_params=sampling_params,
+        )
+
+        results = []
+        for output, label in zip(outputs, labels):
+            instruction = output.prompt
+            generation = output.outputs[0].text.strip()
+            results.append(
+                {
+                    "instruction": instruction,
+                    "generation": generation,
+                    "label": label,
+                }
+            )
+
+        os.makedirs(
+            config.test_output_dir,
+            exist_ok=True,
+        )
+        test_output_path = os.path.join(
+            config.test_output_dir,
+            f"{config.test_output_name}.json",
+        )
+
+        df = pd.DataFrame(results)
+        df.to_json(
+            test_output_path,
+            orient="records",
+            indent=2,
+            force_ascii=False,
+        )
+
+        wandb.log({"test_results": wandb.Table(dataframe=df)})
+
+        wandb.run.alert(
+            title="vLLM Testing Complete",
+            text=f"Testing process on {config.dataset_name} has successfully finished.",
+            level="INFO",
+        )
+    except Exception as e:
+        wandb.run.alert(
+            title="vLLM Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
