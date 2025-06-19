@@ -71,6 +71,15 @@ class SetUp:
         return test_dataset
 
     def get_model(self) -> PreTrainedModel:
+        pretrained_model_name = self.config.pretrained_model_name
+        if self.config.is_preprocessed:
+            merged_model_path = os.path.join(
+                self.config.merged_model_path,
+                self.config.pretrained_model_name,
+            )
+            if os.path.exists(merged_model_path):
+                pretrained_model_name = merged_model_path
+
         quantization_config = None
         device_map = None
         if self.config.is_quantized:
@@ -82,7 +91,7 @@ class SetUp:
             device_map = "auto"
 
         model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_name_or_path=self.config.pretrained_model_name,
+            pretrained_model_name_or_path=pretrained_model_name,
             output_hidden_states=False,
             torch_dtype=self.torch_dtype,
             attn_implementation=self.config.attn_implementation,
@@ -109,8 +118,13 @@ class SetUp:
         return model
 
     def get_data_encoder(self) -> PreTrainedTokenizer:
+        if self.config.is_preprocessed:
+            data_encoder_path = self.config.custom_data_encoder_path
+        else:
+            data_encoder_path = self.config.pretrained_model_name
+
         data_encoder = AutoTokenizer.from_pretrained(
-            self.config.pretrained_model_name,
+            data_encoder_path,
             use_fast=True,
             revision=self.revision,
         )
