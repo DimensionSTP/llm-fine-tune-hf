@@ -380,6 +380,12 @@ def test_vllm(
         skip_special_tokens=True,
         max_tokens=config.max_new_tokens,
         stop_token_ids=[data_encoder.eos_token_id],
+        stop=[
+            "### End",
+            "\n### End",
+            "</think>",
+            "\n</think>",
+        ],
     )
 
     file_name = f"{config.dataset_name}.{config.dataset_format}"
