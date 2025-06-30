@@ -19,6 +19,8 @@ from tqdm import tqdm
 
 from vllm import LLM, SamplingParams
 
+from huggingface_hub import snapshot_download
+
 from ..utils import SetUp
 
 
@@ -367,12 +369,27 @@ def test_vllm(
 
     num_gpus = torch.cuda.device_count()
 
-    llm = LLM(
-        model=config.pretrained_model_name,
-        revision=config.revision,
-        tensor_parallel_size=num_gpus,
-        seed=config.seed,
-    )
+    try:
+        llm = LLM(
+            model=config.pretrained_model_name,
+            tokenizer=config.pretrained_model_name,
+            revision=config.revision,
+            tensor_parallel_size=num_gpus,
+            seed=config.seed,
+            trust_remote_code=True,
+        )
+    except Exception:
+        model_path = snapshot_download(
+            repo_id=config.pretrained_model_name,
+            revision=config.revision,
+        )
+        llm = LLM(
+            model=model_path,
+            tokenizer=model_path,
+            tensor_parallel_size=num_gpus,
+            seed=config.seed,
+            trust_remote_code=True,
+        )
 
     sampling_params = SamplingParams(
         temperature=0,
