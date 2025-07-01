@@ -513,3 +513,140 @@ def test_vllm(
             level="ERROR",
         )
         raise e
+
+
+def test_vllm_multi_turn(
+    config: DictConfig,
+) -> None:
+    wandb.init(
+        project=config.project_name,
+        name=config.model_detail,
+    )
+
+    if "seed" in config:
+        set_seed(config.seed)
+
+    setup = SetUp(config)
+
+    data_encoder = setup.get_data_encoder()
+
+    num_gpus = torch.cuda.device_count()
+
+    try:
+        llm = LLM(
+            model=config.pretrained_model_name,
+            tokenizer=config.pretrained_model_name,
+            revision=config.revision,
+            tensor_parallel_size=num_gpus,
+            seed=config.seed,
+            trust_remote_code=True,
+        )
+    except Exception:
+        model_path = snapshot_download(
+            repo_id=config.pretrained_model_name,
+            revision=config.revision,
+        )
+        llm = LLM(
+            model=model_path,
+            tokenizer=model_path,
+            tensor_parallel_size=num_gpus,
+            seed=config.seed,
+            trust_remote_code=True,
+        )
+
+    sampling_params = SamplingParams(
+        temperature=0,
+        top_p=1,
+        skip_special_tokens=True,
+        max_tokens=config.max_new_tokens,
+        stop_token_ids=[data_encoder.eos_token_id],
+        stop=[
+            "### End",
+            "\n### End",
+            "</think>",
+            "\n</think>",
+        ],
+    )
+
+    file_name = f"{config.dataset_name}.{config.dataset_format}"
+    full_data_path = os.path.join(
+        config.connected_dir,
+        "data",
+        config.test_data_dir,
+        file_name,
+    )
+    df = pd.read_json(
+        full_data_path,
+        lines=True,
+    )
+    df = df.fillna("_")
+
+    try:
+        results = []
+        for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating responses"):
+            turns = row[config.turns_column_name]
+            conversation = []
+            model_answers = []
+
+            for turn_prompt in turns:
+                conversation.append(
+                    {
+                        config.role_column_name: "user",
+                        config.content_column_name: turn_prompt,
+                    }
+                )
+                prompt = data_encoder.apply_chat_template(
+                    conversation=conversation,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+
+                output = llm.generate(
+                    prompts=[prompt],
+                    sampling_params=sampling_params,
+                )[0]
+                model_answer = output.outputs[0].text.strip()
+                model_answers.append(model_answer)
+
+                conversation.append(
+                    {
+                        config.role_column_name: "assistant",
+                        config.content_column_name: model_answer,
+                    }
+                )
+
+            result_item = row.to_dict()
+            result_item["generation"] = model_answers
+            results.append(result_item)
+
+        os.makedirs(
+            config.test_output_dir,
+            exist_ok=True,
+        )
+        test_output_path = os.path.join(
+            config.test_output_dir,
+            f"{config.test_output_name}.jsonl",
+        )
+
+        result_df = pd.DataFrame(results)
+        result_df.to_json(
+            test_output_path,
+            orient="records",
+            lines=True,
+            force_ascii=False,
+        )
+
+        wandb.log({"test_results": wandb.Table(dataframe=result_df)})
+        wandb.run.alert(
+            title="vLLM Multi-Turn Testing Complete",
+            text=f"Testing process on {config.dataset_name} has successfully finished.",
+            level="INFO",
+        )
+
+    except Exception as e:
+        wandb.run.alert(
+            title="vLLM Multi-Turn Testing Error",
+            text=f"An error occurred during testing on {config.dataset_name}: {e}",
+            level="ERROR",
+        )
+        raise e
