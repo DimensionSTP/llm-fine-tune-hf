@@ -556,11 +556,25 @@ def test_vllm_multi_turn(
             trust_remote_code=True,
         )
 
-    sampling_params = SamplingParams(
+    sampling_params_first_turn = SamplingParams(
         temperature=0,
         top_p=1,
         skip_special_tokens=True,
         max_tokens=config.max_new_tokens,
+        stop_token_ids=[data_encoder.eos_token_id],
+        stop=[
+            "### End",
+            "\n### End",
+            "</think>",
+            "\n</think>",
+        ],
+    )
+
+    sampling_params_second_turn = SamplingParams(
+        temperature=0,
+        top_p=1,
+        skip_special_tokens=True,
+        max_tokens=config.max_new_tokens * 2,
         stop_token_ids=[data_encoder.eos_token_id],
         stop=[
             "### End",
@@ -590,7 +604,7 @@ def test_vllm_multi_turn(
             conversation = []
             generations = []
 
-            for content in contents:
+            for i, content in enumerate(contents):
                 conversation.append(
                     {
                         config.role_column_name: "user",
@@ -605,7 +619,11 @@ def test_vllm_multi_turn(
 
                 output = llm.generate(
                     prompts=[prompt],
-                    sampling_params=sampling_params,
+                    sampling_params=(
+                        sampling_params_first_turn
+                        if i == 0
+                        else sampling_params_second_turn
+                    ),
                 )[0]
                 generation = output.outputs[0].text.strip()
                 generations.append(generation)
