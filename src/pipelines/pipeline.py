@@ -3,6 +3,8 @@ import os
 from hydra.utils import get_class
 from omegaconf import DictConfig, OmegaConf
 
+import json
+
 import pandas as pd
 
 import torch
@@ -635,6 +637,18 @@ def test_vllm_multi_turn(
             lines=True,
             force_ascii=False,
         )
+
+        for column in result_df.columns:
+            result_df[column] = result_df[column].apply(
+                lambda value: (
+                    json.dumps(
+                        value,
+                        ensure_ascii=False,
+                    )
+                    if isinstance(value, (list, dict, set))
+                    else value
+                )
+            )
 
         wandb.log({"test_results": wandb.Table(dataframe=result_df)})
         wandb.run.alert(
