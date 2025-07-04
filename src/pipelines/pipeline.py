@@ -584,7 +584,7 @@ def test_vllm_multi_turn(
     try:
         results = []
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating responses"):
-            turns = row[config.turns_column_name]
+            contents = row[config.content_column_name]
             conversation = []
             model_answers = []
 
