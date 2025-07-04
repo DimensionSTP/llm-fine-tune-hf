@@ -50,6 +50,8 @@ def main(
         return test_large(config)
     elif config.mode == "test_vllm":
         return test_vllm(config)
+    elif config.mode == "test_vllm_multi_turn":
+        return test_vllm_multi_turn(config)
     else:
         raise ValueError(f"Invalid execution mode: {config.mode}")
 
