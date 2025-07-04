@@ -586,13 +586,13 @@ def test_vllm_multi_turn(
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating responses"):
             contents = row[config.content_column_name]
             conversation = []
-            model_answers = []
+            generations = []
 
-            for turn_prompt in turns:
+            for content in contents:
                 conversation.append(
                     {
                         config.role_column_name: "user",
-                        config.content_column_name: turn_prompt,
+                        config.content_column_name: content,
                     }
                 )
                 prompt = data_encoder.apply_chat_template(
@@ -605,18 +605,18 @@ def test_vllm_multi_turn(
                     prompts=[prompt],
                     sampling_params=sampling_params,
                 )[0]
-                model_answer = output.outputs[0].text.strip()
-                model_answers.append(model_answer)
+                generation = output.outputs[0].text.strip()
+                generations.append(generation)
 
                 conversation.append(
                     {
                         config.role_column_name: "assistant",
-                        config.content_column_name: model_answer,
+                        config.content_column_name: generation,
                     }
                 )
 
             result_item = row.to_dict()
-            result_item["generation"] = model_answers
+            result_item["generation"] = generations
             results.append(result_item)
 
         os.makedirs(
