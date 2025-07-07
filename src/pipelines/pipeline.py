@@ -556,7 +556,7 @@ def test_vllm_multi_turn(
             trust_remote_code=True,
         )
 
-    model_max_len = llm.llm_engine.model_config.get_max_model_len()
+    model_max_len = llm.llm_engine.model_config.max_model_len
 
     sampling_params = SamplingParams(
         temperature=0,
