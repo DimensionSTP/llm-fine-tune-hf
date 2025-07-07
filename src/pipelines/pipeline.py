@@ -605,6 +605,16 @@ def test_vllm_multi_turn(
                     add_generation_prompt=True,
                 )
 
+                prompt_token_ids = data_encoder.encode(prompt)
+                if len(prompt_token_ids) >= model_max_len:
+                    print(
+                        f"Prompt length ({len(prompt_token_ids)}) is exceeding model max length ({model_max_len}). "
+                        f"Skipping this turn."
+                    )
+                    generation = "MODEL_MAX_LENGTH_EXCEEDED"
+                    generations.append(generation)
+                    break
+
                 output = llm.generate(
                     prompts=[prompt],
                     sampling_params=sampling_params,
