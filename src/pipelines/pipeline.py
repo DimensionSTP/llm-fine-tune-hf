@@ -606,49 +606,73 @@ def test_vllm_multi_turn(
         results = []
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating responses"):
             contents = row[config.content_column_name]
-            conversation = []
-            generations = []
 
-            for i, content in enumerate(contents):
-                conversation.append(
+            if isinstance(contents, list):
+                conversation = []
+                generations = []
+
+                for content in contents:
+                    conversation.append(
+                        {
+                            config.role_column_name: "user",
+                            config.content_column_name: content,
+                        }
+                    )
+                    prompt = data_encoder.apply_chat_template(
+                        conversation=conversation,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                    )
+
+                    prompt_token_ids = data_encoder.encode(prompt)
+                    if len(prompt_token_ids) >= model_max_len:
+                        print(
+                            f"Prompt length ({len(prompt_token_ids)}) is exceeding model max length ({model_max_len}). "
+                            f"Skipping this turn."
+                        )
+                        generation = "MODEL_MAX_LENGTH_EXCEEDED"
+                        generations.append(generation)
+                        break
+
+                    output = llm.generate(
+                        prompts=[prompt],
+                        sampling_params=sampling_params,
+                    )[0]
+                    generation = output.outputs[0].text.strip()
+                    generations.append(generation)
+
+                    conversation.append(
+                        {
+                            config.role_column_name: "assistant",
+                            config.content_column_name: generation,
+                        }
+                    )
+
+                result_item = row.to_dict()
+                result_item["generation"] = generations
+                results.append(result_item)
+            else:
+                conversation = [
                     {
                         config.role_column_name: "user",
-                        config.content_column_name: content,
+                        config.content_column_name: contents,
                     }
-                )
+                ]
                 prompt = data_encoder.apply_chat_template(
                     conversation=conversation,
                     tokenize=False,
                     add_generation_prompt=True,
                 )
 
-                prompt_token_ids = data_encoder.encode(prompt)
-                if len(prompt_token_ids) >= model_max_len:
-                    print(
-                        f"Prompt length ({len(prompt_token_ids)}) is exceeding model max length ({model_max_len}). "
-                        f"Skipping this turn."
-                    )
-                    generation = "MODEL_MAX_LENGTH_EXCEEDED"
-                    generations.append(generation)
-                    break
-
                 output = llm.generate(
                     prompts=[prompt],
                     sampling_params=sampling_params,
                 )[0]
                 generation = output.outputs[0].text.strip()
-                generations.append(generation)
 
-                conversation.append(
-                    {
-                        config.role_column_name: "assistant",
-                        config.content_column_name: generation,
-                    }
-                )
-
-            result_item = row.to_dict()
-            result_item["generation"] = generations
-            results.append(result_item)
+                result_item = row.to_dict()
+                result_item["generation"] = generation
+                results.append(result_item)
 
         os.makedirs(
             config.test_output_dir,
