@@ -415,7 +415,17 @@ def test_vllm(
         config.test_data_dir,
         file_name,
     )
-    df = pd.read_parquet(full_data_path)
+
+    if config.dataset_format == "parquet":
+        df = pd.read_parquet(full_data_path)
+    elif config.dataset_format in ["json", "jsonl"]:
+        df = pd.read_json(
+            full_data_path,
+            lines=True if config.dataset_format == "jsonl" else False,
+        )
+    else:
+        raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
+
     df = df.fillna("_")
 
     prompts = []
@@ -579,10 +589,17 @@ def test_vllm_multi_turn(
         config.test_data_dir,
         file_name,
     )
-    df = pd.read_json(
-        full_data_path,
-        lines=True,
-    )
+
+    if config.dataset_format == "parquet":
+        df = pd.read_parquet(full_data_path)
+    elif config.dataset_format in ["json", "jsonl"]:
+        df = pd.read_json(
+            full_data_path,
+            lines=True if config.dataset_format == "jsonl" else False,
+        )
+    else:
+        raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
+
     df = df.fillna("_")
 
     try:
