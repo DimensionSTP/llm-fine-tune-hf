@@ -180,8 +180,8 @@ def test(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=config.max_new_tokens,
-                    do_sample=False,
-                    num_beams=1,
+                    do_sample=config.do_sample,
+                    **config.generation_config,
                 ).cpu()
 
                 instructions = data_encoder.batch_decode(
@@ -295,8 +295,8 @@ def test_large(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=config.max_new_tokens,
-                    do_sample=False,
-                    num_beams=1,
+                    do_sample=config.do_sample,
+                    **config.generation_config,
                 ).cpu()
 
                 instructions = data_encoder.batch_decode(
@@ -394,11 +394,17 @@ def test_vllm(
             trust_remote_code=True,
         )
 
+    if config.do_sample:
+        generation_config = config.generation_config
+    else:
+        generation_config = {
+            "temperature": 0,
+            "top_p": 1,
+        }
+
     sampling_params = SamplingParams(
-        temperature=0,
-        top_p=1,
-        skip_special_tokens=True,
         max_tokens=config.max_new_tokens,
+        skip_special_tokens=True,
         stop_token_ids=[data_encoder.eos_token_id],
         stop=[
             "### End",
@@ -406,6 +412,7 @@ def test_vllm(
             "</think>",
             "\n</think>",
         ],
+        **generation_config,
     )
 
     file_name = f"{config.dataset_name}.{config.dataset_format}"
@@ -568,11 +575,17 @@ def test_vllm_multi_turn(
 
     model_max_len = llm.llm_engine.model_config.max_model_len
 
+    if config.do_sample:
+        generation_config = config.generation_config
+    else:
+        generation_config = {
+            "temperature": 0,
+            "top_p": 1,
+        }
+
     sampling_params = SamplingParams(
-        temperature=0,
-        top_p=1,
-        skip_special_tokens=True,
         max_tokens=config.max_new_tokens,
+        skip_special_tokens=True,
         stop_token_ids=[data_encoder.eos_token_id],
         stop=[
             "### End",
@@ -580,6 +593,7 @@ def test_vllm_multi_turn(
             "</think>",
             "\n</think>",
         ],
+        **generation_config,
     )
 
     file_name = f"{config.dataset_name}.{config.dataset_format}"
