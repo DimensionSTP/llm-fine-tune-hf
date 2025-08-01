@@ -38,6 +38,10 @@ revision="main"
 left_padding=True
 max_length=2048
 max_new_tokens=256
+do_sample=True
+temperature=0.6
+top_p=0.95
+top_k=20
 
 for model_type in "${model_types[@]}"
 do
@@ -54,6 +58,10 @@ do
             revision=$revision \
             left_padding=$left_padding \
             max_length=$max_length \
-            max_new_tokens=$max_new_tokens
+            max_new_tokens=$max_new_tokens \
+            do_sample=$do_sample \
+            generation_config.temperature=$temperature \
+            generation_config.top_p=$top_p \
+            generation_config.top_k=$top_k
     done
 done
