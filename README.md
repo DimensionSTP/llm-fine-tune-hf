@@ -1,6 +1,6 @@
-# LLM model scaling pipeline
+# LLM model fine-tuning & inference pipeline
 
-## For (s)LLM model scaling
+## For (s)LLM model fine-tuning & inference
 
 ### Dataset
 
