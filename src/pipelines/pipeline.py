@@ -670,10 +670,11 @@ def test_vllm_multi_turn(
                         break
 
                     output = llm.generate(
-                        prompts=[prompt],
+                        prompts=prompt,
                         sampling_params=sampling_params,
-                    )[0]
-                    generation = output.outputs[0].text.strip()
+                        use_tqdm=False,
+                    )
+                    generation = output[0].outputs[0].text.strip()
                     generations.append(generation)
 
                     conversation.append(
@@ -701,10 +702,11 @@ def test_vllm_multi_turn(
                 )
 
                 output = llm.generate(
-                    prompts=[prompt],
+                    prompts=prompt,
                     sampling_params=sampling_params,
-                )[0]
-                generation = output.outputs[0].text.strip()
+                    use_tqdm=False,
+                )
+                generation = output[0].outputs[0].text.strip()
 
                 result_item = row.to_dict()
                 result_item["generation"] = generation
