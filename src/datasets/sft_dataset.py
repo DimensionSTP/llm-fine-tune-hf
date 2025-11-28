@@ -198,22 +198,6 @@ class StructuralDataset(Dataset):
         encoded = {k: v.squeeze(0) for k, v in encoded.items()}
         return encoded
 
-    def find_pattern_indices(
-        self,
-        input_ids: torch.Tensor,
-        pattern: torch.Tensor,
-    ) -> List[int]:
-        pattern_length = pattern.size(0)
-
-        if pattern_length > input_ids.size(0):
-            return []
-
-        indices = []
-        for i in range(input_ids.size(0) - pattern_length + 1):
-            if torch.equal(input_ids[i : i + pattern_length], pattern):
-                indices.append(i)
-        return indices
-
     def add_sft_label(
         self,
         encoded: Dict[str, torch.Tensor],
@@ -252,6 +236,22 @@ class StructuralDataset(Dataset):
 
         encoded["labels"] = labels
         return encoded
+
+    def find_pattern_indices(
+        self,
+        input_ids: torch.Tensor,
+        pattern: torch.Tensor,
+    ) -> List[int]:
+        pattern_length = pattern.size(0)
+
+        if pattern_length > input_ids.size(0):
+            return []
+
+        indices = []
+        for i in range(input_ids.size(0) - pattern_length + 1):
+            if torch.equal(input_ids[i : i + pattern_length], pattern):
+                indices.append(i)
+        return indices
 
 
 class ConversationalDataset(StructuralDataset):
