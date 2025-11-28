@@ -6,9 +6,9 @@
 #SBATCH --output=logs/train_output.log
 #SBATCH --error=logs/train_error.log
 
-cd ~/llm-fine-tune
+cd ~/llm-fine-tune-hf
 
-module add compilers/cuda/12.4 compilers/gcc/10.2.0 libraries/nccl/2.21.5
+module add compilers/cuda/12.8 compilers/gcc/10.2.0 libraries/nccl/2.21.5
 source activate myenv
 
 data_type="conversational"
