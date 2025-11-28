@@ -430,6 +430,11 @@ def test_vllm(
             full_data_path,
             lines=True if config.dataset_format == "jsonl" else False,
         )
+    elif config.dataset_format in ["csv", "tsv"]:
+        df = pd.read_csv(
+            full_data_path,
+            sep="\t" if config.dataset_format == "tsv" else None,
+        )
     else:
         raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
 
@@ -610,6 +615,11 @@ def test_vllm_multi_turn(
         df = pd.read_json(
             full_data_path,
             lines=True if config.dataset_format == "jsonl" else False,
+        )
+    elif config.dataset_format in ["csv", "tsv"]:
+        df = pd.read_csv(
+            full_data_path,
+            sep="\t" if config.dataset_format == "tsv" else None,
         )
     else:
         raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
