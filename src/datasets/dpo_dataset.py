@@ -88,28 +88,6 @@ class StructuralDataset:
             "val": val_dataset,
         }
 
-    def apply_conversation_template(
-        self,
-        instruction: str,
-        data: str,
-        label: str,
-    ) -> str:
-        conversation = [
-            {
-                self.role_column_name: "system",
-                self.content_column_name: instruction,
-            },
-            {
-                self.role_column_name: "user",
-                self.content_column_name: data,
-            },
-            {
-                self.role_column_name: self.assistant_column_name,
-                self.content_column_name: label,
-            },
-        ]
-        return conversation
-
     def create_conversations(
         self,
         examples: Dict[str, List[Any]],
@@ -137,6 +115,28 @@ class StructuralDataset:
             "chosen": chosen_conversations,
             "rejected": rejected_conversations,
         }
+
+    def apply_conversation_template(
+        self,
+        instruction: str,
+        data: str,
+        label: str,
+    ) -> str:
+        conversation = [
+            {
+                self.role_column_name: "system",
+                self.content_column_name: instruction,
+            },
+            {
+                self.role_column_name: "user",
+                self.content_column_name: data,
+            },
+            {
+                self.role_column_name: self.assistant_column_name,
+                self.content_column_name: label,
+            },
+        ]
+        return conversation
 
 
 class ConversationalDataset:
