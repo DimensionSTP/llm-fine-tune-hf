@@ -459,6 +459,7 @@ def test_vllm(
                 conversation=preprocessed_conversation,
                 tokenize=False,
                 add_generation_prompt=True,
+                enable_thinking=config.is_enable_thinking,
             )
             prompts.append(prompt)
             labels.append(label)
@@ -484,6 +485,7 @@ def test_vllm(
                 conversation=conversation,
                 tokenize=False,
                 add_generation_prompt=True,
+                enable_thinking=config.is_enable_thinking,
             )
             prompts.append(prompt)
             labels.append(label)
@@ -646,6 +648,7 @@ def test_vllm_multi_turn(
                         conversation=conversation,
                         tokenize=False,
                         add_generation_prompt=True,
+                        enable_thinking=config.is_enable_thinking,
                     )
 
                     prompt_token_ids = data_encoder.encode(prompt)
@@ -686,6 +689,7 @@ def test_vllm_multi_turn(
                     conversation=conversation,
                     tokenize=False,
                     add_generation_prompt=True,
+                    enable_thinking=config.is_enable_thinking,
                 )
 
                 output = llm.generate(
