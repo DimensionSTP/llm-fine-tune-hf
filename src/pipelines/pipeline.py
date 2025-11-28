@@ -380,6 +380,8 @@ def test_vllm(
             tensor_parallel_size=num_gpus,
             seed=config.seed,
             trust_remote_code=True,
+            max_model_len=config.max_length,
+            gpu_memory_utilization=config.gpu_memory_utilization,
         )
     except Exception:
         model_path = snapshot_download(
@@ -392,6 +394,8 @@ def test_vllm(
             tensor_parallel_size=num_gpus,
             seed=config.seed,
             trust_remote_code=True,
+            max_model_len=config.max_length,
+            gpu_memory_utilization=config.gpu_memory_utilization,
         )
 
     if config.do_sample:
@@ -566,6 +570,8 @@ def test_vllm_multi_turn(
             tensor_parallel_size=num_gpus,
             seed=config.seed,
             trust_remote_code=True,
+            max_model_len=config.max_length,
+            gpu_memory_utilization=config.gpu_memory_utilization,
         )
     except Exception:
         model_path = snapshot_download(
@@ -578,6 +584,8 @@ def test_vllm_multi_turn(
             tensor_parallel_size=num_gpus,
             seed=config.seed,
             trust_remote_code=True,
+            max_model_len=config.max_length,
+            gpu_memory_utilization=config.gpu_memory_utilization,
         )
 
     model_max_len = llm.llm_engine.model_config.max_model_len
