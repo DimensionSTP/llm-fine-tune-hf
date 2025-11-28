@@ -121,6 +121,8 @@ generation_config:
   top_p: 0.95
   top_k: 20
 
+gpu_memory_utilization: 0.95
+
 test_data_dir: benchmarks/test
 test_output_dir: ${connected_dir}/tests/${model_type}
 test_output_name: ${dataset_name}
