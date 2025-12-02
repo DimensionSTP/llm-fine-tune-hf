@@ -83,7 +83,11 @@ class SetUp:
         quantization_config = None
         device_map = None
         if self.config.is_quantized:
-            quantization_config = BitsAndBytesConfig(**self.config.quantization_config)
+            quantization_config_dict = OmegaConf.to_container(
+                self.config.quantization_config,
+                resolve=True,
+            )
+            quantization_config = BitsAndBytesConfig(**quantization_config_dict)
             if device_map is None:
                 device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
 
@@ -100,6 +104,11 @@ class SetUp:
             revision=self.revision,
         )
 
+        if self.config.gradient_checkpointing:
+            model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs=self.config.gradient_checkpointing_kwargs,
+            )
+
         if self.config.is_quantized and self.config.quantization_config.get(
             "load_in_4bit",
             False,
@@ -107,12 +116,14 @@ class SetUp:
             model = prepare_model_for_kbit_training(model)
 
         if self.config.is_peft:
-            peft_config = LoraConfig(**self.config.peft_config)
-            model = get_peft_model(model, peft_config)
-
-        if self.config.gradient_checkpointing:
-            model.gradient_checkpointing_enable(
-                gradient_checkpointing_kwargs=self.config.gradient_checkpointing_kwargs,
+            peft_config_dict = OmegaConf.to_container(
+                self.config.peft_config,
+                resolve=True,
+            )
+            peft_config = LoraConfig(**peft_config_dict)
+            model = get_peft_model(
+                model=model,
+                peft_config=peft_config,
             )
 
         return model
