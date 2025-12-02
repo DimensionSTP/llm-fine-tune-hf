@@ -29,9 +29,8 @@ is_preprocessed=False
 upload_user="Qwen"
 
 model_types=(
+    "Qwen3-8B"
     "Qwen3-32B"
-    "Qwen3-30B-A3B"
-    "Qwen3-235B-A22B"
 )
 
 revision="main"
