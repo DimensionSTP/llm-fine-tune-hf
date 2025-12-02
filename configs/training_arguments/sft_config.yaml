@@ -4,7 +4,7 @@ dataset_kwargs:
   skip_prepare_dataset: true
 use_liger_kernel: false
 packing: false
-max_seq_length: ${max_length}
+max_length: ${max_length}
 output_dir: ${output_dir}
 do_eval: ${use_validation}
 eval_strategy: ${eval_strategy}
