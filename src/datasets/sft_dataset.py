@@ -126,36 +126,36 @@ class StructuralDataset(Dataset):
                 self.data_path,
                 file_name,
             )
-
-            if self.dataset_format == "parquet":
-                data = pd.read_parquet(full_data_path)
-            elif self.dataset_format in ["json", "jsonl"]:
-                data = pd.read_json(
-                    full_data_path,
-                    lines=True if self.dataset_format == "jsonl" else False,
-                )
-            elif self.dataset_format in ["csv", "tsv"]:
-                data = pd.read_csv(
-                    full_data_path,
-                    sep="\t" if self.dataset_format == "tsv" else None,
-                )
-            else:
-                raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
-
-            data = data.fillna("_")
-
-            train_data, val_data = train_test_split(
-                data,
-                test_size=self.split_ratio,
-                random_state=self.seed,
-                shuffle=True,
-            )
-            if self.split == "train" and self.is_strict_split:
-                data = train_data
-            if self.split == "val":
-                data = val_data
         else:
             raise ValueError(f"Inavalid split: {self.split}")
+
+        if self.dataset_format == "parquet":
+            data = pd.read_parquet(full_data_path)
+        elif self.dataset_format in ["json", "jsonl"]:
+            data = pd.read_json(
+                full_data_path,
+                lines=True if self.dataset_format == "jsonl" else False,
+            )
+        elif self.dataset_format in ["csv", "tsv"]:
+            data = pd.read_csv(
+                full_data_path,
+                sep="\t" if self.dataset_format == "tsv" else None,
+            )
+        else:
+            raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
+
+        data = data.fillna("_")
+
+        train_data, val_data = train_test_split(
+            data,
+            test_size=self.split_ratio,
+            random_state=self.seed,
+            shuffle=True,
+        )
+        if self.split == "train" and self.is_strict_split:
+            data = train_data
+        if self.split == "val":
+            data = val_data
 
         instructions = (
             data[self.instruction_column_name].apply(lambda x: x.strip()).tolist()
@@ -375,36 +375,36 @@ class ConversationalDataset(StructuralDataset):
                 self.data_path,
                 file_name,
             )
-
-            if self.dataset_format == "parquet":
-                data = pd.read_parquet(full_data_path)
-            elif self.dataset_format in ["json", "jsonl"]:
-                data = pd.read_json(
-                    full_data_path,
-                    lines=True if self.dataset_format == "jsonl" else False,
-                )
-            elif self.dataset_format in ["csv", "tsv"]:
-                data = pd.read_csv(
-                    full_data_path,
-                    sep="\t" if self.dataset_format == "tsv" else None,
-                )
-            else:
-                raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
-
-            data = data.fillna("_")
-
-            train_data, val_data = train_test_split(
-                data,
-                test_size=self.split_ratio,
-                random_state=self.seed,
-                shuffle=True,
-            )
-            if self.split == "train" and self.is_strict_split:
-                data = train_data
-            if self.split == "val":
-                data = val_data
         else:
             raise ValueError(f"Inavalid split: {self.split}")
+
+        if self.dataset_format == "parquet":
+            data = pd.read_parquet(full_data_path)
+        elif self.dataset_format in ["json", "jsonl"]:
+            data = pd.read_json(
+                full_data_path,
+                lines=True if self.dataset_format == "jsonl" else False,
+            )
+        elif self.dataset_format in ["csv", "tsv"]:
+            data = pd.read_csv(
+                full_data_path,
+                sep="\t" if self.dataset_format == "tsv" else None,
+            )
+        else:
+            raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
+
+        data = data.fillna("_")
+
+        train_data, val_data = train_test_split(
+            data,
+            test_size=self.split_ratio,
+            random_state=self.seed,
+            shuffle=True,
+        )
+        if self.split == "train" and self.is_strict_split:
+            data = train_data
+        if self.split == "val":
+            data = val_data
 
         conversations = data[self.conversation_column_name].tolist()
         return {
