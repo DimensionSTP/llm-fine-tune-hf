@@ -38,6 +38,7 @@ model_types=(
 
 revision="main"
 left_padding=True
+is_enable_thinking=False
 max_length=2048
 max_new_tokens=256
 do_sample=True
@@ -63,6 +64,7 @@ do
             model_type=$model_type \
             revision=$revision \
             left_padding=$left_padding \
+            is_enable_thinking=$is_enable_thinking \
             max_length=$max_length \
             max_new_tokens=$max_new_tokens \
             do_sample=$do_sample \

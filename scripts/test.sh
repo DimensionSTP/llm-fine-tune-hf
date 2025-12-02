@@ -7,6 +7,7 @@ upload_user="Qwen"
 model_type="Qwen3-8B"
 revision="main"
 left_padding=True
+is_enable_thinking=False
 max_length=2048
 max_new_tokens=256
 do_sample=True
@@ -26,6 +27,7 @@ torchrun --nproc_per_node=$num_gpus main.py mode=test \
     model_type=$model_type \
     revision=$revision \
     left_padding=$left_padding \
+    is_enable_thinking=$is_enable_thinking \
     max_length=$max_length \
     max_new_tokens=$max_new_tokens \
     do_sample=$do_sample \
