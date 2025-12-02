@@ -100,15 +100,14 @@ model_name: CausalLM-DPO
 mode: train
 
 project_name: ${model_name}-${dataset_name}-${mode}
-total_batch_size: bs=${batch_size}x${devices}x${gradient_accumulation_steps}
-length_info: max_length=${max_length}
-save_detail: ${model_detail}-${length_info}-${total_batch_size}
-logging_name: ${save_detail}-lr${lr}
-
 peft_info: is_quantized=${is_quantized}-is_peft=${is_peft}
 peft_detail: r=${peft_config.r}-a=${peft_config.lora_alpha}
+length_info: max_length=${max_length}
+total_batch_size: bs=${batch_size}x${devices}x${gradient_accumulation_steps}
+save_detail: ${model_detail}-${peft_info}-${peft_detail}-${length_info}-${total_batch_size}
+logging_name: ${save_detail}-lr${lr}
 
-output_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${peft_info}/${peft_detail}/${save_detail}
+output_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}
 save_strategy: steps
 save_total_limit: -1
 
