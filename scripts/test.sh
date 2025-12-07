@@ -2,6 +2,7 @@
 
 data_type="conversational"
 dataset_name="mmlu"
+dataset_format="parquet"
 is_preprocessed=False
 upload_user="Qwen"
 model_type="Qwen3-8B"
@@ -22,6 +23,7 @@ num_gpus=$(nvidia-smi -L | wc -l)
 torchrun --nproc_per_node=$num_gpus main.py mode=test \
     data_type=$data_type \
     dataset_name=$dataset_name \
+    dataset_format=$dataset_format \
     is_preprocessed=$is_preprocessed \
     upload_user=$upload_user \
     model_type=$model_type \

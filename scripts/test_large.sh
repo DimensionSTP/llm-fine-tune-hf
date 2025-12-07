@@ -2,6 +2,7 @@
 
 data_type="conversational"
 dataset_name="mmlu"
+dataset_format="parquet"
 is_preprocessed=False
 upload_user="Qwen"
 model_type="Qwen3-8B"
@@ -21,6 +22,7 @@ use_all_workers=False
 python main.py mode=test_large \
     data_type=$data_type \
     dataset_name=$dataset_name \
+    dataset_format=$dataset_format \
     is_preprocessed=$is_preprocessed \
     upload_user=$upload_user \
     model_type=$model_type \

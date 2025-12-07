@@ -25,6 +25,7 @@ dataset_names=(
     "haerae"
 )
 
+dataset_format="parquet"
 is_preprocessed=False
 upload_user="Qwen"
 
@@ -56,6 +57,7 @@ do
         torchrun --nproc_per_node=$num_gpus main.py mode=test \
             data_type=$data_type \
             dataset_name=$dataset_name \
+            dataset_format=$dataset_format \
             is_preprocessed=$is_preprocessed \
             upload_user=$upload_user \
             model_type=$model_type \
