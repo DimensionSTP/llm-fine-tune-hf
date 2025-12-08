@@ -116,6 +116,10 @@ resume_from_checkpoint: null
 use_validation: true
 eval_strategy: epoch
 
+peft_test:
+  adapter_path: ${output_dir}
+  adapter_name: adapter
+
 max_new_tokens: 512
 do_sample: true
 generation_config:
