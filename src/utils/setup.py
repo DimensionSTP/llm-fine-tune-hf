@@ -71,8 +71,9 @@ class SetUp:
         return test_dataset
 
     def get_model(self) -> PreTrainedModel:
+        is_inference = getattr(self.config, "mode", "train") in ["test", "test_large"]
         pretrained_model_name = self.config.pretrained_model_name
-        if self.config.is_preprocessed:
+        if not is_inference and self.config.is_preprocessed:
             merged_model_path = os.path.join(
                 self.config.merged_model_path,
                 self.config.pretrained_model_name,
@@ -82,7 +83,7 @@ class SetUp:
 
         quantization_config = None
         device_map = None
-        if self.config.is_quantized:
+        if not is_inference and self.config.is_quantized:
             quantization_config_dict = OmegaConf.to_container(
                 self.config.quantization_config,
                 resolve=True,
@@ -103,6 +104,11 @@ class SetUp:
             device_map=device_map,
             revision=self.revision,
         )
+
+        if is_inference:
+            model.eval()
+
+            return model
 
         if self.config.gradient_checkpointing:
             model.gradient_checkpointing_enable(
