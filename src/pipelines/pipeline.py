@@ -14,14 +14,14 @@ from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import set_seed
+from peft import PeftModel
+from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
+from huggingface_hub import snapshot_download
 
 import wandb
 
 from tqdm import tqdm
-
-from vllm import LLM, SamplingParams
-
-from huggingface_hub import snapshot_download
 
 from ..utils import SetUp
 
@@ -153,6 +153,13 @@ def test(
     model = setup.get_model()
     data_encoder = setup.get_data_encoder()
 
+    if config.is_peft:
+        model = PeftModel.from_pretrained(
+            model=model,
+            model_id=config.peft_test.adapter_path,
+            adapter_name=config.peft_test.adapter_name,
+        )
+
     model.to(local_rank)
     if world_size > 1:
         model = DDP(
@@ -280,6 +287,13 @@ def test_large(
 
     model = setup.get_model()
     data_encoder = setup.get_data_encoder()
+
+    if config.is_peft:
+        model = PeftModel.from_pretrained(
+            model=model,
+            model_id=config.peft_test.adapter_path,
+            adapter_name=config.peft_test.adapter_name,
+        )
 
     try:
         results = []
@@ -419,6 +433,13 @@ def test_vllm(
         **generation_config,
     )
 
+    if config.is_peft:
+        lora_request = LoRARequest(
+            lora_name=config.peft_test.adapter_name,
+            lora_int_id=0,
+            lora_path=config.peft_test.adapter_path,
+        )
+
     file_name = f"{config.dataset_name}.{config.dataset_format}"
     full_data_path = os.path.join(
         config.connected_dir,
@@ -498,6 +519,8 @@ def test_vllm(
         outputs = llm.generate(
             prompts=prompts,
             sampling_params=sampling_params,
+            lora_request=lora_request if config.is_peft else None,
+            use_tqdm=True,
         )
 
         results = []
@@ -611,6 +634,13 @@ def test_vllm_multi_turn(
         **generation_config,
     )
 
+    if config.is_peft:
+        lora_request = LoRARequest(
+            lora_name=config.peft_test.adapter_name,
+            lora_int_id=0,
+            lora_path=config.peft_test.adapter_path,
+        )
+
     file_name = f"{config.dataset_name}.{config.dataset_format}"
     full_data_path = os.path.join(
         config.connected_dir,
@@ -672,6 +702,7 @@ def test_vllm_multi_turn(
                     output = llm.generate(
                         prompts=prompt,
                         sampling_params=sampling_params,
+                        lora_request=lora_request if config.is_peft else None,
                         use_tqdm=False,
                     )
                     generation = output[0].outputs[0].text.strip()
@@ -704,6 +735,7 @@ def test_vllm_multi_turn(
                 output = llm.generate(
                     prompts=prompt,
                     sampling_params=sampling_params,
+                    lora_request=lora_request if config.is_peft else None,
                     use_tqdm=False,
                 )
                 generation = output[0].outputs[0].text.strip()
