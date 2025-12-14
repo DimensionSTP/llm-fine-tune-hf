@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Dict, Union, Optional, Any
 import os
 
 from omegaconf import DictConfig, OmegaConf
@@ -66,7 +66,7 @@ class SetUp:
         )
         return val_dataset
 
-    def get_dataset(self) -> HFDataset:
+    def get_dataset(self) -> Dict[str, HFDataset]:
         dataset: Union[DPOStructuralDataset, DPOConversationalDataset] = instantiate(
             self.config.dataset[self.data_type],
         )
@@ -176,7 +176,7 @@ class SetUp:
         )
         return training_arguments
 
-    def get_ds_config(self) -> DictConfig:
+    def get_ds_config(self) -> Optional[Dict[str, Any]]:
         if self.config.strategy == "deepspeed":
             ds_config = OmegaConf.to_container(
                 self.config.deepspeed,
