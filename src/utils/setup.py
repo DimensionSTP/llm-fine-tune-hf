@@ -10,6 +10,7 @@ datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
 
 import torch
+from torch.utils.data import Dataset
 
 from transformers import (
     AutoTokenizer,
@@ -51,23 +52,17 @@ class SetUp:
         else:
             self.torch_dtype = "auto"
 
-    def get_train_dataset(
-        self,
-    ) -> Union[SFTStructuralDataset, SFTConversationalDataset]:
-        train_dataset: Union[SFTStructuralDataset, SFTConversationalDataset] = (
-            instantiate(
-                self.config.dataset[self.data_type],
-                split=self.config.split.train,
-            )
+    def get_train_dataset(self) -> Dataset:
+        train_dataset: Dataset = instantiate(
+            self.config.dataset[self.data_type],
+            split=self.config.split.train,
         )
         return train_dataset
 
-    def get_val_dataset(self) -> Union[SFTStructuralDataset, SFTConversationalDataset]:
-        val_dataset: Union[SFTStructuralDataset, SFTConversationalDataset] = (
-            instantiate(
-                self.config.dataset[self.data_type],
-                split=self.config.split.val,
-            )
+    def get_val_dataset(self) -> Dataset:
+        val_dataset: Dataset = instantiate(
+            self.config.dataset[self.data_type],
+            split=self.config.split.val,
         )
         return val_dataset
 
@@ -77,13 +72,9 @@ class SetUp:
         )
         return dataset()
 
-    def get_test_dataset(
-        self,
-    ) -> Union[TestStructuralDataset, TestConversationalDataset]:
-        test_dataset: Union[TestStructuralDataset, TestConversationalDataset] = (
-            instantiate(
-                self.config.test_dataset[self.data_type],
-            )
+    def get_test_dataset(self) -> Dataset:
+        test_dataset: Dataset = instantiate(
+            self.config.test_dataset[self.data_type],
         )
         return test_dataset
 
