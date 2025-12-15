@@ -70,43 +70,43 @@ python main.py mode=test_vllm_multi_turn
 * full preprocessing
 
 ```shell
-bash scripts/preprocessings/preprocess.sh
+bash scripts/preprocessing/preprocess.sh
 ```
 
 * dataset preprocessing
 
 ```shell
-bash scripts/preprocessings/preprocess_dataset.sh
+bash scripts/preprocessing/preprocess_dataset.sh
 ```
 
 * train
 
 ```shell
-bash scripts/trains/train.sh
+bash scripts/train/train.sh
 ```
 
 * test
 
 ```shell
-bash scripts/tests/test.sh
+bash scripts/test/test.sh
 ```
 
 * test_large
 
 ```shell
-bash scripts/tests/test_large.sh
+bash scripts/test/test_large.sh
 ```
 
 * test_vllm
 
 ```shell
-bash scripts/tests/test_vllm.sh
+bash scripts/test/test_vllm.sh
 ```
 
 * test_vllm_multi_turn
 
 ```shell
-bash scripts/tests/test_vllm_multi_turn.sh
+bash scripts/test/test_vllm_multi_turn.sh
 ```
 
 ### Additional Options
