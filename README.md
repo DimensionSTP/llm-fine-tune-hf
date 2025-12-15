@@ -53,36 +53,60 @@ python main.py mode=test
 python main.py mode=test_large
 ```
 
+* end-to-end(vLLM)
+
+```shell
+python main.py mode=test_vllm
+```
+
+* end-to-end(vLLM with multi-turn)
+
+```shell
+python main.py mode=test_vllm_multi_turn
+```
+
 ### Examples of shell scipts
 
 * full preprocessing
 
 ```shell
-bash scripts/preprocess.sh
+bash scripts/preprocessings/preprocess.sh
 ```
 
 * dataset preprocessing
 
 ```shell
-bash scripts/preprocess_dataset.sh
+bash scripts/preprocessings/preprocess_dataset.sh
 ```
 
 * train
 
 ```shell
-bash scripts/train.sh
+bash scripts/trains/train.sh
 ```
 
 * test
 
 ```shell
-bash scripts/test.sh
+bash scripts/tests/test.sh
 ```
 
 * test_large
 
 ```shell
-bash scripts/test_large.sh
+bash scripts/tests/test_large.sh
+```
+
+* test_vllm
+
+```shell
+bash scripts/tests/test_vllm.sh
+```
+
+* test_vllm_multi_turn
+
+```shell
+bash scripts/tests/test_vllm_multi_turn.sh
 ```
 
 ### Additional Options
