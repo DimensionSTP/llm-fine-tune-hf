@@ -10,6 +10,10 @@ import warnings
 os.environ["HYDRA_FULL_ERROR"] = "1"
 os.environ["HF_HOME"] = os.environ.get("HF_HOME")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ.setdefault(
+    "VLLM_WORKER_MULTIPROC_METHOD",
+    "spawn",
+)
 warnings.filterwarnings("ignore")
 
 import sys
