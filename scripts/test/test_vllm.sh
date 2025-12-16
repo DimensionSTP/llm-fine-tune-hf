@@ -79,12 +79,12 @@ is_preprocessed=False
 upload_user="Qwen"
 base_path="/data/llm-fine-tune-hf"
 train_dataset="tulu"
-model_type="${train_dataset}/Qwen3-8B"
+model_type="Qwen3-8B"
 revision="main"
 r=32
 lora_alpha=64
 peft_detail="r\=${r}-a\=${lora_alpha}"
-adapter_path="${base_path}/${model_type}/${peft_detail}"
+adapter_path="${base_path}/${train_dataset}/${model_type}/${peft_detail}"
 left_padding=True
 is_enable_thinking=False
 max_length=2048
@@ -93,7 +93,7 @@ do_sample=True
 temperature=0.6
 top_p=0.95
 top_k=20
-test_output_dir="${base_path}/tests/${model_type}/${peft_detail}"
+test_output_dir="${base_path}/tests/${train_dataset}/${model_type}/${peft_detail}"
 
 python main.py mode=test_vllm \
     data_type=$data_type \

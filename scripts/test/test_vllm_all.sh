@@ -176,8 +176,8 @@ base_path="/data/llm-fine-tune-hf"
 train_dataset="tulu"
 
 model_types=(
-    "${train_dataset}/Qwen3-8B"
-    "${train_dataset}/Qwen3-32B"
+    "Qwen3-8B"
+    "Qwen3-32B"
 )
 
 revision="main"
@@ -199,8 +199,8 @@ do
     do
         echo "Running evaluation on dataset: $dataset_name"
 
-        adapter_path="${base_path}/${model_type}/${peft_detail}"
-        test_output_dir="${base_path}/tests/${model_type}/${peft_detail}"
+        adapter_path="${base_path}/${train_dataset}/${model_type}/${peft_detail}"
+        test_output_dir="${base_path}/tests/${train_dataset}/${model_type}/${peft_detail}"
 
         python main.py mode=test_vllm \
             data_type=$data_type \
