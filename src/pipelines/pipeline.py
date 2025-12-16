@@ -397,6 +397,7 @@ def test_vllm(
             max_model_len=config.max_length,
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
+            max_lora_rank=config.peft_config.r,
         )
     except Exception:
         model_path = snapshot_download(
@@ -412,6 +413,7 @@ def test_vllm(
             max_model_len=config.max_length,
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
+            max_lora_rank=config.peft_config.r,
         )
 
     if config.do_sample:
@@ -598,6 +600,7 @@ def test_vllm_multi_turn(
             max_model_len=config.max_length,
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
+            max_lora_rank=config.peft_config.r,
         )
     except Exception:
         model_path = snapshot_download(
@@ -613,6 +616,7 @@ def test_vllm_multi_turn(
             max_model_len=config.max_length,
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
+            max_lora_rank=config.peft_config.r,
         )
 
     model_max_len = llm.llm_engine.model_config.max_model_len
