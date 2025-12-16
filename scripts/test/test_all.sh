@@ -203,13 +203,13 @@ model_types=(
 )
 
 revision="main"
-r=32
-lora_alpha=64
-peft_detail="r\=${r}-a\=${lora_alpha}"
 left_padding=True
 is_enable_thinking=False
 is_quantized=False
 is_peft=True
+r=32
+lora_alpha=64
+peft_detail="r\=${r}-a\=${lora_alpha}"
 max_length=4096
 max_new_tokens=512
 do_sample=True
@@ -227,8 +227,9 @@ do
     do
         echo "Running evaluation on dataset: $dataset_name"
 
-        adapter_path="${base_path}/${train_dataset}/${model_type}/${peft_detail}"
-        test_output_dir="${base_path}/tests/${train_dataset}/${model_type}/${peft_detail}"
+        model_detail="${train_dataset}/${model_type}/${peft_detail}"
+        adapter_path="${base_path}/${model_detail}"
+        test_output_dir="${base_path}/tests/${model_detail}"
 
         torchrun --nproc_per_node=$num_gpus main.py mode=test \
             data_type=$data_type \
@@ -238,11 +239,14 @@ do
             upload_user=$upload_user \
             model_type=$model_type \
             revision=$revision \
-            peft_test.adapter_path=$adapter_path \
             left_padding=$left_padding \
             is_enable_thinking=$is_enable_thinking \
             is_quantized=$is_quantized \
             is_peft=$is_peft \
+            peft_config.r=$r \
+            peft_config.lora_alpha=$lora_alpha \
+            model_detail=$model_detail \
+            peft_test.adapter_path=$adapter_path \
             max_length=$max_length \
             max_new_tokens=$max_new_tokens \
             do_sample=$do_sample \
