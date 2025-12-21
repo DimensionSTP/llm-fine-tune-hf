@@ -69,10 +69,10 @@ quantization_config:
   bnb_4bit_compute_dtype: bfloat16
 is_peft: false
 peft_config:
-  r: 32
-  lora_alpha: 32
+  r: 128
+  lora_alpha: 256
   target_modules: all-linear
-  lora_dropout: 0.1
+  lora_dropout: 0.0
   bias: none
   task_type: CAUSAL_LM
   inference_mode: false
