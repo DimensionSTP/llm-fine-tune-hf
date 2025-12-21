@@ -1,0 +1,26 @@
+structural:
+  _target_: src.datasets.GRPOStructuralDataset
+  data_path: ${connected_dir}/data
+  split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
+  seed: ${seed}
+  dataset_name: ${dataset_name}
+  dataset_format: ${dataset_format}
+  instruction_column_name: ${instruction_column_name}
+  data_column_name: ${data_column_name}
+  solution_column_name: ${solution_column_name}
+  reward_categories_column_name: ${reward_categories_column_name}
+  role_column_name: ${role_column_name}
+  content_column_name: ${content_column_name}
+
+conversational:
+  _target_: src.datasets.GRPOConversationalDataset
+  data_path: ${connected_dir}/data
+  split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
+  seed: ${seed}
+  dataset_name: ${dataset_name}
+  dataset_format: ${dataset_format}
+  prompt_column_name: ${prompt_column_name}
+  solution_column_name: ${solution_column_name}
+  reward_categories_column_name: ${reward_categories_column_name}
