@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, List
 import os
 
 import importlib
@@ -90,8 +90,8 @@ class StructuralDataset:
 
     def create_conversations(
         self,
-        examples: Dict[str, List[Any]],
-    ) -> Dict[str, List[Any]]:
+        examples: Dict[str, List[str]],
+    ) -> Dict[str, List[Dict[str, str]]]:
         chosen_conversations = []
         rejected_conversations = []
 
@@ -121,7 +121,7 @@ class StructuralDataset:
         instruction: str,
         data: str,
         label: str,
-    ) -> str:
+    ) -> List[Dict[str, str]]:
         conversation = [
             {
                 self.role_column_name: "system",
