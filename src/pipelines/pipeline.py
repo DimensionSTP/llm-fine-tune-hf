@@ -23,7 +23,7 @@ import wandb
 
 from tqdm import tqdm
 
-from ..utils import SetUp
+from ..utils import *
 
 
 def train(
@@ -76,6 +76,9 @@ def train(
     )
 
     TrainerClass = get_class(config.trainer._target_)
+
+    if config.fine_tune_method == "grpo":
+        trainer_config["reward_funcs"] = get_grpo_reward_functions()
 
     trainer = TrainerClass(
         model=model,
