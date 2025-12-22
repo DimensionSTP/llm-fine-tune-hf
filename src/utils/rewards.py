@@ -381,17 +381,17 @@ def solution_reward_func(
             rewards.append(1.0)
             continue
 
-        extracted_num = extract_number(text=clean_extracted)
-        ans_num = extract_number(text=clean_answer)
-        if extracted_num and ans_num:
-            if extracted_num == ans_num:
+        extracted_number = extract_number(text=clean_extracted)
+        answer_number = extract_number(text=clean_answer)
+        if extracted_number and answer_number:
+            if extracted_number == answer_number:
                 rewards.append(1.0)
                 continue
 
         extracted_choice = extract_choice(text=clean_extracted)
-        ans_choice = extract_choice(text=clean_answer)
-        if extracted_choice and ans_choice:
-            if extracted_choice == ans_choice:
+        answer_choice = extract_choice(text=clean_answer)
+        if extracted_choice and answer_choice:
+            if extracted_choice == answer_choice:
                 rewards.append(1.0)
                 continue
 
@@ -489,17 +489,17 @@ def code_execution_reward_func(
         if normalize_text(text=clean_output) == normalize_text(text=clean_sol):
             is_correct = True
         else:
-            extracted_num = extract_number(text=clean_output)
-            ans_num = extract_number(text=clean_sol)
-            if extracted_num and ans_num:
-                if extracted_num == ans_num:
+            extracted_number = extract_number(text=clean_output)
+            answer_number = extract_number(text=clean_sol)
+            if extracted_number and answer_number:
+                if extracted_number == answer_number:
                     is_correct = True
 
             if not is_correct:
                 extracted_choice = extract_choice(text=clean_output)
-                ans_choice = extract_choice(text=clean_sol)
-                if extracted_choice and ans_choice:
-                    if extracted_choice == ans_choice:
+                answer_choice = extract_choice(text=clean_sol)
+                if extracted_choice and answer_choice:
+                    if extracted_choice == answer_choice:
                         is_correct = True
 
         if is_correct:
