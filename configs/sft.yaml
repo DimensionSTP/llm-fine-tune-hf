@@ -123,8 +123,8 @@ peft_test:
 max_new_tokens: 512
 do_sample: true
 generation_config:
-  temperature: 0.6
-  top_p: 0.95
+  temperature: 0.7
+  top_p: 0.8
   top_k: 20
 
 gpu_memory_utilization: 0.95
