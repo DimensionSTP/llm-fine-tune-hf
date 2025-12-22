@@ -300,10 +300,21 @@ def formatting_reward_func(
     for completion in completions:
         content = _get_completion_content(completion=completion)
 
+        match_no_thinking = re.search(
+            r"<think>\s*</think>",
+            content,
+        )
+        has_eos_token = "<|im_end|>" in content
+
+        if match_no_thinking:
+            rewards.append(1.0 if has_eos_token else 0.5)
+            continue
+
         if "<think>" in content and "</think>" in content:
-            rewards.append(0.1)
-        else:
-            rewards.append(0.0)
+            rewards.append(0.5 if has_eos_token else 0.25)
+            continue
+
+        rewards.append(0.0)
 
     return rewards
 
