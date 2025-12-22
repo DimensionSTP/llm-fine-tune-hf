@@ -18,6 +18,7 @@ do_sample=True
 temperature=0.6
 top_p=0.95
 top_k=20
+gpu_memory_utilization=0.95
 
 python main.py mode=test_vllm \
     data_type=$data_type \
@@ -36,7 +37,8 @@ python main.py mode=test_vllm \
     do_sample=$do_sample \
     generation_config.temperature=$temperature \
     generation_config.top_p=$top_p \
-    generation_config.top_k=$top_k
+    generation_config.top_k=$top_k \
+    gpu_memory_utilization=$gpu_memory_utilization
 
 
 # fine-tuned
@@ -58,6 +60,7 @@ do_sample=True
 temperature=0.6
 top_p=0.95
 top_k=20
+gpu_memory_utilization=0.95
 
 python main.py mode=test_vllm \
     data_type=$data_type \
@@ -76,7 +79,8 @@ python main.py mode=test_vllm \
     do_sample=$do_sample \
     generation_config.temperature=$temperature \
     generation_config.top_p=$top_p \
-    generation_config.top_k=$top_k 
+    generation_config.top_k=$top_k \
+    gpu_memory_utilization=$gpu_memory_utilization
 
 
 # LoRA fine-tuned
@@ -104,6 +108,7 @@ do_sample=True
 temperature=0.6
 top_p=0.95
 top_k=20
+gpu_memory_utilization=0.95
 test_output_dir="${base_path}/tests/${model_detail}"
 
 python main.py mode=test_vllm \
@@ -128,4 +133,5 @@ python main.py mode=test_vllm \
     generation_config.temperature=$temperature \
     generation_config.top_p=$top_p \
     generation_config.top_k=$top_k \
+    gpu_memory_utilization=$gpu_memory_utilization \
     test_output_dir=$test_output_dir
