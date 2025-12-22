@@ -14,6 +14,14 @@ def extract_answer_from_generation(generation: str) -> str:
         return ""
 
     match = re.search(
+        r"</think>\s*(.*?)\s*(?:<\|im_end\|>|$)",
+        generation,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if match:
+        return match.group(1).strip()
+
+    match = re.search(
         r"###\s*Start\s*\n(.*?)\n?###\s*End",
         generation,
         flags=re.DOTALL,
