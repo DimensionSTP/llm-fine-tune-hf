@@ -453,11 +453,12 @@ def rouge_reward_func(
 
 def code_execution_reward_func(
     completions: List[List[Dict[str, str]]],
+    solution: List[str],
     reward_categories: List[str],
     **kwargs,
 ) -> List[Optional[float]]:
     rewards = []
-    for completion, category in zip(completions, reward_categories):
+    for completion, sol, category in zip(completions, solution, reward_categories):
         if category != "code":
             rewards.append(None)
             continue
@@ -472,10 +473,39 @@ def code_execution_reward_func(
             code=code,
             timeout=2,
         )
-        if result["status"] == "success":
+        if result["status"] != "success":
+            rewards.append(0.0)
+            continue
+
+        if not sol:
             rewards.append(0.5)
+            continue
+
+        output = result["output"]
+        clean_output = strip_wrappers(text=output)
+        clean_sol = strip_wrappers(text=sol)
+
+        is_correct = False
+        if normalize_text(text=clean_output) == normalize_text(text=clean_sol):
+            is_correct = True
         else:
-            rewards.append(0.1)
+            extracted_num = extract_number(text=clean_output)
+            ans_num = extract_number(text=clean_sol)
+            if extracted_num and ans_num:
+                if extracted_num == ans_num:
+                    is_correct = True
+
+            if not is_correct:
+                extracted_choice = extract_choice(text=clean_output)
+                ans_choice = extract_choice(text=clean_sol)
+                if extracted_choice and ans_choice:
+                    if extracted_choice == ans_choice:
+                        is_correct = True
+
+        if is_correct:
+            rewards.append(1.0)
+        else:
+            rewards.append(0.5)
 
     return rewards
 
