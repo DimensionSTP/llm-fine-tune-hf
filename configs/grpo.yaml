@@ -21,7 +21,7 @@ split:
   train: train
   val: val
 
-batch_size: 8
+batch_size: 2
 eval_batch_size: 8
 workers_ratio: 8
 use_all_workers: false
@@ -49,9 +49,7 @@ reference_data_encoder_name: Qwen/Qwen3-8B
 left_padding: false
 is_enable_thinking: false
 merged_model_path: ${connected_dir}/merged/models/${pretrained_model_name}
-max_length: 4096
-max_prompt_length: 2048
-max_completion_length: 2048
+max_length: 2048
 
 user_name: ${oc.env:USER_NAME}
 model_detail: ${model_type}
@@ -96,9 +94,8 @@ log_completions: false
 importance_sampling_level: sequence
 loss_type: sapo
 use_vllm: true
-vllm_mode: server
-vllm_tensor_parallel_size: 1
-vllm_gpu_memory_utilization: 0.35
+vllm_mode: colocate
+vllm_tensor_parallel_size: ${devices}
 sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05
 scale_rewards: group
@@ -107,7 +104,7 @@ devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
 logging_steps: 10
 is_bf16: true
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 64
 max_grad_norm: 1
 epoch: 2
 step: 250
@@ -136,14 +133,14 @@ peft_test:
   adapter_path: ${output_dir}
   adapter_name: adapter
 
-max_new_tokens: 512
+max_new_tokens: 2048
 do_sample: true
 generation_config:
   temperature: 0.7
   top_p: 0.8
   top_k: 20
 
-gpu_memory_utilization: 0.95
+gpu_memory_utilization: 0.7
 
 test_data_dir: benchmarks/test
 test_output_dir: ${connected_dir}/tests/${model_type}
