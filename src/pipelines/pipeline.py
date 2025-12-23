@@ -15,6 +15,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import set_seed
 from peft import PeftModel
+from trl.rewards import reasoning_accuracy_reward, think_format_reward
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 from huggingface_hub import snapshot_download
@@ -78,7 +79,10 @@ def train(
     TrainerClass = get_class(config.trainer._target_)
 
     if config.fine_tune_method == "grpo":
-        trainer_config["reward_funcs"] = get_grpo_reward_functions()
+        trainer_config["reward_funcs"] = [
+            reasoning_accuracy_reward,
+            think_format_reward,
+        ]
 
     trainer = TrainerClass(
         model=model,
