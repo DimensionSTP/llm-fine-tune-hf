@@ -24,6 +24,7 @@ from transformers import (
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 
 from ..datasets import *
+from src.utils.rewards import RewardManager
 
 
 class SetUp:
@@ -189,3 +190,9 @@ class SetUp:
             )
             return ds_config
         return None
+
+    def get_reward_manager(self) -> RewardManager:
+        reward_manager: RewardManager = instantiate(
+            self.config.reward_manager,
+        )
+        return reward_manager
