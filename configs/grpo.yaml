@@ -101,6 +101,18 @@ sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05
 scale_rewards: group
 
+reward:
+  is_reasoning_model: true
+  think_end_format: </think>
+  eos_token: <|im_end|>
+  timeout: 2
+  rouge_type: l
+  weight:
+    think_format: 1.0
+    match: 2.0
+    code_execution: 0.0
+    rouge: 0.0
+
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
 logging_steps: 10
