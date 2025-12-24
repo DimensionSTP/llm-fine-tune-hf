@@ -88,11 +88,11 @@ scheduler_type: cosine
 warmup_ratio: 5e-2
 
 beta: 0.0
-epsilon: 3e-4
-epsilon_high: 4e-4
+epsilon: 0.2
+epsilon_high: null
 num_generations: 8
 log_completions: false
-importance_sampling_level: sequence
+importance_sampling_level: token
 loss_type: sapo
 use_vllm: true
 vllm_mode: colocate
