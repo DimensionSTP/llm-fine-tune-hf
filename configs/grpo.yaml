@@ -3,6 +3,7 @@ defaults:
   - dataset: grpo_dataset
   - training_arguments: grpo_config
   - trainer: grpo_trainer
+  - reward_manager: reward_manager
   - deepspeed: ds_config
   - test_dataset: test_dataset
   - hydra: hydra
