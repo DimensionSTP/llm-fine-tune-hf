@@ -79,10 +79,8 @@ def train(
     TrainerClass = get_class(config.trainer._target_)
 
     if config.fine_tune_method == "grpo":
-        trainer_config["reward_funcs"] = [
-            reasoning_accuracy_reward,
-            think_format_reward,
-        ]
+        reward_manager = setup.get_reward_manager()
+        trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
 
     trainer = TrainerClass(
         model=model,
