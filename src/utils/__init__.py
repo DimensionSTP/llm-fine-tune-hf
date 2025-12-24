@@ -1,7 +1,17 @@
 from .setup import SetUp
-from .rewards import get_grpo_reward_functions
+from .rewards import (
+    ThinkFormatReward,
+    MatchReward,
+    CodeExecutionReward,
+    RougeReward,
+    RewardManager,
+)
 
 __all__ = [
     "SetUp",
-    "get_grpo_reward_functions",
+    "ThinkFormatReward",
+    "MatchReward",
+    "CodeExecutionReward",
+    "RougeReward",
+    "RewardManager",
 ]
