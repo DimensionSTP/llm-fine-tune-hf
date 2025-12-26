@@ -6,6 +6,7 @@ import multiprocessing as mp
 import contextlib
 import io
 import queue
+import functools
 
 from rouge_score import rouge_scorer
 
@@ -22,6 +23,10 @@ class BaseReward(ABC):
         self.think_end_format = think_end_format
         self.eos_token = eos_token
         self.weight = weight
+
+    @property
+    def name(self) -> str:
+        return re.sub(r"(?<!^)(?=[A-Z])", "_", self.__class__.__name__).lower()
 
     def __call__(
         self,
@@ -499,6 +504,10 @@ class RougeReward(BaseReward):
         )
         self.rouge_type = rouge_type
 
+    @property
+    def name(self) -> str:
+        return f"rouge_{self.rouge_type}_reward"
+
     def compute(
         self,
         completions: List[List[Dict[str, str]]],
@@ -553,4 +562,13 @@ class RewardManager:
         self.rewards = [reward for reward in rewards if reward.weight > 0]
 
     def get_reward_funcs(self) -> List[Callable]:
-        return [reward.__call__ for reward in self.rewards]
+        funcs = []
+        for reward in self.rewards:
+
+            @functools.wraps(reward.__call__)
+            def wrapper(*args, **kwargs):
+                return reward(*args, **kwargs)
+
+            wrapper.__name__ = reward.name
+            funcs.append(wrapper)
+        return funcs
