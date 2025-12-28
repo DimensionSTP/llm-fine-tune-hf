@@ -566,8 +566,12 @@ class RewardManager:
         for reward in self.rewards:
 
             @functools.wraps(reward.__call__)
-            def wrapper(*args, **kwargs):
-                return reward(*args, **kwargs)
+            def wrapper(
+                *args,
+                _reward=reward,
+                **kwargs,
+            ):
+                return _reward(*args, **kwargs)
 
             wrapper.__name__ = reward.name
             funcs.append(wrapper)
