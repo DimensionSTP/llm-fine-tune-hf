@@ -15,12 +15,20 @@ class BaseReward(ABC):
     def __init__(
         self,
         is_reasoning_model: bool,
-        think_end_format: str,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
         eos_token: str,
         weight: float,
     ) -> None:
         self.is_reasoning_model = is_reasoning_model
-        self.think_end_format = think_end_format
+        self.is_answer_tag = is_answer_tag
+        self.think_start_token = think_start_token
+        self.think_end_token = think_end_token
+        self.answer_start_token = answer_start_token
+        self.answer_end_token = answer_end_token
         self.eos_token = eos_token
         self.weight = weight
 
@@ -69,59 +77,78 @@ class BaseReward(ABC):
         if not isinstance(generation, str):
             return ""
 
-        if self.is_reasoning_model:
+        if self.is_answer_tag:
             match = re.search(
-                rf"{self.think_end_format}\s*(.*?)\s*(?:{self.eos_token}|$)",
+                rf"{self.answer_start_token}\s*(.*?)\s*(?:{self.answer_end_token}|$)",
                 generation,
                 flags=re.DOTALL | re.IGNORECASE,
             )
             if match:
                 return match.group(1).strip()
-
             return ""
 
         else:
-            match = re.search(
-                rf"{self.think_end_format}\s*(.*?)\s*(?:{self.eos_token}|$)",
-                generation,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            if match:
-                return match.group(1).strip()
+            if self.is_reasoning_model:
+                match = re.search(
+                    rf"{self.think_end_token}\s*(.*?)\s*(?:{self.eos_token}|$)",
+                    generation,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+                if match:
+                    return match.group(1).strip()
 
-            match = re.search(
-                r"###\s*Start\s*\n(.*?)\n?###\s*End",
-                generation,
-                flags=re.DOTALL,
-            )
-            if match:
-                return match.group(1).strip()
+                return ""
 
-            match = re.search(
-                r"<solution>(.*?)</solution>",
-                generation,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            if match:
-                return match.group(1).strip()
+            else:
+                match = re.search(
+                    r"###\s*Start\s*\n(.*?)\n?###\s*End",
+                    generation,
+                    flags=re.DOTALL,
+                )
+                if match:
+                    return match.group(1).strip()
 
-            match = re.search(
-                r"###\s*Start\s*\n(.*)$",
-                generation,
-                flags=re.DOTALL,
-            )
-            if match:
-                return match.group(1).strip()
+                match = re.search(
+                    r"<solution>(.*?)</solution>",
+                    generation,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+                if match:
+                    return match.group(1).strip()
 
-            match = re.search(
-                r"<solution>(.*)$",
-                generation,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            if match:
-                return match.group(1).strip()
+                match = re.search(
+                    r"<answer>(.*?)</answer>",
+                    generation,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+                if match:
+                    return match.group(1).strip()
 
-            return generation
+                match = re.search(
+                    r"###\s*Start\s*\n(.*)$",
+                    generation,
+                    flags=re.DOTALL,
+                )
+                if match:
+                    return match.group(1).strip()
+
+                match = re.search(
+                    r"<solution>(.*)$",
+                    generation,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+                if match:
+                    return match.group(1).strip()
+
+                match = re.search(
+                    r"<answer>(.*)$",
+                    generation,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+                if match:
+                    return match.group(1).strip()
+
+                return generation
 
     @staticmethod
     def split_on_keywords(text: str) -> str:
@@ -222,10 +249,34 @@ class ThinkFormatReward(BaseReward):
         if not self.is_reasoning_model:
             return [None] * len(completions)
 
-        pattern = r"^<think>(?!.*<think>)(.*?)</think>.*$"
+        pattern = rf"{self.think_start_token}(?!.*{self.think_start_token})(.*?){self.think_end_token}"
         contents = self.get_contents_from_completions(completions=completions)
         matches = [
-            re.match(
+            re.search(
+                pattern,
+                content,
+                re.DOTALL | re.MULTILINE,
+            )
+            for content in contents
+        ]
+        return [1.0 if match else 0.0 for match in matches]
+
+
+class AnswerFormatReward(BaseReward):
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        if not self.is_answer_tag:
+            return [None] * len(completions)
+
+        pattern = rf"{self.answer_start_token}(?!.*{self.answer_start_token})(.*?){self.answer_end_token}"
+        contents = self.get_contents_from_completions(completions=completions)
+        matches = [
+            re.search(
                 pattern,
                 content,
                 re.DOTALL | re.MULTILINE,
@@ -326,14 +377,22 @@ class CodeExecutionReward(BaseReward):
     def __init__(
         self,
         is_reasoning_model: bool,
-        think_end_format: str,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
         eos_token: str,
         weight: float,
         timeout: int,
     ) -> None:
         super().__init__(
             is_reasoning_model=is_reasoning_model,
-            think_end_format=think_end_format,
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
             eos_token=eos_token,
             weight=weight,
         )
@@ -491,14 +550,22 @@ class RougeReward(BaseReward):
     def __init__(
         self,
         is_reasoning_model: bool,
-        think_end_format: str,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
         eos_token: str,
         weight: float,
         rouge_type: str,
     ) -> None:
         super().__init__(
             is_reasoning_model=is_reasoning_model,
-            think_end_format=think_end_format,
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
             eos_token=eos_token,
             weight=weight,
         )
