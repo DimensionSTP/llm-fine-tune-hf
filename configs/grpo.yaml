@@ -125,7 +125,7 @@ reward:
 
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
-logging_steps: 10
+logging_steps: 2
 is_bf16: true
 gradient_accumulation_steps: 64
 max_grad_norm: 1
