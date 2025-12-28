@@ -154,11 +154,7 @@ class BaseReward(ABC):
     def split_on_keywords(text: str) -> str:
         if not isinstance(text, str):
             return ""
-        pattern = (
-            r"(?:the\s*(?:final|best)\s*)?answer\s*(?:is|:)\s*|"
-            r"best\s*answer\s*(?:is|:)\s*|"
-            r"answer\s*(?:is|:)\s*"
-        )
+        pattern = r"answer\s*(?:is\s*:?|:)\s*"
         parts = re.split(
             pattern,
             text,
