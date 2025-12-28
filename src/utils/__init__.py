@@ -1,6 +1,7 @@
 from .setup import SetUp
 from .rewards import (
     ThinkFormatReward,
+    AnswerFormatReward,
     MatchReward,
     CodeExecutionReward,
     RougeReward,
@@ -10,6 +11,7 @@ from .rewards import (
 __all__ = [
     "SetUp",
     "ThinkFormatReward",
+    "AnswerFormatReward",
     "MatchReward",
     "CodeExecutionReward",
     "RougeReward",
