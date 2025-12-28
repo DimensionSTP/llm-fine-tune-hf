@@ -2,26 +2,42 @@ _target_: src.utils.RewardManager
 rewards:
   - _target_: src.utils.ThinkFormatReward
     is_reasoning_model: ${reward.is_reasoning_model}
-    think_end_format: ${reward.think_end_format}
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.think_format}
 
   - _target_: src.utils.MatchReward
     is_reasoning_model: ${reward.is_reasoning_model}
-    think_end_format: ${reward.think_end_format}
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.match}
 
   - _target_: src.utils.CodeExecutionReward
     is_reasoning_model: ${reward.is_reasoning_model}
-    think_end_format: ${reward.think_end_format}
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.code_execution}
     timeout: ${reward.timeout}
 
   - _target_: src.utils.RougeReward
     is_reasoning_model: ${reward.is_reasoning_model}
-    think_end_format: ${reward.think_end_format}
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.rouge}
     rouge_type: ${reward.rouge_type}
