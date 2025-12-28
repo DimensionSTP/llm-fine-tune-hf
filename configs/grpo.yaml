@@ -108,7 +108,11 @@ scale_rewards: group
 
 reward:
   is_reasoning_model: true
-  think_end_format: </think>
+  is_answer_tag: true
+  think_start_token: <think>
+  think_end_token: </think>
+  answer_start_token: <answer>
+  answer_end_token: </answer>
   eos_token: <|im_end|>
   timeout: 2
   rouge_type: l
