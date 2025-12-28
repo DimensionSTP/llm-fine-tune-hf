@@ -34,6 +34,8 @@ dataset_format: parquet
 is_preprocessed: false
 instruction_column_name: instruction
 data_column_name: input
+target_column_name: response
+conversation_column_name: messages
 chosen_column_name: chosen
 rejected_column_name: rejected
 role_column_name: role
