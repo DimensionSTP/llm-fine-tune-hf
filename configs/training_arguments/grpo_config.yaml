@@ -30,6 +30,7 @@ save_strategy: ${save_strategy}
 save_total_limit: ${save_total_limit}
 resume_from_checkpoint: ${resume_from_checkpoint}
 run_name: ${logging_name}
+chat_template_kwargs: ${chat_template_kwargs}
 beta: ${beta}
 epsilon: ${epsilon}
 epsilon_high: ${epsilon_high}
