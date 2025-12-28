@@ -79,7 +79,7 @@ class BaseReward(ABC):
 
         if self.is_answer_tag:
             match = re.search(
-                rf"{self.answer_start_token}\s*(.*?)\s*(?:{self.answer_end_token}|$)",
+                rf"{self.answer_start_token}(.*?){self.answer_end_token}",
                 generation,
                 flags=re.DOTALL | re.IGNORECASE,
             )
