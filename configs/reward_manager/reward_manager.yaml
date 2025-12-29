@@ -51,3 +51,15 @@ rewards:
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.rouge}
     rouge_type: ${reward.rouge_type}
+
+  - _target_: src.utils.EquationReward
+    is_reasoning_model: ${reward.is_reasoning_model}
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
+    eos_token: ${reward.eos_token}
+    weight: ${reward.weight.equation}
+    equation_target_column_name: ${reward.equation_target_column_name}
+    equation_numbers_column_name: ${reward.equation_numbers_column_name}
