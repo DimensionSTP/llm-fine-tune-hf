@@ -116,12 +116,15 @@ reward:
   eos_token: <|im_end|>
   timeout: 2
   rouge_type: l
+  equation_target_column_name: target
+  equation_numbers_column_name: numbers
   weight:
     think_format: 0.0
     answer_format: 1.0
     match: 2.0
     code_execution: 0.0
     rouge: 0.0
+    equation: 0.0
 
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
