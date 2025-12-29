@@ -1,11 +1,12 @@
 from .setup import SetUp
 from .rewards import (
+    RewardManager,
     ThinkFormatReward,
     AnswerFormatReward,
     MatchReward,
     CodeExecutionReward,
     RougeReward,
-    RewardManager,
+    EquationReward,
 )
 
 __all__ = [
@@ -16,5 +17,5 @@ __all__ = [
     "MatchReward",
     "CodeExecutionReward",
     "RougeReward",
-    "RewardManager",
+    "EquationReward",
 ]
