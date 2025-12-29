@@ -591,6 +591,14 @@ class RougeReward(BaseReward):
         )
         self.rouge_type = rouge_type
 
+        if self.rouge_type not in ["1", "2", "l"]:
+            raise ValueError("rouge_type must be '1', '2', or 'l'")
+
+        self.scorer = rouge_scorer.RougeScorer(
+            [f"rouge{self.rouge_type.upper()}"],
+            use_stemmer=True,
+        )
+
     @property
     def name(self) -> str:
         return f"rouge_{self.rouge_type}_reward"
@@ -630,14 +638,10 @@ class RougeReward(BaseReward):
         prediction: str,
         reference: str,
     ) -> float:
-        if self.rouge_type not in ["1", "2", "l"]:
-            raise ValueError("rouge_type must be '1', '2', or 'l'")
-
-        scorer = rouge_scorer.RougeScorer(
-            [f"rouge{self.rouge_type.upper()}"],
-            use_stemmer=True,
+        scores = self.scorer.score(
+            prediction=prediction,
+            target=reference,
         )
-        scores = scorer.score(reference, prediction)
         return scores[f"rouge{self.rouge_type.upper()}"].fmeasure
 
 
