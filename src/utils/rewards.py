@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Any
 
 from abc import ABC, abstractmethod
 import re
@@ -645,25 +645,83 @@ class RougeReward(BaseReward):
         return scores[f"rouge{self.rouge_type.upper()}"].fmeasure
 
 
-class RewardManager:
+class EquationReward(BaseReward):
     def __init__(
         self,
-        rewards: List[BaseReward],
+        is_reasoning_model: bool,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        equation_target_column_name: str,
+        equation_numbers_column_name: str,
     ) -> None:
-        self.rewards = [reward for reward in rewards if reward.weight > 0]
+        super().__init__(
+            is_reasoning_model=is_reasoning_model,
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+        )
+        self.equation_target_column_name = equation_target_column_name
+        self.equation_numbers_column_name = equation_numbers_column_name
 
-    def get_reward_funcs(self) -> List[Callable]:
-        funcs = []
-        for reward in self.rewards:
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[Dict[str, Any]],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "equation":
+                rewards.append(None)
+                continue
 
-            @functools.wraps(reward.__call__)
-            def wrapper(
-                *args,
-                _reward=reward,
-                **kwargs,
-            ):
-                return _reward(*args, **kwargs)
+            if not sol:
+                rewards.append(None)
+                continue
 
-            wrapper.__name__ = reward.name
-            funcs.append(wrapper)
-        return funcs
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            clean_answer = self.strip_wrappers(text=extracted_answer)
+
+            reward = self.calculate_equation_reward(
+                equation=clean_answer,
+                solution=sol,
+            )
+            rewards.append(reward)
+        return rewards
+
+    def calculate_equation_reward(
+        self,
+        equation: str,
+        solution: Dict[str, Any],
+    ) -> float:
+        target = solution[self.equation_target_column_name]
+        numbers = solution[self.equation_numbers_column_name]
+        try:
+            used_numbers = [int(n) for n in re.findall(r"\d+", equation)]
+            if sorted(used_numbers) != sorted(numbers):
+                return 0.0
+
+            allowed_pattern = r"^[\d+\-*/().\s]+$"
+            if not re.match(allowed_pattern, equation):
+                return 0.0
+
+            result = eval(equation, {"__builtins__": None}, {})
+            if abs(float(result) - float(target)) < 1e-5:
+                return 1.0
+            else:
+                return 0.0
+        except Exception:
+            return 0.0
