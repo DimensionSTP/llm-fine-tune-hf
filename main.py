@@ -6,6 +6,7 @@ dotenv.load_dotenv(
 
 import os
 import warnings
+import absl.logging
 
 os.environ["HYDRA_FULL_ERROR"] = "1"
 os.environ["HF_HOME"] = os.environ.get("HF_HOME")
@@ -17,6 +18,7 @@ os.environ.setdefault(
 os.environ["VLLM_LOGGING_LEVEL"] = "WARNING"
 
 warnings.filterwarnings("ignore")
+absl.logging.set_verbosity(absl.logging.ERROR)
 
 import sys
 
