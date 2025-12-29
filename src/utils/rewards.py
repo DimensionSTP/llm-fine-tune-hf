@@ -234,6 +234,30 @@ class BaseReward(ABC):
         return text.strip()
 
 
+class RewardManager:
+    def __init__(
+        self,
+        rewards: List[BaseReward],
+    ) -> None:
+        self.rewards = [reward for reward in rewards if reward.weight > 0]
+
+    def get_reward_funcs(self) -> List[Callable]:
+        funcs = []
+        for reward in self.rewards:
+
+            @functools.wraps(reward.__call__)
+            def wrapper(
+                *args,
+                _reward=reward,
+                **kwargs,
+            ):
+                return _reward(*args, **kwargs)
+
+            wrapper.__name__ = reward.name
+            funcs.append(wrapper)
+        return funcs
+
+
 class ThinkFormatReward(BaseReward):
     def compute(
         self,
