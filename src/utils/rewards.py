@@ -87,68 +87,66 @@ class BaseReward(ABC):
                 return match.group(1).strip()
             return ""
 
-        else:
-            if self.is_reasoning_model:
-                match = re.search(
-                    rf"{self.think_end_token}\s*(.*?)\s*(?:{self.eos_token}|$)",
-                    generation,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                if match:
-                    return match.group(1).strip()
+        if self.is_reasoning_model:
+            match = re.search(
+                rf"{self.think_end_token}\s*(.*?)\s*(?:{self.eos_token}|$)",
+                generation,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            if match:
+                return match.group(1).strip()
 
-                return ""
+            return ""
 
-            else:
-                match = re.search(
-                    r"###\s*Start\s*\n(.*?)\n?###\s*End",
-                    generation,
-                    flags=re.DOTALL,
-                )
-                if match:
-                    return match.group(1).strip()
+        match = re.search(
+            r"###\s*Start\s*\n(.*?)\n?###\s*End",
+            generation,
+            flags=re.DOTALL,
+        )
+        if match:
+            return match.group(1).strip()
 
-                match = re.search(
-                    r"<solution>(.*?)</solution>",
-                    generation,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                if match:
-                    return match.group(1).strip()
+        match = re.search(
+            r"<solution>(.*?)</solution>",
+            generation,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
 
-                match = re.search(
-                    r"<answer>(.*?)</answer>",
-                    generation,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                if match:
-                    return match.group(1).strip()
+        match = re.search(
+            r"<answer>(.*?)</answer>",
+            generation,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
 
-                match = re.search(
-                    r"###\s*Start\s*\n(.*)$",
-                    generation,
-                    flags=re.DOTALL,
-                )
-                if match:
-                    return match.group(1).strip()
+        match = re.search(
+            r"###\s*Start\s*\n(.*)$",
+            generation,
+            flags=re.DOTALL,
+        )
+        if match:
+            return match.group(1).strip()
 
-                match = re.search(
-                    r"<solution>(.*)$",
-                    generation,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                if match:
-                    return match.group(1).strip()
+        match = re.search(
+            r"<solution>(.*)$",
+            generation,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
 
-                match = re.search(
-                    r"<answer>(.*)$",
-                    generation,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                if match:
-                    return match.group(1).strip()
+        match = re.search(
+            r"<answer>(.*)$",
+            generation,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
 
-                return generation
+        return generation
 
     @staticmethod
     def split_on_keywords(text: str) -> str:
