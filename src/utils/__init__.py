@@ -10,6 +10,7 @@ from .rewards import (
 
 __all__ = [
     "SetUp",
+    "RewardManager",
     "ThinkFormatReward",
     "AnswerFormatReward",
     "MatchReward",
