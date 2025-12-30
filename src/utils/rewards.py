@@ -14,7 +14,6 @@ from rouge_score import rouge_scorer
 class BaseReward(ABC):
     def __init__(
         self,
-        is_reasoning_model: bool,
         is_answer_tag: bool,
         think_start_token: str,
         think_end_token: str,
@@ -23,7 +22,6 @@ class BaseReward(ABC):
         eos_token: str,
         weight: float,
     ) -> None:
-        self.is_reasoning_model = is_reasoning_model
         self.is_answer_tag = is_answer_tag
         self.think_start_token = think_start_token
         self.think_end_token = think_end_token
@@ -85,17 +83,6 @@ class BaseReward(ABC):
             )
             if match:
                 return match.group(1).strip()
-            return ""
-
-        if self.is_reasoning_model:
-            match = re.search(
-                rf"{self.think_end_token}\s*(.*?)\s*(?:{self.eos_token}|$)",
-                generation,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            if match:
-                return match.group(1).strip()
-
             return ""
 
         match = re.search(
@@ -257,6 +244,28 @@ class RewardManager:
 
 
 class ThinkFormatReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        is_enable_thinking: bool,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+        )
+        self.is_enable_thinking = is_enable_thinking
+
     def compute(
         self,
         completions: List[List[Dict[str, str]]],
@@ -264,7 +273,7 @@ class ThinkFormatReward(BaseReward):
         reward_categories: List[str],
         **kwargs,
     ) -> List[Optional[float]]:
-        if not self.is_reasoning_model:
+        if not self.is_enable_thinking:
             return [None] * len(completions)
 
         pattern = rf"{self.think_start_token}(?!.*{self.think_start_token})(.*?){self.think_end_token}"
@@ -394,7 +403,6 @@ class MatchReward(BaseReward):
 class CodeExecutionReward(BaseReward):
     def __init__(
         self,
-        is_reasoning_model: bool,
         is_answer_tag: bool,
         think_start_token: str,
         think_end_token: str,
@@ -405,7 +413,6 @@ class CodeExecutionReward(BaseReward):
         timeout: int,
     ) -> None:
         super().__init__(
-            is_reasoning_model=is_reasoning_model,
             is_answer_tag=is_answer_tag,
             think_start_token=think_start_token,
             think_end_token=think_end_token,
@@ -567,7 +574,6 @@ class CodeExecutionReward(BaseReward):
 class RougeReward(BaseReward):
     def __init__(
         self,
-        is_reasoning_model: bool,
         is_answer_tag: bool,
         think_start_token: str,
         think_end_token: str,
@@ -578,7 +584,6 @@ class RougeReward(BaseReward):
         rouge_type: str,
     ) -> None:
         super().__init__(
-            is_reasoning_model=is_reasoning_model,
             is_answer_tag=is_answer_tag,
             think_start_token=think_start_token,
             think_end_token=think_end_token,
@@ -646,7 +651,6 @@ class RougeReward(BaseReward):
 class EquationReward(BaseReward):
     def __init__(
         self,
-        is_reasoning_model: bool,
         is_answer_tag: bool,
         think_start_token: str,
         think_end_token: str,
@@ -658,7 +662,6 @@ class EquationReward(BaseReward):
         equation_numbers_column_name: str,
     ) -> None:
         super().__init__(
-            is_reasoning_model=is_reasoning_model,
             is_answer_tag=is_answer_tag,
             think_start_token=think_start_token,
             think_end_token=think_end_token,
