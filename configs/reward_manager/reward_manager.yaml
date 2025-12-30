@@ -1,7 +1,6 @@
 _target_: src.utils.RewardManager
 rewards:
   - _target_: src.utils.ThinkFormatReward
-    is_reasoning_model: ${reward.is_reasoning_model}
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -9,9 +8,9 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.think_format}
+    is_enable_thinking: ${is_enable_thinking}
 
   - _target_: src.utils.AnswerFormatReward
-    is_reasoning_model: ${reward.is_reasoning_model}
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -21,7 +20,6 @@ rewards:
     weight: ${reward.weight.answer_format}
 
   - _target_: src.utils.MatchReward
-    is_reasoning_model: ${reward.is_reasoning_model}
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -31,7 +29,6 @@ rewards:
     weight: ${reward.weight.match}
 
   - _target_: src.utils.CodeExecutionReward
-    is_reasoning_model: ${reward.is_reasoning_model}
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -42,7 +39,6 @@ rewards:
     timeout: ${reward.timeout}
 
   - _target_: src.utils.RougeReward
-    is_reasoning_model: ${reward.is_reasoning_model}
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -53,7 +49,6 @@ rewards:
     rouge_type: ${reward.rouge_type}
 
   - _target_: src.utils.EquationReward
-    is_reasoning_model: ${reward.is_reasoning_model}
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
