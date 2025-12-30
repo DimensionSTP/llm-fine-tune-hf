@@ -133,6 +133,14 @@ class BaseReward(ABC):
         if match:
             return match.group(1).strip()
 
+        match = re.search(
+            rf"{self.think_end_token}\s*(.*?)\s*(?:{self.eos_token}|$)",
+            generation,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
+
         return generation
 
     @staticmethod
