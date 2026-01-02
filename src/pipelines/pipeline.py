@@ -15,7 +15,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import set_seed
 from peft import PeftModel
-from trl.rewards import reasoning_accuracy_reward, think_format_reward
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 from huggingface_hub import snapshot_download
