@@ -476,7 +476,7 @@ class CodeExecutionReward(BaseReward):
                 code=solution_code,
                 timeout=self.timeout,
             )
-            if answer_result["status"] != "success":
+            if solution_result["status"] != "success":
                 rewards.append(None)
                 continue
 
