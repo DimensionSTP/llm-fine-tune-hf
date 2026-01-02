@@ -452,9 +452,7 @@ class CodeExecutionReward(BaseReward):
             extracted_answer = self.extract_answer_from_generation(generation=content)
             extracted_answer = self.split_on_keywords(text=extracted_answer)
 
-            clean_answer = self.strip_wrappers(text=extracted_answer)
-
-            answer_code = self.parse_python_code(text=clean_answer)
+            answer_code = self.parse_python_code(text=extracted_answer)
             if not answer_code:
                 rewards.append(0.0)
                 continue
