@@ -435,8 +435,6 @@ def test_vllm(
         stop=[
             "### End",
             "\n### End",
-            "</think>",
-            "\n</think>",
         ],
         **generation_config,
     )
@@ -640,8 +638,6 @@ def test_vllm_multi_turn(
         stop=[
             "### End",
             "\n### End",
-            "</think>",
-            "\n</think>",
         ],
         **generation_config,
     )
