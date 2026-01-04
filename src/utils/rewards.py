@@ -9,6 +9,10 @@ import queue
 import functools
 
 from rouge_score import rouge_scorer
+from ast import literal_eval
+
+from src.utils.reward_vector_store import FaissIndex
+from src.utils.reward_embedding import VllmEmbedding
 
 
 class BaseReward(ABC):
@@ -732,3 +736,98 @@ class EquationReward(BaseReward):
                 return 0.0
         except Exception:
             return 0.0
+
+
+class RetrievalHitReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        database: FaissIndex,
+        embedding: VllmEmbedding,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+        )
+        self.database = database
+        self.embedding = embedding
+        self._database_loaded = False
+
+    @property
+    def name(self) -> str:
+        return f"retrieval_hit@{self.database.retrieval_top_k}_reward"
+
+    def _ensure_ready(self) -> None:
+        if not self._database_loaded:
+            self.database.load()
+            self._database_loaded = True
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "retrieval_hit":
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            self._ensure_ready()
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            query_embedding = self.embedding(
+                input_text=extracted_answer,
+                is_query=True,
+            )
+            candidates = self.database.search(query_embedding=query_embedding)
+            candidates = sorted(
+                candidates,
+                key=lambda x: x[self.database.distance_column_name],
+                reverse=True,
+            )
+            candidates = [
+                candidate[self.database.candidate_column_name]
+                for candidate in candidates
+            ]
+
+            hit_location = 0
+
+            try:
+                parsed_gt = literal_eval(str(sol))
+            except (ValueError, SyntaxError):
+                parsed_gt = sol
+
+            if isinstance(parsed_gt, list):
+                gt_set = set(parsed_gt)
+                for idx, retrieved_candidate in enumerate(candidates):
+                    if retrieved_candidate in gt_set:
+                        hit_location = idx + 1
+                        break
+            else:
+                if parsed_gt in candidates:
+                    hit_location = candidates.index(parsed_gt) + 1
+
+            rewards.append(1.0 / hit_location if hit_location > 0 else 0.0)
+
+        return rewards
