@@ -16,6 +16,7 @@ structural:
   content_column_name: ${content_column_name}
   assistant_column_name: ${assistant_column_name}
   pretrained_model_name: ${pretrained_model_name}
+  modality: ${modality}
   custom_data_encoder_path: ${custom_data_encoder_path}
   revision: ${revision}
   reference_data_encoder_name: ${reference_data_encoder_name}
@@ -39,6 +40,7 @@ conversational:
   role_column_name: ${role_column_name}
   content_column_name: ${content_column_name}
   pretrained_model_name: ${pretrained_model_name}
+  modality: ${modality}
   custom_data_encoder_path: ${custom_data_encoder_path}
   revision: ${revision}
   reference_data_encoder_name: ${reference_data_encoder_name}
