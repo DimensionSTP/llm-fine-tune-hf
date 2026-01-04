@@ -4,6 +4,6 @@ embedding_model_detail: Qwen3-Embedding-0.6B-base
 indices_name: ${dataset_name}_candidates.faiss
 items_name: ${dataset_name}_candidates.csv
 dim: 1024
-retrieval_top_k: 10
+retrieval_top_k: 100
 distance_column_name: distance
 candidate_column_name: candidate
