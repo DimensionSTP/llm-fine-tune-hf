@@ -9,6 +9,7 @@ from .rewards import (
     CodeExecutionReward,
     RougeReward,
     EquationReward,
+    RetrievalHitReward,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "CodeExecutionReward",
     "RougeReward",
     "EquationReward",
+    "RetrievalHitReward",
 ]
