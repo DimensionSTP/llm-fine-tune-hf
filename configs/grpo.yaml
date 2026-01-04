@@ -126,6 +126,7 @@ reward:
     code_execution: 0.0
     rouge: 0.0
     equation: 0.0
+    retrieval_hit: 0.0
 
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
