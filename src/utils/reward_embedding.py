@@ -17,6 +17,7 @@ class VllmEmbedding:
         seed: int,
         gpu_memory_utilization: float,
         max_length: int,
+        instruction_length: int,
         instruction: str,
         device_id: Optional[int],
         master_addr: Optional[str],
@@ -57,7 +58,7 @@ class VllmEmbedding:
         self.tensor_parallel_size = 1 if device_id is not None else num_gpus
         self.seed = seed
         self.gpu_memory_utilization = gpu_memory_utilization
-        self.max_length = max_length
+        self.max_length = max_length + instruction_length
         self.instruction = instruction
 
     def __call__(
