@@ -14,8 +14,11 @@ from torch.utils.data import Dataset
 
 from transformers import (
     AutoTokenizer,
+    AutoProcessor,
     PreTrainedTokenizer,
+    ProcessorMixin,
     AutoModelForCausalLM,
+    AutoModelForImageTextToText,
     PreTrainedModel,
     BitsAndBytesConfig,
     TrainingArguments,
@@ -109,15 +112,26 @@ class SetUp:
         if getattr(self.config, "mode", "train") == "test_large":
             device_map = "auto"
 
-        model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_name_or_path=pretrained_model_name,
-            output_hidden_states=False,
-            torch_dtype=self.torch_dtype,
-            attn_implementation=self.config.attn_implementation,
-            quantization_config=quantization_config,
-            device_map=device_map,
-            revision=self.revision,
-        )
+        if self.config.modality == "text":
+            model = AutoModelForCausalLM.from_pretrained(
+                pretrained_model_name_or_path=pretrained_model_name,
+                output_hidden_states=False,
+                torch_dtype=self.torch_dtype,
+                attn_implementation=self.config.attn_implementation,
+                quantization_config=quantization_config,
+                device_map=device_map,
+                revision=self.revision,
+            )
+        else:
+            model = AutoModelForImageTextToText.from_pretrained(
+                pretrained_model_name_or_path=pretrained_model_name,
+                output_hidden_states=False,
+                torch_dtype=self.torch_dtype,
+                attn_implementation=self.config.attn_implementation,
+                quantization_config=quantization_config,
+                device_map=device_map,
+                revision=self.revision,
+            )
 
         if is_inference:
             model.eval()
@@ -148,30 +162,53 @@ class SetUp:
 
         return model
 
-    def get_data_encoder(self) -> PreTrainedTokenizer:
+    def get_data_encoder(self) -> Union[PreTrainedTokenizer, ProcessorMixin]:
         if self.config.is_preprocessed:
             data_encoder_path = self.config.custom_data_encoder_path
         else:
             data_encoder_path = self.config.pretrained_model_name
 
-        data_encoder = AutoTokenizer.from_pretrained(
-            data_encoder_path,
-            use_fast=True,
-            revision=self.revision,
-        )
-
-        if data_encoder.chat_template is None:
-            reference_data_encoder = AutoTokenizer.from_pretrained(
-                self.config.reference_data_encoder_name
+        if self.config.modality == "text":
+            data_encoder = AutoTokenizer.from_pretrained(
+                data_encoder_path,
+                use_fast=True,
+                revision=self.revision,
             )
-            data_encoder.chat_template = reference_data_encoder.chat_template
 
-        if data_encoder.pad_token_id is None:
-            data_encoder.pad_token_id = data_encoder.eos_token_id
-        if self.config.left_padding:
-            data_encoder.padding_side = "left"
+            if data_encoder.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    self.config.reference_data_encoder_name
+                )
+                data_encoder.chat_template = reference_data_encoder.chat_template
+
+            if data_encoder.pad_token_id is None:
+                data_encoder.pad_token_id = data_encoder.eos_token_id
+            if self.config.left_padding:
+                data_encoder.padding_side = "left"
+            else:
+                data_encoder.padding_side = "right"
         else:
-            data_encoder.padding_side = "right"
+            data_encoder = AutoProcessor.from_pretrained(
+                data_encoder_path,
+                revision=self.revision,
+            )
+
+            if data_encoder.tokenizer.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    self.config.reference_data_encoder_name
+                )
+                data_encoder.tokenizer.chat_template = (
+                    reference_data_encoder.chat_template
+                )
+
+            if data_encoder.tokenizer.pad_token_id is None:
+                data_encoder.tokenizer.pad_token_id = (
+                    data_encoder.tokenizer.eos_token_id
+                )
+            if self.config.left_padding:
+                data_encoder.tokenizer.padding_side = "left"
+            else:
+                data_encoder.tokenizer.padding_side = "right"
 
         return data_encoder
 
