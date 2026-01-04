@@ -58,3 +58,14 @@ rewards:
     weight: ${reward.weight.equation}
     equation_target_column_name: ${reward.equation_target_column_name}
     equation_numbers_column_name: ${reward.equation_numbers_column_name}
+
+  - _target_: src.utils.RetrievalHitReward
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
+    eos_token: ${reward.eos_token}
+    weight: ${reward.weight.retrieval_hit}
+    database: ${reward_database}
+    embedding: ${reward_embedding}
