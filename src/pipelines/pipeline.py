@@ -402,10 +402,16 @@ def test_vllm(
             "top_p": 1,
         }
 
+    eos_token_id = (
+        data_encoder.eos_token_id
+        if config.modality == "text"
+        else data_encoder.tokenizer.eos_token_id
+    )
+
     sampling_params = SamplingParams(
         max_tokens=config.max_new_tokens,
         skip_special_tokens=True,
-        stop_token_ids=[data_encoder.eos_token_id],
+        stop_token_ids=[eos_token_id],
         stop=[
             "### End",
             "\n### End",
