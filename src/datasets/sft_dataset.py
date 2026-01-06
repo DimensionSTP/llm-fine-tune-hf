@@ -114,12 +114,17 @@ class StructuralDataset(Dataset):
         self.max_length = max_length
 
         self.response_start_tokens = self.data_encoder(
-            response_start_template,
+            text=response_start_template,
             return_tensors="pt",
             add_special_tokens=False,
         )["input_ids"].squeeze(0)
+        self.eos_token = (
+            self.data_encoder.eos_token
+            if modality == "text"
+            else self.data_encoder.tokenizer.eos_token
+        )
         self.response_end_tokens = self.data_encoder(
-            self.data_encoder.eos_token,
+            text=self.eos_token,
             return_tensors="pt",
             add_special_tokens=False,
         )["input_ids"].squeeze(0)
@@ -392,12 +397,17 @@ class ConversationalDataset(StructuralDataset):
         self.max_length = max_length
 
         self.response_start_tokens = self.data_encoder(
-            response_start_template,
+            text=response_start_template,
             return_tensors="pt",
             add_special_tokens=False,
         )["input_ids"].squeeze(0)
+        self.eos_token = (
+            self.data_encoder.eos_token
+            if modality == "text"
+            else self.data_encoder.tokenizer.eos_token
+        )
         self.response_end_tokens = self.data_encoder(
-            self.data_encoder.eos_token,
+            text=self.eos_token,
             return_tensors="pt",
             add_special_tokens=False,
         )["input_ids"].squeeze(0)
