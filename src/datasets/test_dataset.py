@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoProcessor
 
 
 class StructuralDataset(Dataset):
@@ -23,6 +23,7 @@ class StructuralDataset(Dataset):
         content_column_name: str,
         assistant_column_name: str,
         pretrained_model_name: str,
+        modality: str,
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -41,30 +42,56 @@ class StructuralDataset(Dataset):
         self.content_column_name = content_column_name
         self.assistant_column_name = assistant_column_name
         self.pretrained_model_name = pretrained_model_name
+        self.modality = modality
 
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
         else:
             data_encoder_path = self.pretrained_model_name
-        self.data_encoder = AutoTokenizer.from_pretrained(
-            data_encoder_path,
-            use_fast=True,
-            revision=revision,
-        )
 
-        if self.data_encoder.chat_template is None:
-            reference_data_encoder = AutoTokenizer.from_pretrained(
-                reference_data_encoder_name
+        if self.modality == "text":
+            self.data_encoder = AutoTokenizer.from_pretrained(
+                data_encoder_path,
+                use_fast=True,
+                revision=revision,
             )
-            self.data_encoder.chat_template = reference_data_encoder.chat_template
 
-        if self.data_encoder.pad_token_id is None:
-            self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
+            if self.data_encoder.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    reference_data_encoder_name
+                )
+                self.data_encoder.chat_template = reference_data_encoder.chat_template
 
-        if left_padding:
-            self.data_encoder.padding_side = "left"
+            if self.data_encoder.pad_token_id is None:
+                self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
+
+            if left_padding:
+                self.data_encoder.padding_side = "left"
+            else:
+                self.data_encoder.padding_side = "right"
         else:
-            self.data_encoder.padding_side = "right"
+            self.data_encoder = AutoProcessor.from_pretrained(
+                data_encoder_path,
+                revision=revision,
+            )
+
+            if self.data_encoder.tokenizer.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    reference_data_encoder_name
+                )
+                self.data_encoder.tokenizer.chat_template = (
+                    reference_data_encoder.chat_template
+                )
+
+            if self.data_encoder.tokenizer.pad_token_id is None:
+                self.data_encoder.tokenizer.pad_token_id = (
+                    self.data_encoder.tokenizer.eos_token_id
+                )
+
+            if left_padding:
+                self.data_encoder.tokenizer.padding_side = "left"
+            else:
+                self.data_encoder.tokenizer.padding_side = "right"
 
         self.is_enable_thinking = is_enable_thinking
 
@@ -194,6 +221,7 @@ class ConversationalDataset(StructuralDataset):
         content_column_name: str,
         assistant_column_name: str,
         pretrained_model_name: str,
+        modality: str,
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -210,30 +238,56 @@ class ConversationalDataset(StructuralDataset):
         self.content_column_name = content_column_name
         self.assistant_column_name = assistant_column_name
         self.pretrained_model_name = pretrained_model_name
+        self.modality = modality
 
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
         else:
             data_encoder_path = self.pretrained_model_name
-        self.data_encoder = AutoTokenizer.from_pretrained(
-            data_encoder_path,
-            use_fast=True,
-            revision=revision,
-        )
 
-        if self.data_encoder.chat_template is None:
-            reference_data_encoder = AutoTokenizer.from_pretrained(
-                reference_data_encoder_name
+        if self.modality == "text":
+            self.data_encoder = AutoTokenizer.from_pretrained(
+                data_encoder_path,
+                use_fast=True,
+                revision=revision,
             )
-            self.data_encoder.chat_template = reference_data_encoder.chat_template
 
-        if self.data_encoder.pad_token_id is None:
-            self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
+            if self.data_encoder.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    reference_data_encoder_name
+                )
+                self.data_encoder.chat_template = reference_data_encoder.chat_template
 
-        if left_padding:
-            self.data_encoder.padding_side = "left"
+            if self.data_encoder.pad_token_id is None:
+                self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
+
+            if left_padding:
+                self.data_encoder.padding_side = "left"
+            else:
+                self.data_encoder.padding_side = "right"
         else:
-            self.data_encoder.padding_side = "right"
+            self.data_encoder = AutoProcessor.from_pretrained(
+                data_encoder_path,
+                revision=revision,
+            )
+
+            if self.data_encoder.tokenizer.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    reference_data_encoder_name
+                )
+                self.data_encoder.tokenizer.chat_template = (
+                    reference_data_encoder.chat_template
+                )
+
+            if self.data_encoder.tokenizer.pad_token_id is None:
+                self.data_encoder.tokenizer.pad_token_id = (
+                    self.data_encoder.tokenizer.eos_token_id
+                )
+
+            if left_padding:
+                self.data_encoder.tokenizer.padding_side = "left"
+            else:
+                self.data_encoder.tokenizer.padding_side = "right"
 
         self.is_enable_thinking = is_enable_thinking
 
