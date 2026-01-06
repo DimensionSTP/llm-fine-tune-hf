@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, List, Optional, Any
 import os
 
 import pandas as pd
@@ -142,7 +142,15 @@ class StructuralDataset(Dataset):
             data=self.datas[idx],
             label=self.labels[idx],
         )
-        encoded = self.encode_text(data=prompt)
+
+        image = None
+        if self.modality != "text":
+            image = self.datas[idx]
+
+        encoded = self.encode_data(
+            data=prompt,
+            image=image,
+        )
         if self.is_sft:
             encoded = self.add_sft_label(encoded=encoded)
         if "token_type_ids" in encoded.keys():
@@ -213,7 +221,14 @@ class StructuralDataset(Dataset):
             },
             {
                 self.role_column_name: "user",
-                self.content_column_name: data,
+                self.content_column_name: (
+                    data
+                    if self.modality == "text"
+                    else {
+                        "type": "image",
+                        "image": data,
+                    }
+                ),
             },
             {
                 self.role_column_name: self.assistant_column_name,
@@ -229,18 +244,22 @@ class StructuralDataset(Dataset):
         )
         return prompt
 
-    def encode_text(
+    def encode_data(
         self,
         data: str,
+        image: Optional[str],
     ) -> Dict[str, torch.Tensor]:
-        encoded = self.data_encoder(
-            data,
-            padding="max_length",
-            max_length=self.max_length,
-            truncation=True,
-            return_tensors="pt",
-            add_special_tokens=True,
-        )
+        kwargs = {
+            "text": data,
+            "padding": "max_length",
+            "max_length": self.max_length,
+            "truncation": True,
+            "return_tensors": "pt",
+            "add_special_tokens": True,
+        }
+        if self.modality != "text":
+            kwargs["images"] = image
+        encoded = self.data_encoder(**kwargs)
 
         encoded = {k: v.squeeze(0) for k, v in encoded.items()}
         return encoded
@@ -423,7 +442,24 @@ class ConversationalDataset(StructuralDataset):
         prompt = self.apply_chat_template(
             conversation=self.conversations[idx],
         )
-        encoded = self.encode_text(data=prompt)
+
+        image = None
+        if self.modality != "text":
+            image = []
+            for turn in self.conversations[idx]:
+                content = turn[self.content_column_name]
+                if isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "image":
+                            image.append(part.get("image"))
+
+            if not image:
+                image = None
+
+        encoded = self.encode_data(
+            data=prompt,
+            image=image,
+        )
         if self.is_sft:
             encoded = self.add_sft_label(encoded=encoded)
         if "token_type_ids" in encoded.keys():
