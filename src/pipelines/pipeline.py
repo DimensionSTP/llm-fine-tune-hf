@@ -11,7 +11,6 @@ import torch
 from torch import distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import set_seed
 from vllm import LLM, SamplingParams
@@ -157,11 +156,6 @@ def test(
     data_encoder = setup.get_data_encoder()
 
     model.to(local_rank)
-    if world_size > 1:
-        model = DDP(
-            model,
-            device_ids=[local_rank],
-        )
 
     try:
         results = []
@@ -174,12 +168,7 @@ def test(
                 input_ids = batch["input_ids"].to(local_rank)
                 attention_mask = batch["attention_mask"].to(local_rank)
 
-                if world_size > 1:
-                    generate_func = model.module.generate
-                else:
-                    generate_func = model.generate
-
-                outputs = generate_func(
+                outputs = model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=config.max_new_tokens,
