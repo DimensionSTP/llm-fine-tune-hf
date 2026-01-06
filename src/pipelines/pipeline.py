@@ -14,7 +14,6 @@ from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import set_seed
-from peft import PeftModel
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 from huggingface_hub import snapshot_download
@@ -157,13 +156,6 @@ def test(
     model = setup.get_model()
     data_encoder = setup.get_data_encoder()
 
-    if config.is_peft:
-        model = PeftModel.from_pretrained(
-            model=model,
-            model_id=config.peft_test.adapter_path,
-            adapter_name=config.peft_test.adapter_name,
-        )
-
     model.to(local_rank)
     if world_size > 1:
         model = DDP(
@@ -291,13 +283,6 @@ def test_large(
 
     model = setup.get_model()
     data_encoder = setup.get_data_encoder()
-
-    if config.is_peft:
-        model = PeftModel.from_pretrained(
-            model=model,
-            model_id=config.peft_test.adapter_path,
-            adapter_name=config.peft_test.adapter_name,
-        )
 
     try:
         results = []
