@@ -150,6 +150,7 @@ def test(
         num_workers=setup.num_workers,
         pin_memory=True,
         sampler=sampler,
+        collate_fn=collate_fn_vlm if config.modality != "text" else None,
     )
 
     model = setup.get_model()
@@ -268,6 +269,7 @@ def test_large(
         shuffle=False,
         num_workers=setup.num_workers,
         pin_memory=True,
+        collate_fn=collate_fn_vlm if config.modality != "text" else None,
     )
 
     model = setup.get_model()
