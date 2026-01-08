@@ -24,7 +24,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
+from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
 
 from ..datasets import *
 from src.utils.rewards import RewardManager
@@ -135,6 +135,12 @@ class SetUp:
 
         if is_inference:
             model.eval()
+            if self.config.is_peft:
+                model = PeftModel.from_pretrained(
+                    model=model,
+                    model_id=self.config.peft_test.adapter_path,
+                    adapter_name=self.config.peft_test.adapter_name,
+                )
 
             return model
 
