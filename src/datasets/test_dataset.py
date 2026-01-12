@@ -114,7 +114,13 @@ class StructuralDataset(Dataset):
 
         image = None
         if self.modality != "text":
-            image = self.datas[idx]
+            image = []
+            for part in self.datas[idx]:
+                if isinstance(part, dict) and part.get("type") == "image":
+                    image.append(part.get("image"))
+
+            if not image:
+                image = None
 
         encoded = self.encode_data(
             data=prompt,
