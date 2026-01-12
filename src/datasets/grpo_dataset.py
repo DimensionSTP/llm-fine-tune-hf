@@ -94,7 +94,6 @@ class StructuralDataset:
             conversations.append(
                 self.apply_conversation_template(
                     data=examples[self.data_column_name][i],
-                    label=examples[self.chosen_column_name][i],
                 )
             )
 
