@@ -16,7 +16,6 @@ class StructuralDataset(Dataset):
         dataset_name: str,
         dataset_format: str,
         is_preprocessed: bool,
-        instruction_column_name: str,
         data_column_name: str,
         target_column_name: str,
         role_column_name: str,
@@ -35,7 +34,6 @@ class StructuralDataset(Dataset):
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
         self.is_preprocessed = is_preprocessed
-        self.instruction_column_name = instruction_column_name
         self.data_column_name = data_column_name
         self.target_column_name = target_column_name
         self.role_column_name = role_column_name
@@ -96,7 +94,6 @@ class StructuralDataset(Dataset):
         self.is_enable_thinking = is_enable_thinking
 
         dataset = self.get_dataset()
-        self.instructions = dataset["instructions"]
         self.datas = dataset["datas"]
         self.labels = dataset["labels"]
         self.max_length = max_length
@@ -109,7 +106,6 @@ class StructuralDataset(Dataset):
         idx: int,
     ) -> Dict[str, Any]:
         applied = self.apply_chat_template(
-            instruction=self.instructions[idx],
             data=self.datas[idx],
             label=self.labels[idx],
         )
@@ -160,22 +156,16 @@ class StructuralDataset(Dataset):
         datas = data[self.data_column_name].apply(lambda x: x.strip()).tolist()
         labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
         return {
-            "instructions": instructions,
             "datas": datas,
             "labels": labels,
         }
 
     def apply_chat_template(
         self,
-        instruction: str,
         data: str,
         label: str,
     ) -> str:
         conversation = [
-            {
-                self.role_column_name: "system",
-                self.content_column_name: instruction,
-            },
             {
                 self.role_column_name: "user",
                 self.content_column_name: (
