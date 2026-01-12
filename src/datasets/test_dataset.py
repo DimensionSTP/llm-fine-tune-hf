@@ -150,10 +150,7 @@ class StructuralDataset(Dataset):
 
         data = data.fillna("_")
 
-        instructions = (
-            data[self.instruction_column_name].apply(lambda x: x.strip()).tolist()
-        )
-        datas = data[self.data_column_name].apply(lambda x: x.strip()).tolist()
+        datas = data[self.data_column_name].tolist()
         labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
         return {
             "datas": datas,
