@@ -9,7 +9,6 @@ structural:
   dataset_format: ${dataset_format}
   is_sft: ${is_sft}
   is_preprocessed: ${is_preprocessed}
-  instruction_column_name: ${instruction_column_name}
   data_column_name: ${data_column_name}
   target_column_name: ${target_column_name}
   role_column_name: ${role_column_name}

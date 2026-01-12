@@ -33,7 +33,6 @@ is_strict_split: false
 dataset_name: tulu
 dataset_format: parquet
 is_preprocessed: false
-instruction_column_name: instruction
 data_column_name: input
 target_column_name: response
 conversation_column_name: messages

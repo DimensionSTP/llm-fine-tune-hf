@@ -6,7 +6,6 @@ structural:
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
-  instruction_column_name: ${instruction_column_name}
   data_column_name: ${data_column_name}
   chosen_column_name: ${chosen_column_name}
   rejected_column_name: ${rejected_column_name}
