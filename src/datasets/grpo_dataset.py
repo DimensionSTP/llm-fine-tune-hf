@@ -169,6 +169,7 @@ class ConversationalDataset:
 
         output_column_names = [
             "prompt",
+            "images",
             self.solution_column_name,
             self.reward_categories_column_name,
         ]
