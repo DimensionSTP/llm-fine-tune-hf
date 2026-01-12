@@ -42,8 +42,14 @@ class StructuralDataset:
             file_name,
         )
 
+        dataset_format = self.dataset_format
+        if dataset_format == "tsv":
+            dataset_format = "csv"
+        if dataset_format == "jsonl":
+            dataset_format = "json"
+
         dataset = load_dataset(
-            self.dataset_format,
+            dataset_format,
             data_files=full_data_path,
         )["train"]
 
@@ -144,8 +150,14 @@ class ConversationalDataset:
             file_name,
         )
 
+        dataset_format = self.dataset_format
+        if dataset_format == "tsv":
+            dataset_format = "csv"
+        if dataset_format == "jsonl":
+            dataset_format = "json"
+
         dataset = load_dataset(
-            self.dataset_format,
+            dataset_format,
             data_files=full_data_path,
         )["train"]
 
