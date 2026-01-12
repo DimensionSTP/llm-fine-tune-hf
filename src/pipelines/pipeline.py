@@ -479,15 +479,10 @@ def test_vllm(
 
     elif config.data_type == "structural":
         for _, row in df.iterrows():
-            instruction = row[config.instruction_column_name].strip()
-            data = row[config.data_column_name].strip()
+            data = row[config.data_column_name]
             label = row[config.target_column_name].strip()
 
             conversation = [
-                {
-                    config.role_column_name: "system",
-                    config.content_column_name: instruction,
-                },
                 {
                     config.role_column_name: "user",
                     config.content_column_name: data,
