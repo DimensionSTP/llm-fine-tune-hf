@@ -199,7 +199,7 @@ class StructuralDataset(Dataset):
     def encode_data(
         self,
         data: str,
-        image: Optional[str],
+        image: Optional[List[str]],
     ) -> Dict[str, torch.Tensor]:
         kwargs = {
             "text": data,
