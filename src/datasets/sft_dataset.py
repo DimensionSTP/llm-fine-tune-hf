@@ -22,7 +22,6 @@ class StructuralDataset(Dataset):
         dataset_format: str,
         is_sft: bool,
         is_preprocessed: bool,
-        instruction_column_name: str,
         data_column_name: str,
         target_column_name: str,
         role_column_name: str,
@@ -47,7 +46,6 @@ class StructuralDataset(Dataset):
         self.dataset_format = dataset_format
         self.is_sft = is_sft
         self.is_preprocessed = is_preprocessed
-        self.instruction_column_name = instruction_column_name
         self.data_column_name = data_column_name
         self.target_column_name = target_column_name
         self.role_column_name = role_column_name
@@ -108,7 +106,6 @@ class StructuralDataset(Dataset):
         self.is_enable_thinking = is_enable_thinking
 
         dataset = self.get_dataset()
-        self.instructions = dataset["instructions"]
         self.datas = dataset["datas"]
         self.labels = dataset["labels"]
         self.max_length = max_length
@@ -138,7 +135,6 @@ class StructuralDataset(Dataset):
         idx: int,
     ) -> Dict[str, Any]:
         prompt = self.apply_chat_template(
-            instruction=self.instructions[idx],
             data=self.datas[idx],
             label=self.labels[idx],
         )
@@ -157,6 +153,7 @@ class StructuralDataset(Dataset):
             del encoded["token_type_ids"]
         if not "labels" in encoded.keys():
             encoded["labels"] = encoded["input_ids"]
+
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
@@ -197,20 +194,15 @@ class StructuralDataset(Dataset):
         if self.split == "val":
             data = val_data
 
-        instructions = (
-            data[self.instruction_column_name].apply(lambda x: x.strip()).tolist()
-        )
-        datas = data[self.data_column_name].apply(lambda x: x.strip()).tolist()
+        datas = data[self.data_column_name].tolist()
         labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
         return {
-            "instructions": instructions,
             "datas": datas,
             "labels": labels,
         }
 
     def apply_chat_template(
         self,
-        instruction: str,
         data: str,
         label: str,
     ) -> str:

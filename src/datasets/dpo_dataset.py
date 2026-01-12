@@ -17,7 +17,6 @@ class StructuralDataset:
         seed: int,
         dataset_name: str,
         dataset_format: str,
-        instruction_column_name: str,
         data_column_name: str,
         chosen_column_name: str,
         rejected_column_name: str,
@@ -31,7 +30,6 @@ class StructuralDataset:
         self.seed = seed
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
-        self.instruction_column_name = instruction_column_name
         self.data_column_name = data_column_name
         self.chosen_column_name = chosen_column_name
         self.rejected_column_name = rejected_column_name
@@ -56,7 +54,6 @@ class StructuralDataset:
             "rejected",
         ]
         input_column_names = [
-            self.instruction_column_name,
             self.data_column_name,
             self.chosen_column_name,
             self.rejected_column_name,
@@ -95,17 +92,15 @@ class StructuralDataset:
         chosen_conversations = []
         rejected_conversations = []
 
-        for i in range(len(examples[self.instruction_column_name])):
+        for i in range(len(examples[self.data_column_name])):
             chosen_conversations.append(
                 self.apply_conversation_template(
-                    instruction=examples[self.instruction_column_name][i],
                     data=examples[self.data_column_name][i],
                     label=examples[self.chosen_column_name][i],
                 )
             )
             rejected_conversations.append(
                 self.apply_conversation_template(
-                    instruction=examples[self.instruction_column_name][i],
                     data=examples[self.data_column_name][i],
                     label=examples[self.rejected_column_name][i],
                 )
@@ -118,15 +113,10 @@ class StructuralDataset:
 
     def apply_conversation_template(
         self,
-        instruction: str,
         data: str,
         label: str,
     ) -> List[Dict[str, str]]:
         conversation = [
-            {
-                self.role_column_name: "system",
-                self.content_column_name: instruction,
-            },
             {
                 self.role_column_name: "user",
                 self.content_column_name: data,

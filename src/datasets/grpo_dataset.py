@@ -17,7 +17,6 @@ class StructuralDataset:
         seed: int,
         dataset_name: str,
         dataset_format: str,
-        instruction_column_name: str,
         data_column_name: str,
         solution_column_name: str,
         reward_categories_column_name: str,
@@ -30,7 +29,6 @@ class StructuralDataset:
         self.seed = seed
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
-        self.instruction_column_name = instruction_column_name
         self.data_column_name = data_column_name
         self.solution_column_name = solution_column_name
         self.reward_categories_column_name = reward_categories_column_name
@@ -55,7 +53,6 @@ class StructuralDataset:
             self.reward_categories_column_name,
         ]
         input_column_names = [
-            self.instruction_column_name,
             self.data_column_name,
             self.solution_column_name,
             self.reward_categories_column_name,
@@ -93,10 +90,9 @@ class StructuralDataset:
     ) -> Dict[str, List[Dict[str, str]]]:
         conversations = []
 
-        for i in range(len(examples[self.instruction_column_name])):
+        for i in range(len(examples[self.data_column_name])):
             conversations.append(
                 self.apply_conversation_template(
-                    instruction=examples[self.instruction_column_name][i],
                     data=examples[self.data_column_name][i],
                     label=examples[self.chosen_column_name][i],
                 )
@@ -108,14 +104,9 @@ class StructuralDataset:
 
     def apply_conversation_template(
         self,
-        instruction: str,
         data: str,
     ) -> List[Dict[str, str]]:
         conversation = [
-            {
-                self.role_column_name: "system",
-                self.content_column_name: instruction,
-            },
             {
                 self.role_column_name: "user",
                 self.content_column_name: data,
