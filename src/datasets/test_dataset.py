@@ -171,22 +171,9 @@ class StructuralDataset(Dataset):
         conversation = [
             {
                 self.role_column_name: "user",
-                self.content_column_name: (
-                    data
-                    if self.modality == "text"
-                    else {
-                        "type": "image",
-                        "image": data,
-                    }
-                ),
-            },
-            {
-                self.role_column_name: self.assistant_column_name,
-                self.content_column_name: label,
+                self.content_column_name: data,
             },
         ]
-
-        label = conversation.pop()
 
         prompt = self.data_encoder.apply_chat_template(
             conversation=conversation,
