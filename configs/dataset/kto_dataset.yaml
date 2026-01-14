@@ -1,0 +1,26 @@
+structural:
+  _target_: src.datasets.KTOStructuralDataset
+  data_path: ${connected_dir}/data
+  split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
+  seed: ${seed}
+  dataset_name: ${dataset_name}
+  dataset_format: ${dataset_format}
+  data_column_name: ${data_column_name}
+  target_column_name: ${target_column_name}
+  label_column_name: ${label_column_name}
+  role_column_name: ${role_column_name}
+  content_column_name: ${content_column_name}
+  assistant_column_name: ${assistant_column_name}
+
+conversational:
+  _target_: src.datasets.KTOConversationalDataset
+  data_path: ${connected_dir}/data
+  split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
+  seed: ${seed}
+  dataset_name: ${dataset_name}
+  dataset_format: ${dataset_format}
+  prompt_column_name: ${prompt_column_name}
+  completion_column_name: ${completion_column_name}
+  label_column_name: ${label_column_name}
