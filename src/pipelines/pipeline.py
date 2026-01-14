@@ -27,8 +27,8 @@ from ..utils import *
 def train(
     config: DictConfig,
 ) -> None:
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    if local_rank == 0:
+    rank = int(os.environ.get("RANK", 0))
+    if rank == 0:
         wandb.init(
             project=config.project_name,
             name=config.logging_name,
@@ -37,7 +37,8 @@ def train(
     if "seed" in config:
         set_seed(config.seed)
 
-    if config.devices is not None:
+    is_distributed = "RANK" in os.environ and "WORLD_SIZE" in os.environ
+    if (not is_distributed) and (config.devices is not None):
         if isinstance(config.devices, int):
             num_gpus = min(config.devices, torch.cuda.device_count())
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(num_gpus)))
@@ -96,14 +97,14 @@ def train(
         )
         trainer.save_model()
 
-        if local_rank == 0:
+        if rank == 0:
             wandb.run.alert(
                 title="Training Complete",
                 text=f"Training process on {config.dataset_name} has successfully finished.",
                 level="INFO",
             )
     except Exception as e:
-        if local_rank == 0:
+        if rank == 0:
             wandb.run.alert(
                 title="Training Error",
                 text=f"An error occurred during training on {config.dataset_name}: {e}",
@@ -118,12 +119,12 @@ def test(
     world_size = torch.cuda.device_count()
     if world_size > 1:
         dist.init_process_group(backend="nccl")
-        local_rank = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(local_rank)
+        rank = int(os.environ["RANK"])
+        torch.cuda.set_device(rank)
     else:
-        local_rank = 0
+        rank = 0
 
-    if local_rank == 0:
+    if rank == 0:
         wandb.init(
             project=config.project_name,
             name=config.model_detail,
@@ -156,7 +157,7 @@ def test(
     model = setup.get_model()
     data_encoder = setup.get_data_encoder()
 
-    model.to(local_rank)
+    model.to(rank)
 
     try:
         results = []
@@ -164,10 +165,10 @@ def test(
             for batch in tqdm(
                 test_loader,
                 desc=f"Test {config.dataset_name}",
-                disable=(local_rank != 0),
+                disable=(rank != 0),
             ):
-                input_ids = batch["input_ids"].to(local_rank)
-                attention_mask = batch["attention_mask"].to(local_rank)
+                input_ids = batch["input_ids"].to(rank)
+                attention_mask = batch["attention_mask"].to(rank)
 
                 outputs = model.generate(
                     input_ids=input_ids,
@@ -205,13 +206,13 @@ def test(
             all_results = [None] * world_size
             dist.gather_object(
                 results,
-                all_results if local_rank == 0 else None,
+                all_results if rank == 0 else None,
                 dst=0,
             )
-            if local_rank == 0:
+            if rank == 0:
                 results = [item for sublist in all_results for item in sublist]
 
-        if local_rank == 0:
+        if rank == 0:
             os.makedirs(
                 config.test_output_dir,
                 exist_ok=True,
@@ -237,7 +238,7 @@ def test(
                 level="INFO",
             )
     except Exception as e:
-        if local_rank == 0:
+        if rank == 0:
             wandb.run.alert(
                 title="Testing Error",
                 text=f"An error occurred during testing on {config.dataset_name}: {e}",
