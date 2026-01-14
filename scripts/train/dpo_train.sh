@@ -1,5 +1,6 @@
 #!/bin/bash
 
+modality="text"
 data_type="conversational"
 split_ratio=1e-2
 is_strict_split=False

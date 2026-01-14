@@ -11,6 +11,7 @@ cd ~/llm-fine-tune-hf
 module add compilers/cuda/12.8 compilers/gcc/10.2.0 libraries/nccl/2.21.5
 source activate myenv
 
+modality="text"
 data_type="conversational"
 split_ratio=1e-2
 is_strict_split=False
