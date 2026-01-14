@@ -1,0 +1,23 @@
+structural:
+  _target_: src.datasets.GKDStructuralDataset
+  data_path: ${connected_dir}/data
+  split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
+  seed: ${seed}
+  dataset_name: ${dataset_name}
+  dataset_format: ${dataset_format}
+  data_column_name: ${data_column_name}
+  target_column_name: ${target_column_name}
+  role_column_name: ${role_column_name}
+  content_column_name: ${content_column_name}
+  assistant_column_name: ${assistant_column_name}
+
+conversational:
+  _target_: src.datasets.GKDConversationalDataset
+  data_path: ${connected_dir}/data
+  split_ratio: ${split_ratio}
+  is_strict_split: ${is_strict_split}
+  seed: ${seed}
+  dataset_name: ${dataset_name}
+  dataset_format: ${dataset_format}
+  conversation_column_name: ${conversation_column_name}
