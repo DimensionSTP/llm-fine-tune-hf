@@ -801,41 +801,85 @@ class RetrievalHitReward(BaseReward):
 
             self._ensure_ready()
 
-            extracted_answer = self.extract_answer_from_generation(generation=content)
-            extracted_answer = self.split_on_keywords(text=extracted_answer)
-
-            query_embedding = self.embedding(
-                input_text=extracted_answer,
+            original_query_embedding = self.embedding(
+                input_text=original_query,
                 is_query=True,
             )
-            candidates = self.database.search(query_embedding=query_embedding)
-            candidates = sorted(
-                candidates,
+            candidates_from_original = self.database.search(
+                query_embedding=original_query_embedding
+            )
+            candidates_from_original = sorted(
+                candidates_from_original,
                 key=lambda x: x[self.database.distance_column_name],
                 reverse=True,
             )
-            candidates = [
+            candidates_from_original = [
                 candidate[self.database.candidate_column_name]
-                for candidate in candidates
+                for candidate in candidates_from_original
             ]
 
-            hit_location = 0
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            rewritten_query_embedding = self.embedding(
+                input_text=extracted_answer,
+                is_query=True,
+            )
+            candidates_from_rewritten = self.database.search(
+                query_embedding=rewritten_query_embedding
+            )
+            candidates_from_rewritten = sorted(
+                candidates_from_rewritten,
+                key=lambda x: x[self.database.distance_column_name],
+                reverse=True,
+            )
+            candidates_from_rewritten = [
+                candidate[self.database.candidate_column_name]
+                for candidate in candidates_from_rewritten
+            ]
+
+            original_hit_location = 0
+            rewritten_hit_location = 0
 
             try:
-                parsed_gt = literal_eval(str(sol))
+                parsed_gt = literal_eval(str(gt))
             except (ValueError, SyntaxError):
-                parsed_gt = sol
+                parsed_gt = gt
 
             if isinstance(parsed_gt, list):
                 gt_set = set(parsed_gt)
-                for idx, retrieved_candidate in enumerate(candidates):
+
+                for idx, retrieved_candidate in enumerate(candidates_from_original):
                     if retrieved_candidate in gt_set:
-                        hit_location = idx + 1
+                        original_hit_location = idx + 1
+                        break
+
+                for idx, retrieved_candidate in enumerate(candidates_from_rewritten):
+                    if retrieved_candidate in gt_set:
+                        rewritten_hit_location = idx + 1
                         break
             else:
-                if parsed_gt in candidates:
-                    hit_location = candidates.index(parsed_gt) + 1
+                if parsed_gt in candidates_from_original:
+                    original_hit_location = (
+                        candidates_from_original.index(parsed_gt) + 1
+                    )
+                if parsed_gt in candidates_from_rewritten:
+                    rewritten_hit_location = (
+                        candidates_from_rewritten.index(parsed_gt) + 1
+                    )
 
-            rewards.append(1.0 / hit_location if hit_location > 0 else 0.0)
+            original_score = (
+                0.0
+                if original_hit_location == 0
+                else 1.0 / math.log2(original_hit_location + 1)
+            )
+            rewritten_score = (
+                0.0
+                if rewritten_hit_location == 0
+                else 1.0 / math.log2(rewritten_hit_location + 1)
+            )
+
+            reward = math.tanh(rewritten_score - original_score)
+            rewards.append(reward)
 
         return rewards
