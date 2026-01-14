@@ -5,7 +5,7 @@ model_ft_data: base
 model_default_upload_user: Qwen
 num_gpus: ${devices}
 seed: ${seed}
-gpu_memory_utilization: 0.1
+gpu_memory_utilization: ${reward.embedding_gpu_memory_utilization}
 max_length: ${max_new_tokens}
 instruction_length: 32
 instruction: |
