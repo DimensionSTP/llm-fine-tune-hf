@@ -119,6 +119,9 @@ reward:
   rouge_type: l
   equation_target_column_name: target
   equation_numbers_column_name: numbers
+  embedding_gpu_memory_utilization: 0.1
+  embedding_dim: 1024
+  retrieval_top_k: 100
   weight:
     think_format: 0.0
     answer_format: 0.0
