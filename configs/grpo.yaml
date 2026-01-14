@@ -25,8 +25,8 @@ split:
   train: train
   val: val
 
-batch_size: 2
-eval_batch_size: 8
+batch_size: 16
+eval_batch_size: 16
 workers_ratio: 8
 use_all_workers: false
 
@@ -97,7 +97,7 @@ chat_template_kwargs:
 beta: 0.0
 epsilon: 0.2
 epsilon_high: null
-num_generations: 8
+num_generations: 16
 log_completions: false
 importance_sampling_level: token
 loss_type: sapo
@@ -135,7 +135,7 @@ devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
 logging_steps: 2
 is_bf16: true
-gradient_accumulation_steps: 64
+gradient_accumulation_steps: 4
 max_grad_norm: 1
 epoch: 2
 step: 250
