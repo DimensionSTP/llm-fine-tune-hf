@@ -121,7 +121,7 @@ reward:
   equation_numbers_column_name: numbers
   weight:
     think_format: 0.0
-    answer_format: 1.0
+    answer_format: 0.0
     match: 2.0
     code_execution: 0.0
     rouge: 0.0
