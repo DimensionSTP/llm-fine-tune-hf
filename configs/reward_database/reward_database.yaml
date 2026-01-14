@@ -2,8 +2,9 @@ _target_: src.utils.FaissIndex
 data_path: ${connected_dir}/data/retrieval
 embedding_model_detail: Qwen3-Embedding-0.6B-base
 indices_name: ${dataset_name}_candidates.faiss
-items_name: ${dataset_name}_candidates.csv
-dim: 1024
-retrieval_top_k: 100
+items_name: ${dataset_name}_candidates
+items_format: parquet
+dim: ${reward.embedding_dim}
+retrieval_top_k: ${reward.retrieval_top_k}
 distance_column_name: distance
 candidate_column_name: candidate
