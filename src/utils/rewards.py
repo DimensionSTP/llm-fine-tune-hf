@@ -9,6 +9,7 @@ import queue
 import functools
 import math
 
+import numpy as np
 from rouge_score import rouge_scorer
 from ast import literal_eval
 
@@ -841,9 +842,14 @@ class RetrievalHitReward(BaseReward):
             original_hit_location = 0
             rewritten_hit_location = 0
 
-            try:
-                parsed_gt = literal_eval(str(gt))
-            except (ValueError, SyntaxError):
+            if isinstance(gt, str):
+                try:
+                    parsed_gt = literal_eval(str(gt))
+                except (ValueError, SyntaxError):
+                    parsed_gt = gt
+            elif isinstance(gt, np.ndarray):
+                parsed_gt = gt.tolist()
+            else:
                 parsed_gt = gt
 
             if isinstance(parsed_gt, list):
