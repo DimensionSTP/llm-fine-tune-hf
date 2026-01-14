@@ -49,6 +49,7 @@ match_weight=2.0
 code_execution_weight=0.0
 rouge_weight=0.0
 equation_weight=0.0
+retrieval_hit_weight=0.0
 lr=5e-7
 weight_decay=1e-1
 warmup_ratio=5e-2
