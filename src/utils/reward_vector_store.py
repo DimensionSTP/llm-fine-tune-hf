@@ -14,6 +14,7 @@ class FaissIndex:
         embedding_model_detail: str,
         indices_name: str,
         items_name: str,
+        items_format: str,
         dim: int,
         retrieval_top_k: int,
         distance_column_name: str,
@@ -23,6 +24,7 @@ class FaissIndex:
         self.embedding_model_detail = embedding_model_detail
         self.indices_name = indices_name
         self.items_name = items_name
+        self.items_format = items_format
         self.indices_path = os.path.join(
             self.data_path,
             self.embedding_model_detail,
@@ -30,7 +32,7 @@ class FaissIndex:
         )
         self.items_path = os.path.join(
             self.data_path,
-            self.items_name,
+            f"{self.items_name}.{self.items_format}",
         )
 
         self.dim = dim
@@ -98,5 +100,20 @@ class FaissIndex:
             raise FileNotFoundError(f"Missing items: {self.items_path}")
 
         self.index = faiss.read_index(self.indices_path)
-        self.df = pd.read_csv(self.items_path)
+
+        if self.items_format == "parquet":
+            self.df = pd.read_parquet(self.items_path)
+        elif self.items_format in ["json", "jsonl"]:
+            self.df = pd.read_json(
+                self.items_path,
+                lines=True if self.items_format == "jsonl" else False,
+            )
+        elif self.items_format in ["csv", "tsv"]:
+            self.df = pd.read_csv(
+                self.items_path,
+                sep="\t" if self.items_format == "tsv" else None,
+            )
+        else:
+            raise ValueError(f"Unsupported items format: {self.items_format}")
+
         self.loaded = True
