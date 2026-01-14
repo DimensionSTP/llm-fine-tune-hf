@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Union, Any
 
 from abc import ABC, abstractmethod
 import re
@@ -7,6 +7,7 @@ import contextlib
 import io
 import queue
 import functools
+import math
 
 from rouge_score import rouge_scorer
 from ast import literal_eval
@@ -776,7 +777,7 @@ class RetrievalHitReward(BaseReward):
     def compute(
         self,
         completions: List[List[Dict[str, str]]],
-        solution: List[str],
+        solution: List[Dict[str, Union[str, List[str]]]],
         reward_categories: List[str],
         **kwargs,
     ) -> List[Optional[float]]:
@@ -787,7 +788,14 @@ class RetrievalHitReward(BaseReward):
                 rewards.append(None)
                 continue
 
-            if not sol:
+            original_query = sol["query"]
+            gt = sol["candidate"]
+
+            if not original_query:
+                rewards.append(None)
+                continue
+
+            if not gt:
                 rewards.append(None)
                 continue
 
