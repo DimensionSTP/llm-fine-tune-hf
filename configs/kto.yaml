@@ -1,10 +1,10 @@
 # @package _global_
 defaults:
-  - dataset: kto_dataset
-  - training_arguments: kto_config
-  - trainer: kto_trainer
+  - dataset: kto
+  - training_arguments: kto
+  - trainer: kto
   - deepspeed: ds_config
-  - test_dataset: test_dataset
+  - dataset@test_dataset: test
   - hydra: hydra
 
 package_name: llm-fine-tune-hf

@@ -1,10 +1,10 @@
 # @package _global_
 defaults:
-  - dataset: sft_dataset
-  - training_arguments: sft_config
-  - trainer: sft_trainer
+  - dataset: sft
+  - training_arguments: sft
+  - trainer: sft
   - deepspeed: ds_config
-  - test_dataset: test_dataset
+  - dataset@test_dataset: test
   - hydra: hydra
 
 package_name: llm-fine-tune-hf

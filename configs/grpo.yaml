@@ -1,13 +1,13 @@
 # @package _global_
 defaults:
-  - dataset: grpo_dataset
-  - training_arguments: grpo_config
-  - trainer: grpo_trainer
-  - reward_manager: reward_manager
-  - reward_database: reward_database
-  - reward_embedding: reward_embedding
+  - dataset: grpo
+  - training_arguments: grpo
+  - trainer: grpo
+  - reward@reward_manager: manager
+  - reward@reward_database: database
+  - reward@reward_embedding: embedding
   - deepspeed: ds_config
-  - test_dataset: test_dataset
+  - dataset@test_dataset: test
   - hydra: hydra
 
 package_name: llm-fine-tune-hf
