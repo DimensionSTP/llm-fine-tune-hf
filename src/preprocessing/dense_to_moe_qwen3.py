@@ -102,19 +102,21 @@ def copy_dense_mlp_to_all_experts(
 
 @hydra.main(
     config_path="../../configs/",
-    config_name="dense_to_moe.yaml",
+    config_name="sft.yaml",
 )
 def dense_to_moe(
     config: DictConfig,
 ) -> None:
+    d2m_cfg = config.dense_to_moe
+
     os.makedirs(
-        config.output_dir,
+        d2m_cfg.moe_model_dir,
         exist_ok=True,
     )
 
-    dtype = torch_dtype_from_str(config.runtime.dtype)
-    device = torch.device(str(config.runtime.device))
-    trust_remote_code = bool(config.runtime.trust_remote_code)
+    dtype = torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    device = torch.device(str(d2m_cfg.runtime.device))
+    trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
     tokenizer = AutoTokenizer.from_pretrained(
         config.pretrained_model_name,
@@ -133,11 +135,11 @@ def dense_to_moe(
     moe_cfg = Qwen3MoeConfig.from_dict(dense_cfg.to_dict())
 
     moe_cfg.model_type = "qwen3_moe"
-    moe_cfg.num_experts = int(config.moe.num_experts)
-    moe_cfg.num_experts_per_tok = int(config.moe.num_experts_per_tok)
-    moe_cfg.norm_topk_prob = bool(config.moe.norm_topk_prob)
-    moe_cfg.router_aux_loss_coef = float(config.moe.router_aux_loss_coef)
-    moe_cfg.output_router_logits = bool(config.moe.output_router_logits)
+    moe_cfg.num_experts = int(d2m_cfg.moe.num_experts)
+    moe_cfg.num_experts_per_tok = int(d2m_cfg.moe.num_experts_per_tok)
+    moe_cfg.norm_topk_prob = bool(d2m_cfg.moe.norm_topk_prob)
+    moe_cfg.router_aux_loss_coef = float(d2m_cfg.moe.router_aux_loss_coef)
+    moe_cfg.output_router_logits = bool(d2m_cfg.moe.output_router_logits)
 
     moe_cfg.moe_intermediate_size = int(dense_cfg.intermediate_size)
 
@@ -156,14 +158,14 @@ def dense_to_moe(
     copied_tensors, layers_touched = copy_dense_mlp_to_all_experts(
         moe_model=moe_model,
         dense_model=dense_model,
-        num_experts=int(config.moe.num_experts),
+        num_experts=int(d2m_cfg.moe.num_experts),
     )
     print(
         f"[copy dense->experts] layers_touched={layers_touched}, copied_tensors={copied_tensors}"
     )
 
-    init_type = str(config.router.init_type)
-    gain = float(config.router.gain)
+    init_type = str(d2m_cfg.router.init_type)
+    gain = float(d2m_cfg.router.gain)
 
     routers_inited = 0
     for layer in moe_model.model.layers:
@@ -177,13 +179,13 @@ def dense_to_moe(
             routers_inited += 1
     print(f"[router init] inited={routers_inited}")
 
-    tokenizer.save_pretrained(config.output_dir)
+    tokenizer.save_pretrained(d2m_cfg.moe_model_dir)
     moe_model.save_pretrained(
-        config.output_dir,
-        safe_serialization=bool(config.runtime.safe_serialization),
+        d2m_cfg.moe_model_dir,
+        safe_serialization=bool(d2m_cfg.runtime.safe_serialization),
     )
 
-    print(f"[OK] Saved official Qwen3MoE checkpoint to: {config.output_dir}")
+    print(f"[OK] Saved official Qwen3MoE checkpoint to: {d2m_cfg.moe_model_dir}")
 
 
 if __name__ == "__main__":
