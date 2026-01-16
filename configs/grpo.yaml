@@ -8,6 +8,7 @@ defaults:
   - reward@reward_embedding: embedding
   - deepspeed: ds_config
   - dataset@test_dataset: test
+  - dense_to_moe: dense_to_moe
   - hydra: hydra
 
 package_name: llm-fine-tune-hf
