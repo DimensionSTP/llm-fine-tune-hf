@@ -4,7 +4,6 @@ dotenv.load_dotenv(
     override=True,
 )
 
-from typing import Tuple
 import os
 import warnings
 
@@ -12,6 +11,8 @@ os.environ["HYDRA_FULL_ERROR"] = "1"
 os.environ["HF_HOME"] = os.environ.get("HF_HOME")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore")
+
+from typing import Tuple
 
 import torch
 
@@ -26,15 +27,15 @@ import hydra
 from omegaconf import DictConfig
 
 
-def torch_dtype_from_str(s: str) -> torch.dtype:
-    s = str(s).lower()
-    if s in ("bf16", "bfloat16"):
+def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+    dtype_str = str(dtype_str).lower()
+    if dtype_str in ("bf16", "bfloat16"):
         return torch.bfloat16
-    if s in ("fp16", "float16"):
+    if dtype_str in ("fp16", "float16"):
         return torch.float16
-    if s in ("fp32", "float32"):
+    if dtype_str in ("fp32", "float32"):
         return torch.float32
-    raise ValueError(f"Unknown dtype: {s}")
+    raise ValueError(f"Unknown dtype: {dtype_str}")
 
 
 def init_router_weights(
@@ -46,10 +47,16 @@ def init_router_weights(
         torch.nn.init.zeros_(router_linear.weight)
         return
     if init_type == "xavier_uniform":
-        torch.nn.init.xavier_uniform_(router_linear.weight, gain=gain)
+        torch.nn.init.xavier_uniform_(
+            router_linear.weight,
+            gain=gain,
+        )
         return
     if init_type == "kaiming_uniform":
-        torch.nn.init.kaiming_uniform_(router_linear.weight, a=0.0)
+        torch.nn.init.kaiming_uniform_(
+            router_linear.weight,
+            a=0.0,
+        )
         return
     raise ValueError(f"Unknown router init_type: {init_type}")
 
