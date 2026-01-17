@@ -31,4 +31,8 @@ baseline/
 tmp*
 !requirements.txt
 !packages.txt
+checkpoints/
 benchmarks/
+adapters/
+dense_to_moe/
+merge_dense_lora_to_moe/
