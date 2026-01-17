@@ -1,5 +1,5 @@
 runtime:
-  dtype: bf16
+  dtype: bfloat16
   device: cuda
   trust_remote_code: true
   safe_serialization: true
