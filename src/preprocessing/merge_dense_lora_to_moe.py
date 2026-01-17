@@ -335,7 +335,7 @@ def merge_dense_lora_to_moe(
     d2m_cfg = config.dense_to_moe
 
     moe_model_dir = str(d2m_cfg.moe_model_dir)
-    output_dir = str(d2m_cfg.output_dir)
+    output_dir = str(d2m_cfg.merged_moe_model_dir)
     os.makedirs(
         output_dir,
         exist_ok=True,
