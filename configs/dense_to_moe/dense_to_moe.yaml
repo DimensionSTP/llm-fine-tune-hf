@@ -45,4 +45,14 @@ m2n:
   per_expert_alphas: [1.0, 1.0, 1.0, 1.0, 0.90, 0.90, 0.90, 0.90]
   expert_to_group: [0, 0, 0, 0, 1, 1, 1, 1]
 
-meged_moe_model_dir: ${dense_to_moe.moe_model_dir}/${dense_to_moe.adapter_prefix}/${dense_to_moe.merge_mode}/merge_attention=${dense_to_moe.targets.merge_attention}
+merged_moe_model_dir: ${connected_dir}/merge_dense_lora_to_moe/${model_type}-${dense_to_moe.moe_info}/${dense_to_moe.adapter_prefix}/${dense_to_moe.merge_mode}/merge_attention=${dense_to_moe.targets.merge_attention}
+
+verify_merge:
+  layers: [0, 10, 53]
+  experts: [0, 7]
+  projs: [up_proj]
+  delta_tol: 5.0e-3
+  attn_delta_tol: 8.0e-3
+
+router_only_train: false
+router_regex: "(^|\\.)model\\.layers\\.[0-9]+\\.mlp\\.(gate|router)\\.(weight|bias)$"
