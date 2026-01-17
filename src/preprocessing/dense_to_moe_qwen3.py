@@ -153,7 +153,10 @@ def dense_to_moe(
     moe_cfg.decoder_sparse_step = 1
     moe_cfg.mlp_only_layers = []
 
-    moe_model = Qwen3MoeForCausalLM(moe_cfg).to(device)
+    moe_model = Qwen3MoeForCausalLM(moe_cfg).to(
+        device=device,
+        dtype=dtype,
+    )
     moe_model.eval()
 
     missing, unexpected = moe_model.load_state_dict(
