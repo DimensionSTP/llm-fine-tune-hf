@@ -1,5 +1,6 @@
 from typing import Dict, Union, Optional, Any
 import os
+import re
 
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
@@ -148,6 +149,30 @@ class SetUp:
             model.gradient_checkpointing_enable(
                 gradient_checkpointing_kwargs=self.config.gradient_checkpointing_kwargs,
             )
+
+        if self.config.dense_to_moe.router_only_train:
+            router_regex = self.config.dense_to_moe.router_regex
+
+            for param in model.parameters():
+                param.requires_grad = False
+
+            router_pattern = re.compile(router_regex)
+
+            unfrozen = 0
+            total = 0
+            for name, p in model.named_parameters():
+                total += 1
+                if router_pattern.search(name):
+                    p.requires_grad = True
+                    unfrozen += 1
+
+            if unfrozen == 0:
+                raise RuntimeError(
+                    "No router parameters were unfrozen. "
+                    f"Check router_regex='{router_regex}' against model.named_parameters()."
+                )
+
+            print(f"[router-only] Unfroze {unfrozen} / {total} parameters (tensors).")
 
         if self.config.is_quantized and self.config.quantization_config.get(
             "load_in_4bit",
