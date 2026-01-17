@@ -246,8 +246,12 @@ def _resolve_adapter_plan(
             alpha_for_expert = alphas
 
         uniq = sorted(set(adapter_for_expert))
-        lora_cfg_for_adapter = {ap: _load_lora_config(ap) for ap in uniq}
-        lora_state_dict_for_adapter = {ap: _load_lora_state_dict(ap) for ap in uniq}
+        lora_cfg_for_adapter = {
+            adapter_dir: _load_lora_config(adapter_dir) for adapter_dir in uniq
+        }
+        lora_state_dict_for_adapter = {
+            adapter_dir: _load_lora_state_dict(adapter_dir) for adapter_dir in uniq
+        }
         all_adapter_paths = uniq
 
     elif mode == "m2n":
@@ -284,8 +288,8 @@ def _resolve_adapter_plan(
             alpha_for_expert = per_expert_alphas
         else:
             group_alphas = [float(x) for x in list(config.m2n.group_alphas)]
-            g = len(group_alphas)
-            if g <= 0:
+            num_groups = len(group_alphas)
+            if num_groups <= 0:
                 raise ValueError(
                     "m2n requires either lora.per_expert_alphas or lora.group_alphas (len>0)."
                 )
@@ -297,20 +301,27 @@ def _resolve_adapter_plan(
                     xs=expert_to_group,
                     expected=num_experts,
                 )
-                if any(x < 0 or x >= g for x in expert_to_group):
-                    raise ValueError(f"m2n.expert_to_group must be in [0, {g-1}]")
+                if any(x < 0 or x >= num_groups for x in expert_to_group):
+                    raise ValueError(
+                        f"m2n.expert_to_group must be in [0, {num_groups-1}]"
+                    )
             else:
                 expert_to_group = [
-                    min((e * g) // num_experts, g - 1) for e in range(num_experts)
+                    min((expert * num_groups) // num_experts, num_groups - 1)
+                    for expert in range(num_experts)
                 ]
 
             alpha_for_expert = [
-                group_alphas[expert_to_group[e]] for e in range(num_experts)
+                group_alphas[expert_to_group[expert]] for expert in range(num_experts)
             ]
 
         uniq = sorted(set(adapter_for_expert))
-        lora_cfg_for_adapter = {ap: _load_lora_config(ap) for ap in uniq}
-        lora_state_dict_for_adapter = {ap: _load_lora_state_dict(ap) for ap in uniq}
+        lora_cfg_for_adapter = {
+            adapter_dir: _load_lora_config(adapter_dir) for adapter_dir in uniq
+        }
+        lora_state_dict_for_adapter = {
+            adapter_dir: _load_lora_state_dict(adapter_dir) for adapter_dir in uniq
+        }
         all_adapter_paths = uniq
 
     else:
@@ -354,12 +365,14 @@ def merge_dense_lora_to_moe(
     moe_model.eval()
     state_dict = moe_model.state_dict()
 
-    expert_keys = _list_expert_ffn_weight_keys(state_dict)
+    expert_keys = _list_expert_ffn_weight_keys(state_dict=state_dict)
     if not expert_keys:
         raise RuntimeError(
             "No expert FFN keys found. This does not look like a MoE checkpoint with FFN experts."
         )
-    num_layers, num_experts_found = _infer_num_layers_and_experts_from_keys(expert_keys)
+    num_layers, num_experts_found = _infer_num_layers_and_experts_from_keys(
+        keys=expert_keys
+    )
 
     num_experts_cfg = int(d2m_cfg.moe.num_experts)
     if num_experts_found != num_experts_cfg:
