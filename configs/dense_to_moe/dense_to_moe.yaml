@@ -55,4 +55,7 @@ verify_merge:
   attn_delta_tol: 8.0e-3
 
 router_only_train: false
+router_with_lora: false
+
 router_regex: "(^|\\.)model\\.layers\\.[0-9]+\\.mlp\\.(gate|router)\\.(weight|bias)$"
+router_lora_regex: "(^|\\.)model\\.layers\\.[0-9]+\\.mlp\\.(gate|router)\\.(?:modules_to_save\\.[^.]+\\.|original_module\\.)?(weight|bias)$"
