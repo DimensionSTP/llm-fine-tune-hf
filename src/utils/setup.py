@@ -185,10 +185,55 @@ class SetUp:
                 self.config.peft_config,
                 resolve=True,
             )
+
+            if self.config.dense_to_moe.router_with_lora:
+                peft_config_dict["modules_to_save"] = ["gate"]
+
             peft_config = LoraConfig(**peft_config_dict)
             model = get_peft_model(
                 model=model,
                 peft_config=peft_config,
+            )
+
+        if self.config.dense_to_moe.router_with_lora:
+            router_regex = self.config.dense_to_moe.router_lora_regex
+
+            for param in model.parameters():
+                param.requires_grad = False
+
+            router_pattern = re.compile(router_regex)
+
+            unfrozen_router = 0
+            unfrozen_lora = 0
+            total = 0
+
+            for name, p in model.named_parameters():
+                total += 1
+
+                if router_pattern.search(name):
+                    p.requires_grad = True
+                    unfrozen_router += 1
+                    continue
+
+                if "lora_" in name:
+                    p.requires_grad = True
+                    unfrozen_lora += 1
+                    continue
+
+            if unfrozen_router == 0:
+                raise RuntimeError(
+                    "No router parameters were unfrozen. "
+                    f"Check router_regex='{router_regex}' against model.named_parameters()."
+                )
+
+            if unfrozen_lora == 0:
+                raise RuntimeError(
+                    "No LoRA parameters were unfrozen. "
+                    "Check that get_peft_model injected LoRA modules correctly."
+                )
+
+            print(
+                f"[router-with-lora] Unfroze router={unfrozen_router}, lora={unfrozen_lora} / {total} parameters (tensors). "
             )
 
         return model
