@@ -39,22 +39,22 @@ def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
 
 
 def init_router_weights(
-    router_linear: torch.nn.Linear,
+    router_param: torch.nn.Parameter,
     init_type: str,
     gain: float,
 ) -> None:
     if init_type == "zeros":
-        torch.nn.init.zeros_(router_linear.weight)
+        torch.nn.init.zeros_(router_param.weight)
         return
     if init_type == "xavier_uniform":
         torch.nn.init.xavier_uniform_(
-            router_linear.weight,
+            router_param.weight,
             gain=gain,
         )
         return
     if init_type == "kaiming_uniform":
         torch.nn.init.kaiming_uniform_(
-            router_linear.weight,
+            router_param.weight,
             a=0.0,
         )
         return
