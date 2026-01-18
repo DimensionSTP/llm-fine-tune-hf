@@ -14,7 +14,7 @@ moe:
 
 router:
   # zeros | xavier_uniform | kaiming_uniform
-  init_type: xavier_uniform
+  init_type: zeros
   gain: 0.02
 
 moe_info: experts_${dense_to_moe.moe.num_experts}-tok_${dense_to_moe.moe.num_experts_per_tok}
