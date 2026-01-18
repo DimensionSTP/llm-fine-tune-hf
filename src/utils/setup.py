@@ -151,6 +151,14 @@ class SetUp:
             )
 
         if self.config.dense_to_moe.router_only_train:
+            if self.config.is_peft or self.config.is_quantized:
+                raise ValueError("router_only_train is not supported with PEFT.")
+
+            if self.config.dense_to_moe.router_with_lora:
+                raise ValueError(
+                    "router_with_lora is not supported with router_only_train."
+                )
+
             router_regex = self.config.dense_to_moe.router_regex
 
             for param in model.parameters():
