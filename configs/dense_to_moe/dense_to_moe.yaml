@@ -31,7 +31,7 @@ adapter_prefix: sft
 base_adapter_dir: ${connected_dir}/adapters/${model_type}/${dense_to_moe.adapter_prefix}
 
 one2n:
-  base_adapter: ${dense_to_moe.base_adapter_dir}/full_split
+  base_adapter: full_split
   alphas: [1.0, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65]
 
 n2n:

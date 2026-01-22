@@ -200,7 +200,10 @@ def _resolve_adapter_plan(
     mode = str(config.merge_mode)
 
     if mode == "one2n":
-        base_adapter = str(config.one2n.base_adapter)
+        base_adapter = os.path.join(
+            config.base_adapter_dir,
+            str(config.one2n.base_adapter),
+        )
         alphas = [float(x) for x in list(config.one2n.alphas)]
         _validate_list_length(
             name="one2n.alphas",
