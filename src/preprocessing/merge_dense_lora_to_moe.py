@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import torch
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -117,8 +117,8 @@ def _collect_lora_for_target(
 ) -> Optional[LoraWeights]:
     """
     target_weight_key example:
-      model.layers.0.mlp.up_proj.weight
-      model.layers.0.self_attn.q_proj.weight
+        model.layers.0.mlp.up_proj.weight
+        model.layers.0.self_attn.q_proj.weight
     """
     r = adapter_cfg.get(
         "r",
@@ -190,11 +190,11 @@ def _resolve_adapter_plan(
 ]:
     """
     Returns:
-      adapter_for_expert: length n, adapter path per expert (for FFN)
-      alpha_for_expert: length n, alpha per expert (for FFN)
-      lora_cfg_for_adapter: dict adapter_path -> adapter_config
-      lora_state_dict_for_adapter: dict adapter_path -> adapter_state_dict
-      all_adapter_paths: list of unique adapter paths involved (for attention averaging)
+        adapter_for_expert: length n, adapter path per expert (for FFN)
+        alpha_for_expert: length n, alpha per expert (for FFN)
+        lora_cfg_for_adapter: dict adapter_path -> adapter_config
+        lora_state_dict_for_adapter: dict adapter_path -> adapter_state_dict
+        all_adapter_paths: list of unique adapter paths involved (for attention averaging)
     """
     num_experts = int(config.moe.num_experts)
     mode = str(config.merge_mode)
