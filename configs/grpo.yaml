@@ -111,7 +111,7 @@ sapo_temperature_neg: 1.05
 scale_rewards: group
 
 reward:
-  is_answer_tag: true
+  is_answer_tag: false
   think_start_token: <think>
   think_end_token: </think>
   answer_start_token: <answer>
