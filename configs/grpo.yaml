@@ -124,6 +124,7 @@ reward:
   embedding_gpu_memory_utilization: 0.1
   embedding_dim: 1024
   retrieval_top_k: 100
+  json_parse_weight: 0.2
   weight:
     think_format: 0.0
     answer_format: 0.0
@@ -132,6 +133,7 @@ reward:
     rouge: 0.0
     equation: 0.0
     retrieval_hit: 0.0
+    vlm_single_kv: 0.0
 
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
