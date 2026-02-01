@@ -31,6 +31,7 @@ class StructuralDataset(Dataset):
         modality: str,
         custom_data_encoder_path: str,
         revision: str,
+        max_pixels: int,
         reference_data_encoder_name: str,
         left_padding: bool,
         is_enable_thinking: bool,
@@ -84,6 +85,9 @@ class StructuralDataset(Dataset):
                 data_encoder_path,
                 revision=revision,
             )
+
+            if max_pixels is not None:
+                self.data_encoder.image_processor.max_pixels = max_pixels
 
             if self.data_encoder.tokenizer.chat_template is None:
                 reference_data_encoder = AutoTokenizer.from_pretrained(
@@ -343,6 +347,7 @@ class ConversationalDataset(StructuralDataset):
         modality: str,
         custom_data_encoder_path: str,
         revision: str,
+        max_pixels: int,
         reference_data_encoder_name: str,
         left_padding: bool,
         is_enable_thinking: bool,
@@ -394,6 +399,9 @@ class ConversationalDataset(StructuralDataset):
                 data_encoder_path,
                 revision=revision,
             )
+
+            if max_pixels is not None:
+                self.data_encoder.image_processor.max_pixels = max_pixels
 
             if self.data_encoder.tokenizer.chat_template is None:
                 reference_data_encoder = AutoTokenizer.from_pretrained(
