@@ -11,6 +11,7 @@ from .rewards import (
     RougeReward,
     EquationReward,
     RetrievalHitReward,
+    SingleKVReward,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "RougeReward",
     "EquationReward",
     "RetrievalHitReward",
+    "SingleKVReward",
 ]
