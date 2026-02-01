@@ -48,6 +48,7 @@ pretrained_model_name: ${upload_user}/${model_type}
 merge_path: ${connected_dir}/merged
 custom_data_encoder_path: ${merge_path}/${pretrained_model_name}
 revision: main
+max_pixels: 4194304
 reference_data_encoder_name: Qwen/Qwen3-8B
 left_padding: false
 is_enable_thinking: false
