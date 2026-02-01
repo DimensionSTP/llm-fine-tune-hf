@@ -1,7 +1,9 @@
-from typing import Dict, List, Optional, Callable, Union, Any
+from typing import Dict, List, Tuple, Optional, Callable, Union, Any
 
 from abc import ABC, abstractmethod
 import re
+import json
+import unicodedata
 import multiprocessing as mp
 import contextlib
 import io
@@ -889,3 +891,139 @@ class RetrievalHitReward(BaseReward):
             rewards.append(reward)
 
         return rewards
+
+
+class SingleKVReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        json_parse_weight: float,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+        )
+        self.json_parse_weight = json_parse_weight
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "vlm_single_kv":
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            pred_json = self._try_parse_json(extracted_answer)
+            if pred_json is None:
+                rewards.append(0.0)
+                continue
+
+            gt_json = self._try_parse_json(sol)
+            if gt_json is None:
+                rewards.append(None)
+                continue
+
+            pred_leaf = self._extract_last_leaf_value(pred_json)
+            gt_leaf = self._extract_last_leaf_value(gt_json)
+
+            if self._values_match(pred_leaf, gt_leaf):
+                rewards.append(1.0)
+            else:
+                rewards.append(self.json_parse_weight)
+
+        return rewards
+
+    @staticmethod
+    def _try_parse_json(text: str) -> Optional[Any]:
+        try:
+            return json.loads(text)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _extract_last_leaf_value(node: Any) -> Optional[Any]:
+        leaves: List[Any] = []
+
+        def walk(obj: Any) -> None:
+            if isinstance(obj, dict):
+                for val in obj.values():
+                    walk(val)
+            elif isinstance(obj, list):
+                if any(isinstance(item, (dict, list)) for item in obj):
+                    for item in obj:
+                        walk(item)
+                else:
+                    leaves.append(obj)
+            else:
+                leaves.append(obj)
+
+        walk(node)
+        if not leaves:
+            return None
+
+        leaf = leaves[-1]
+        if isinstance(leaf, list):
+            return leaf[-1] if leaf else ""
+        return leaf
+
+    @staticmethod
+    def _values_match(pred_leaf: Any, gt_leaf: Any) -> bool:
+        pred_clean, pred_coarse = SingleKVReward._normalize_leaf(pred_leaf)
+        gt_clean, gt_coarse = SingleKVReward._normalize_leaf(gt_leaf)
+
+        if pred_clean and gt_clean and pred_clean == gt_clean:
+            return True
+        if pred_coarse and gt_coarse and pred_coarse == gt_coarse:
+            return True
+        return False
+
+    @staticmethod
+    def _normalize_leaf(value: Any) -> Tuple[str, str]:
+        if isinstance(value, list):
+            value = value[-1] if value else ""
+        if value is None:
+            return "", ""
+        text = str(value)
+        return (
+            SingleKVReward._clean_text(text),
+            SingleKVReward._coarse_normalize(text),
+        )
+
+    @staticmethod
+    def _clean_text(text: str) -> str:
+        text = unicodedata.normalize("NFKC", text)
+        text = text.strip()
+        text = re.sub(r"[“”\"'`]", "", text)
+        text = re.sub(r"\s+", " ", text)
+        text = text.strip(".,;:!?()[]{}")
+        return text.lower()
+
+    @staticmethod
+    def _coarse_normalize(text: str) -> str:
+        text = SingleKVReward._clean_text(text)
+        text = re.sub(r"[^\w가-힣%]+", "", text)
+        return text
