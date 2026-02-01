@@ -13,6 +13,7 @@ structural:
   modality: ${modality}
   custom_data_encoder_path: ${custom_data_encoder_path}
   revision: ${revision}
+  max_pixels: ${max_pixels}
   reference_data_encoder_name: ${reference_data_encoder_name}
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
@@ -32,6 +33,7 @@ conversational:
   modality: ${modality}
   custom_data_encoder_path: ${custom_data_encoder_path}
   revision: ${revision}
+  max_pixels: ${max_pixels}
   reference_data_encoder_name: ${reference_data_encoder_name}
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
