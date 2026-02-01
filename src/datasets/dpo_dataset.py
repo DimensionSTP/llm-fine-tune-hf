@@ -188,6 +188,7 @@ class ConversationalDataset:
         output_column_names = [
             "chosen",
             "rejected",
+            "image",
             "images",
         ]
         remove_columns = [
