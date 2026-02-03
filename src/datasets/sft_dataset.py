@@ -31,7 +31,6 @@ class StructuralDataset(Dataset):
         modality: str,
         custom_data_encoder_path: str,
         revision: str,
-        max_pixels: int,
         reference_data_encoder_name: str,
         left_padding: bool,
         is_enable_thinking: bool,
@@ -81,13 +80,9 @@ class StructuralDataset(Dataset):
             else:
                 self.data_encoder.padding_side = "right"
         else:
-            data_encoder_kwargs = {}
-            if max_pixels is not None and max_pixels > 0:
-                data_encoder_kwargs["max_pixels"] = max_pixels
             self.data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
                 revision=revision,
-                **data_encoder_kwargs,
             )
 
             if self.data_encoder.tokenizer.chat_template is None:
@@ -348,7 +343,6 @@ class ConversationalDataset(StructuralDataset):
         modality: str,
         custom_data_encoder_path: str,
         revision: str,
-        max_pixels: int,
         reference_data_encoder_name: str,
         left_padding: bool,
         is_enable_thinking: bool,
@@ -400,9 +394,6 @@ class ConversationalDataset(StructuralDataset):
                 data_encoder_path,
                 revision=revision,
             )
-
-            if max_pixels is not None:
-                self.data_encoder.image_processor.max_pixels = max_pixels
 
             if self.data_encoder.tokenizer.chat_template is None:
                 reference_data_encoder = AutoTokenizer.from_pretrained(

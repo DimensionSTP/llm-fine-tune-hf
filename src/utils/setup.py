@@ -272,13 +272,9 @@ class SetUp:
             else:
                 data_encoder.padding_side = "right"
         else:
-            data_encoder_kwargs = {}
-            if self.config.max_pixels is not None and self.config.max_pixels > 0:
-                data_encoder_kwargs["max_pixels"] = self.config.max_pixels
             data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
                 revision=self.revision,
-                **data_encoder_kwargs,
             )
 
             if data_encoder.tokenizer.chat_template is None:
