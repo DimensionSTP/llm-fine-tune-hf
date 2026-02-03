@@ -947,8 +947,20 @@ class SingleKVReward(BaseReward):
                 rewards.append(None)
                 continue
 
-            pred_leaf = self._extract_last_leaf_value(pred_json)
-            gt_leaf = self._extract_last_leaf_value(gt_json)
+            if self._contains_tables(
+                obj=pred_json,
+            ) or self._contains_tables(
+                obj=gt_json,
+            ):
+                reward = self._compute_table_reward(
+                    pred_json=pred_json,
+                    gt_json=gt_json,
+                )
+                rewards.append(reward)
+                continue
+
+            pred_leaf = self._extract_last_leaf_value(node=pred_json)
+            gt_leaf = self._extract_last_leaf_value(node=gt_json)
 
             if self._values_match(pred_leaf, gt_leaf):
                 rewards.append(1.0)
@@ -1027,3 +1039,65 @@ class SingleKVReward(BaseReward):
         text = SingleKVReward._clean_text(text)
         text = re.sub(r"[^\w가-힣%]+", "", text)
         return text
+
+    @staticmethod
+    def _contains_tables(obj: Any) -> bool:
+        return isinstance(obj, dict) and "tables" in obj
+
+    def _compute_table_reward(
+        self,
+        pred_json: Any,
+        gt_json: Any,
+    ) -> float:
+        pred_tables = pred_json.get("tables") if isinstance(pred_json, dict) else None
+        gt_tables = gt_json.get("tables") if isinstance(gt_json, dict) else None
+
+        if not isinstance(pred_tables, dict) or not isinstance(gt_tables, dict):
+            return self.json_parse_weight
+
+        total_cells = 0
+        matched_cells = 0
+
+        table_names = set(gt_tables.keys()) | set(pred_tables.keys())
+
+        for table_name in table_names:
+            gt_table = gt_tables.get(table_name, {})
+            pred_table = pred_tables.get(table_name, {})
+
+            gt_rows = gt_table.get("rows", []) if isinstance(gt_table, dict) else []
+            pred_rows = (
+                pred_table.get("rows", []) if isinstance(pred_table, dict) else []
+            )
+
+            max_rows = max(len(gt_rows), len(pred_rows))
+            for row_idx in range(max_rows):
+                gt_row = gt_rows[row_idx] if row_idx < len(gt_rows) else {}
+                pred_row = pred_rows[row_idx] if row_idx < len(pred_rows) else {}
+
+                gt_vals = self._row_values_from_row(row=gt_row)
+                pred_vals = self._row_values_from_row(row=pred_row)
+                max_cells = max(len(gt_vals), len(pred_vals))
+
+                for cell_idx in range(max_cells):
+                    total_cells += 1
+                    gt_val = gt_vals[cell_idx] if cell_idx < len(gt_vals) else [""]
+                    pred_val = (
+                        pred_vals[cell_idx] if cell_idx < len(pred_vals) else [""]
+                    )
+                    if self._values_match(
+                        pred_leaf=pred_val,
+                        gt_leaf=gt_val,
+                    ):
+                        matched_cells += 1
+
+        if total_cells == 0:
+            return self.json_parse_weight
+
+        cell_accuracy = matched_cells / total_cells
+        return self.json_parse_weight + (1 - self.json_parse_weight) * cell_accuracy
+
+    @staticmethod
+    def _row_values_from_row(row: Any) -> List[Any]:
+        if not isinstance(row, dict):
+            return []
+        return [val for _, val in row.items()]
