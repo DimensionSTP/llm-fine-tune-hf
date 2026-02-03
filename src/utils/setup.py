@@ -275,10 +275,8 @@ class SetUp:
             data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
                 revision=self.revision,
+                max_pixels=self.config.max_pixels,
             )
-
-            if self.config.max_pixels is not None:
-                data_encoder.image_processor.max_pixels = self.config.max_pixels
 
             if data_encoder.tokenizer.chat_template is None:
                 reference_data_encoder = AutoTokenizer.from_pretrained(

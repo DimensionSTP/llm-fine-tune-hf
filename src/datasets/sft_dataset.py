@@ -84,10 +84,8 @@ class StructuralDataset(Dataset):
             self.data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
                 revision=revision,
+                max_pixels=max_pixels,
             )
-
-            if max_pixels is not None:
-                self.data_encoder.image_processor.max_pixels = max_pixels
 
             if self.data_encoder.tokenizer.chat_template is None:
                 reference_data_encoder = AutoTokenizer.from_pretrained(
