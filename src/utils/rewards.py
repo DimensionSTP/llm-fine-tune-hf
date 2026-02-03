@@ -40,7 +40,11 @@ class BaseReward(ABC):
 
     @property
     def name(self) -> str:
-        return re.sub(r"(?<!^)(?=[A-Z])", "_", self.__class__.__name__).lower()
+        return re.sub(
+            r"(?<!^)(?=[A-Z])",
+            "_",
+            self.__class__.__name__,
+        ).lower()
 
     def __call__(
         self,
@@ -937,12 +941,12 @@ class SingleKVReward(BaseReward):
             extracted_answer = self.extract_answer_from_generation(generation=content)
             extracted_answer = self.split_on_keywords(text=extracted_answer)
 
-            pred_json = self._try_parse_json(extracted_answer)
+            pred_json = self._try_parse_json(text=extracted_answer)
             if pred_json is None:
                 rewards.append(0.0)
                 continue
 
-            gt_json = self._try_parse_json(sol)
+            gt_json = self._try_parse_json(text=sol)
             if gt_json is None:
                 rewards.append(None)
                 continue
@@ -962,7 +966,10 @@ class SingleKVReward(BaseReward):
             pred_leaf = self._extract_last_leaf_value(node=pred_json)
             gt_leaf = self._extract_last_leaf_value(node=gt_json)
 
-            if self._values_match(pred_leaf, gt_leaf):
+            if self._values_match(
+                pred_leaf=pred_leaf,
+                gt_leaf=gt_leaf,
+            ):
                 rewards.append(1.0)
             else:
                 rewards.append(self.json_parse_weight)
@@ -1002,42 +1009,68 @@ class SingleKVReward(BaseReward):
             return leaf[-1] if leaf else ""
         return leaf
 
-    @staticmethod
-    def _values_match(pred_leaf: Any, gt_leaf: Any) -> bool:
-        pred_clean, pred_coarse = SingleKVReward._normalize_leaf(pred_leaf)
-        gt_clean, gt_coarse = SingleKVReward._normalize_leaf(gt_leaf)
+    def _values_match(
+        self,
+        pred_leaf: Any,
+        gt_leaf: Any,
+    ) -> bool:
+        pred_clean, pred_coarse = self._normalize_leaf(value=pred_leaf)
+        gt_clean, gt_coarse = self._normalize_leaf(value=gt_leaf)
 
+        if pred_clean == "" and gt_clean == "":
+            return True
         if pred_clean and gt_clean and pred_clean == gt_clean:
             return True
         if pred_coarse and gt_coarse and pred_coarse == gt_coarse:
             return True
         return False
 
-    @staticmethod
-    def _normalize_leaf(value: Any) -> Tuple[str, str]:
+    def _normalize_leaf(
+        self,
+        value: Any,
+    ) -> Tuple[str, str]:
         if isinstance(value, list):
             value = value[-1] if value else ""
         if value is None:
             return "", ""
         text = str(value)
         return (
-            SingleKVReward._clean_text(text),
-            SingleKVReward._coarse_normalize(text),
+            self._clean_text(text=text),
+            self._coarse_normalize(text=text),
         )
 
-    @staticmethod
-    def _clean_text(text: str) -> str:
-        text = unicodedata.normalize("NFKC", text)
+    def _clean_text(
+        self,
+        text: str,
+    ) -> str:
+        text = unicodedata.normalize(
+            "NFKC",
+            text,
+        )
         text = text.strip()
-        text = re.sub(r"[“”\"'`]", "", text)
-        text = re.sub(r"\s+", " ", text)
+        text = re.sub(
+            r"[“”\"'`]",
+            "",
+            text,
+        )
+        text = re.sub(
+            r"\s+",
+            " ",
+            text,
+        )
         text = text.strip(".,;:!?()[]{}")
         return text.lower()
 
-    @staticmethod
-    def _coarse_normalize(text: str) -> str:
-        text = SingleKVReward._clean_text(text)
-        text = re.sub(r"[^\w가-힣%]+", "", text)
+    def _coarse_normalize(
+        self,
+        text: str,
+    ) -> str:
+        text = self._clean_text(text=text)
+        text = re.sub(
+            r"[^\w가-힣%]+",
+            "",
+            text,
+        )
         return text
 
     @staticmethod
