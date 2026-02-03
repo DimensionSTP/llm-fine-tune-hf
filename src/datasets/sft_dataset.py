@@ -81,10 +81,13 @@ class StructuralDataset(Dataset):
             else:
                 self.data_encoder.padding_side = "right"
         else:
+            data_encoder_kwargs = {}
+            if max_pixels is not None and max_pixels > 0:
+                data_encoder_kwargs["max_pixels"] = max_pixels
             self.data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
                 revision=revision,
-                max_pixels=max_pixels,
+                **data_encoder_kwargs,
             )
 
             if self.data_encoder.tokenizer.chat_template is None:
