@@ -17,6 +17,7 @@ structural:
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
+  max_pixels: ${max_pixels}
 
 conversational:
   _target_: src.datasets.TestConversationalDataset
@@ -36,3 +37,4 @@ conversational:
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
+  max_pixels: ${max_pixels}

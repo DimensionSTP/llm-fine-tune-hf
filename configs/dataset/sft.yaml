@@ -22,6 +22,7 @@ structural:
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
+  max_pixels: ${max_pixels}
   response_start_template: ${response_start_template}
 
 conversational:
@@ -46,4 +47,5 @@ conversational:
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
+  max_pixels: ${max_pixels}
   response_start_template: ${response_start_template}
