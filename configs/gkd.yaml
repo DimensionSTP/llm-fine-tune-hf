@@ -135,6 +135,10 @@ generation_config:
   top_p: 0.8
   top_k: 20
 
+test_vllm:
+  gpu_count: null
+  tp_size: 1
+
 gpu_memory_utilization: 0.95
 
 test_data_dir: benchmarks/test
