@@ -370,12 +370,39 @@ def test_vllm(
 
     num_gpus = torch.cuda.device_count()
 
+    devices_limit = num_gpus
+    if config.devices is not None:
+        if isinstance(config.devices, int):
+            devices_limit = config.devices
+        elif isinstance(config.devices, str):
+            devices_limit = len(
+                [d for d in config.devices.split(",") if d.strip() != ""]
+            )
+        elif isinstance(config.devices, list):
+            devices_limit = len(config.devices)
+
+    test_gpu_count = devices_limit
+    if config.test_vllm.gpu_count is not None:
+        test_gpu_count = int(config.test_vllm.gpu_count)
+
+    if test_gpu_count > devices_limit:
+        test_gpu_count = devices_limit
+    if test_gpu_count < 1:
+        test_gpu_count = 1
+
+    tp_size = int(config.test_vllm.tp_size)
+    if tp_size > test_gpu_count:
+        tp_size = test_gpu_count
+    if test_gpu_count % tp_size != 0:
+        divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
+        tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
+
     try:
         llm = LLM(
             model=config.pretrained_model_name,
             tokenizer=config.pretrained_model_name,
             revision=config.revision,
-            tensor_parallel_size=num_gpus,
+            tensor_parallel_size=tp_size,
             seed=config.seed,
             trust_remote_code=True,
             max_model_len=config.max_length,
@@ -391,7 +418,7 @@ def test_vllm(
         llm = LLM(
             model=model_path,
             tokenizer=model_path,
-            tensor_parallel_size=num_gpus,
+            tensor_parallel_size=tp_size,
             seed=config.seed,
             trust_remote_code=True,
             max_model_len=config.max_length,
@@ -572,12 +599,39 @@ def test_vllm_multi_turn(
 
     num_gpus = torch.cuda.device_count()
 
+    devices_limit = num_gpus
+    if config.devices is not None:
+        if isinstance(config.devices, int):
+            devices_limit = config.devices
+        elif isinstance(config.devices, str):
+            devices_limit = len(
+                [d for d in config.devices.split(",") if d.strip() != ""]
+            )
+        elif isinstance(config.devices, list):
+            devices_limit = len(config.devices)
+
+    test_gpu_count = devices_limit
+    if config.test_vllm.gpu_count is not None:
+        test_gpu_count = int(config.test_vllm.gpu_count)
+
+    if test_gpu_count > devices_limit:
+        test_gpu_count = devices_limit
+    if test_gpu_count < 1:
+        test_gpu_count = 1
+
+    tp_size = int(config.test_vllm.tp_size)
+    if tp_size > test_gpu_count:
+        tp_size = test_gpu_count
+    if test_gpu_count % tp_size != 0:
+        divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
+        tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
+
     try:
         llm = LLM(
             model=config.pretrained_model_name,
             tokenizer=config.pretrained_model_name,
             revision=config.revision,
-            tensor_parallel_size=num_gpus,
+            tensor_parallel_size=tp_size,
             seed=config.seed,
             trust_remote_code=True,
             max_model_len=config.max_length,
@@ -593,7 +647,7 @@ def test_vllm_multi_turn(
         llm = LLM(
             model=model_path,
             tokenizer=model_path,
-            tensor_parallel_size=num_gpus,
+            tensor_parallel_size=tp_size,
             seed=config.seed,
             trust_remote_code=True,
             max_model_len=config.max_length,
