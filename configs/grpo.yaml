@@ -123,7 +123,9 @@ reward:
   equation_numbers_column_name: numbers
   embedding_gpu_memory_utilization: 0.1
   embedding_dim: 1024
-  retrieval_top_k: 100
+  retrieval_top_k: 250
+  retrieval_margin: 0.1
+  retrieval_tau: 0.2
   json_parse_weight: 0.2
   weight:
     think_format: 0.0
