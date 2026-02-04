@@ -37,6 +37,7 @@ is_preprocessed: false
 data_column_name: input
 target_column_name: response
 conversation_column_name: messages
+prompt_column_name: prompt
 chosen_column_name: chosen
 rejected_column_name: rejected
 role_column_name: role
