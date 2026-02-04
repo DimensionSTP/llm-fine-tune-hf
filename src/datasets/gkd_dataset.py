@@ -168,8 +168,6 @@ class ConversationalDataset:
 
         output_column_names = [
             "messages",
-            "image",
-            "images",
         ]
         remove_columns = [
             column

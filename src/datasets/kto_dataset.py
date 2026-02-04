@@ -203,8 +203,6 @@ class ConversationalDataset:
             "prompt",
             "completion",
             "label",
-            "image",
-            "images",
         ]
         remove_columns = [
             column
