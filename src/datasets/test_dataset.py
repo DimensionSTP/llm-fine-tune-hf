@@ -1,7 +1,13 @@
 from typing import Dict, List, Optional, Any
 import os
 
+import base64
+import io
+import math
+import urllib.request
+
 import pandas as pd
+from PIL import Image
 
 import torch
 from torch.utils.data import Dataset
@@ -23,6 +29,7 @@ class StructuralDataset(Dataset):
         assistant_column_name: str,
         pretrained_model_name: str,
         modality: str,
+        max_pixels: Optional[int],
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -41,6 +48,10 @@ class StructuralDataset(Dataset):
         self.assistant_column_name = assistant_column_name
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
+        self._init_resize(
+            modality=modality,
+            max_pixels=max_pixels,
+        )
 
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
@@ -121,6 +132,8 @@ class StructuralDataset(Dataset):
 
             if not image:
                 image = None
+            elif self._should_resize_images:
+                image = [self._resize_single_image(img) for img in image]
 
         encoded = self.encode_data(
             data=prompt,
@@ -189,7 +202,7 @@ class StructuralDataset(Dataset):
     def encode_data(
         self,
         data: str,
-        image: Optional[List[str]],
+        image: Optional[List[Any]],
     ) -> Dict[str, torch.Tensor]:
         kwargs = {
             "text": data,
@@ -206,6 +219,121 @@ class StructuralDataset(Dataset):
         encoded = {k: v.squeeze(0) for k, v in encoded.items()}
         return encoded
 
+    def _init_resize(
+        self,
+        modality: str,
+        max_pixels: Optional[int],
+    ) -> None:
+        self.modality = modality
+        self.max_pixels = max_pixels
+        self.resample_filter = getattr(
+            Image,
+            "LANCZOS",
+            Image.Resampling.LANCZOS,
+        )
+        self._should_resize_images = (
+            self.modality != "text"
+            and self.max_pixels is not None
+            and self.max_pixels > 0
+        )
+
+    def _compute_target_size(
+        self,
+        width: int,
+        height: int,
+    ) -> Optional[tuple[int, int]]:
+        if self.max_pixels is None:
+            return None
+
+        total_pixels = width * height
+        if total_pixels <= self.max_pixels:
+            return None
+
+        scale = math.sqrt(self.max_pixels / float(total_pixels))
+        new_width = max(1, int(width * scale))
+        new_height = max(1, int(height * scale))
+        return new_width, new_height
+
+    def _load_image_from_bytes(
+        self,
+        data: bytes,
+    ) -> Optional[Image.Image]:
+        try:
+            return Image.open(io.BytesIO(data))
+        except Exception:
+            return None
+
+    def _load_image(
+        self,
+        image: Any,
+    ) -> Optional[Image.Image]:
+        if isinstance(image, Image.Image):
+            return image
+
+        if isinstance(image, (bytes, bytearray)):
+            return self._load_image_from_bytes(data=bytes(image))
+
+        if not isinstance(image, str):
+            return None
+
+        value = image.strip()
+        if not value:
+            return None
+
+        if value.startswith(("http://", "https://")):
+            try:
+                with urllib.request.urlopen(value) as response:
+                    return self._load_image_from_bytes(data=response.read())
+            except Exception:
+                return None
+
+        if os.path.exists(value):
+            try:
+                with open(value, "rb") as f:
+                    return self._load_image_from_bytes(data=f.read())
+            except Exception:
+                return None
+
+        try:
+            if "base64," in value:
+                _, value = value.split(
+                    "base64,",
+                    1,
+                )
+            decoded = base64.b64decode(
+                value,
+                validate=False,
+            )
+            return self._load_image_from_bytes(data=decoded)
+        except Exception:
+            return None
+
+    def _resize_single_image(
+        self,
+        image: Any,
+    ) -> Any:
+        if not self._should_resize_images:
+            return image
+
+        pil_image = self._load_image(image=image)
+        if pil_image is None:
+            return image
+
+        target_size = self._compute_target_size(
+            width=pil_image.width,
+            height=pil_image.height,
+        )
+        if target_size is None:
+            return pil_image
+
+        try:
+            return pil_image.resize(
+                target_size,
+                self.resample_filter,
+            )
+        except Exception:
+            return image
+
 
 class ConversationalDataset(StructuralDataset):
     def __init__(
@@ -220,6 +348,7 @@ class ConversationalDataset(StructuralDataset):
         assistant_column_name: str,
         pretrained_model_name: str,
         modality: str,
+        max_pixels: Optional[int],
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -237,6 +366,10 @@ class ConversationalDataset(StructuralDataset):
         self.assistant_column_name = assistant_column_name
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
+        self._init_resize(
+            modality=modality,
+            max_pixels=max_pixels,
+        )
 
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
@@ -318,6 +451,8 @@ class ConversationalDataset(StructuralDataset):
 
             if not image:
                 image = None
+            elif self._should_resize_images:
+                image = [self._resize_single_image(img) for img in image]
 
         encoded = self.encode_data(
             data=prompt,
