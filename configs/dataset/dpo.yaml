@@ -12,6 +12,8 @@ structural:
   role_column_name: ${role_column_name}
   content_column_name: ${content_column_name}
   assistant_column_name: ${assistant_column_name}
+  modality: ${modality}
+  max_pixels: ${max_pixels}
 
 conversational:
   _target_: src.datasets.DPOConversationalDataset
@@ -21,5 +23,8 @@ conversational:
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  prompt_column_name: ${prompt_column_name}
   chosen_column_name: ${chosen_column_name}
   rejected_column_name: ${rejected_column_name}
+  modality: ${modality}
+  max_pixels: ${max_pixels}
