@@ -758,6 +758,8 @@ class RetrievalHitReward(BaseReward):
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
+        margin: float,
+        tau: float,
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -771,6 +773,8 @@ class RetrievalHitReward(BaseReward):
         self.database = database
         self.embedding = embedding
         self._database_loaded = False
+        self.margin = margin
+        self.tau = tau
 
     @property
     def name(self) -> str:
@@ -891,7 +895,11 @@ class RetrievalHitReward(BaseReward):
                 else 1.0 / math.log2(rewritten_hit_location + 1)
             )
 
-            reward = math.tanh(rewritten_score - original_score)
+            delta = rewritten_score - original_score
+            if delta < self.margin:
+                reward = 0.0
+            else:
+                reward = math.tanh(delta / self.tau)
             rewards.append(reward)
 
         return rewards
