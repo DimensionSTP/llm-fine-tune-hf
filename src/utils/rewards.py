@@ -1050,7 +1050,7 @@ class SingleKVReward(BaseReward):
         pred_clean, pred_coarse = self._normalize_leaf(value=pred_leaf)
         gt_clean, gt_coarse = self._normalize_leaf(value=gt_leaf)
 
-        if pred_clean == "" and gt_clean == "":
+        if pred_clean == ("",) and gt_clean == ("",):
             return True
         if pred_clean and gt_clean and pred_clean == gt_clean:
             return True
@@ -1061,16 +1061,25 @@ class SingleKVReward(BaseReward):
     def _normalize_leaf(
         self,
         value: Any,
-    ) -> Tuple[str, str]:
-        if isinstance(value, list):
-            value = value[-1] if value else ""
+    ) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
         if value is None:
-            return "", ""
+            return ("",), ("",)
+
+        if isinstance(value, list):
+            if not value:
+                return ("",), ("",)
+            cleaned = tuple(
+                self._clean_text(text=str(item)) if item is not None else ""
+                for item in value
+            )
+            coarse = tuple(
+                self._coarse_normalize(text=str(item)) if item is not None else ""
+                for item in value
+            )
+            return cleaned, coarse
+
         text = str(value)
-        return (
-            self._clean_text(text=text),
-            self._coarse_normalize(text=text),
-        )
+        return (self._clean_text(text=text),), (self._coarse_normalize(text=text),)
 
     def _clean_text(
         self,
@@ -1245,18 +1254,22 @@ class MultiKVReward(SingleKVReward):
                 matched += 1
                 remaining_pred.pop(matched_idx)
 
-        total = max(len(gt_leaves), len(pred_leaves))
+        total = len(gt_leaves) + (len(pred_leaves) - matched)
         return total, matched
 
     def _find_match_index(
         self,
-        candidates: List[Any],
-        target: Any,
+        candidates: List[Tuple[Tuple[str, ...], Any]],
+        target: Tuple[Tuple[str, ...], Any],
     ) -> Optional[int]:
+        target_path, target_leaf = target
         for idx, candidate in enumerate(candidates):
+            candidate_path, candidate_leaf = candidate
+            if candidate_path != target_path:
+                continue
             if self._values_match(
-                pred_leaf=candidate,
-                gt_leaf=target,
+                pred_leaf=candidate_leaf,
+                gt_leaf=target_leaf,
             ):
                 return idx
         return None
@@ -1264,25 +1277,25 @@ class MultiKVReward(SingleKVReward):
     def _extract_leaf_values_excluding_tables(
         self,
         node: Any,
-    ) -> List[Any]:
-        leaves: List[Any] = []
+    ) -> List[Tuple[Tuple[str, ...], Any]]:
+        leaves: List[Tuple[Tuple[str, ...], Any]] = []
 
-        def walk(obj: Any) -> None:
+        def walk(obj: Any, path: List[str]) -> None:
             if isinstance(obj, dict):
                 for key, val in obj.items():
                     if key == "tables":
                         continue
-                    walk(val)
+                    walk(val, path + [key])
             elif isinstance(obj, list):
                 if any(isinstance(item, (dict, list)) for item in obj):
                     for item in obj:
-                        walk(item)
+                        walk(item, path)
                 else:
-                    leaves.append(obj)
+                    leaves.append((tuple(path), obj))
             else:
-                leaves.append(obj)
+                leaves.append((tuple(path), obj))
 
-        walk(node)
+        walk(node, [])
         return leaves
 
     def _compute_table_counts(
@@ -1292,9 +1305,8 @@ class MultiKVReward(SingleKVReward):
     ) -> tuple[int, int]:
         pred_tables = pred_json.get("tables") if isinstance(pred_json, dict) else None
         gt_tables = gt_json.get("tables") if isinstance(gt_json, dict) else None
-
-        if not isinstance(pred_tables, dict) or not isinstance(gt_tables, dict):
-            return 0, 0
+        pred_tables = pred_tables if isinstance(pred_tables, dict) else {}
+        gt_tables = gt_tables if isinstance(gt_tables, dict) else {}
 
         total_cells = 0
         matched_cells = 0
