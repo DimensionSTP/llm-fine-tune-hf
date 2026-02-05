@@ -343,7 +343,7 @@ class MatchReward(BaseReward):
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
         for content, sol, category in zip(contents, solution, reward_categories):
-            if category != "math" and category != "choice":
+            if category not in ["math", "choice"]:
                 rewards.append(None)
                 continue
 
