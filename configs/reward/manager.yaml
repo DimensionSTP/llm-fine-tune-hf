@@ -69,8 +69,9 @@ rewards:
     weight: ${reward.weight.retrieval_hit}
     database: ${reward_database}
     embedding: ${reward_embedding}
-    margin: ${reward.retrieval_margin}
-    tau: ${reward.retrieval_tau}
+    target_top_k: ${reward.target_top_k}
+    shaping_weight: ${reward.shaping_weight}
+    rank_margin: ${reward.rank_margin}
 
   - _target_: src.utils.SingleKVReward
     is_answer_tag: ${reward.is_answer_tag}

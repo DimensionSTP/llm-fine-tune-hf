@@ -125,8 +125,9 @@ reward:
   embedding_gpu_memory_utilization: 0.1
   embedding_dim: 1024
   retrieval_top_k: 250
-  retrieval_margin: 0.1
-  retrieval_tau: 0.2
+  target_top_k: 10
+  shaping_weight: 0.2
+  rank_margin: 1
   json_parse_weight: 0.2
   weight:
     think_format: 0.0
