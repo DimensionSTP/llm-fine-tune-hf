@@ -80,7 +80,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
-    weight: ${reward.weight.vlm_single_kv}
+    weight: ${reward.weight.single_kv}
     json_parse_weight: ${reward.json_parse_weight}
 
   - _target_: src.utils.MultiKVReward
@@ -90,5 +90,5 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
-    weight: ${reward.weight.vlm_multi_kv}
+    weight: ${reward.weight.multi_kv}
     json_parse_weight: ${reward.json_parse_weight}
