@@ -9,6 +9,7 @@ import contextlib
 import io
 import queue
 import functools
+import math
 
 import numpy as np
 from rouge_score import rouge_scorer
@@ -760,6 +761,7 @@ class RetrievalHitReward(BaseReward):
         target_top_k: int,
         shaping_weight: float,
         rank_margin: int,
+        cosine_tau: float,
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -773,6 +775,7 @@ class RetrievalHitReward(BaseReward):
         self.database = database
         self.embedding = embedding
         self._database_loaded = False
+        self._candidate_to_row_index = None
 
         if target_top_k <= 0:
             raise ValueError("target_top_k must be > 0")
@@ -780,10 +783,13 @@ class RetrievalHitReward(BaseReward):
             raise ValueError("shaping_weight must be >= 0")
         if rank_margin < 0:
             raise ValueError("rank_margin must be >= 0")
+        if cosine_tau <= 0:
+            raise ValueError("cosine_tau must be > 0")
 
         self.target_top_k = target_top_k
         self.shaping_weight = shaping_weight
         self.rank_margin = rank_margin
+        self.cosine_tau = cosine_tau
 
     @property
     def name(self) -> str:
@@ -793,6 +799,14 @@ class RetrievalHitReward(BaseReward):
         if not self._database_loaded:
             self.database.load()
             self._database_loaded = True
+
+        if self._candidate_to_row_index is None:
+            self._candidate_to_row_index = {}
+            for row_index, candidate in enumerate(
+                self.database.df[self.database.candidate_column_name].tolist()
+            ):
+                if candidate not in self._candidate_to_row_index:
+                    self._candidate_to_row_index[candidate] = row_index
 
     def compute(
         self,
@@ -896,6 +910,64 @@ class RetrievalHitReward(BaseReward):
             original_in_target_top_k = 0 < original_hit_location <= self.target_top_k
             rewritten_in_target_top_k = 0 < rewritten_hit_location <= self.target_top_k
 
+            if (not original_in_target_top_k) and rewritten_in_target_top_k:
+                reward = 1.0
+                rewards.append(reward)
+                continue
+
+            gt_row_indices = []
+            if isinstance(parsed_gt, list):
+                for gt_candidate in parsed_gt:
+                    if gt_candidate in self._candidate_to_row_index:
+                        gt_row_indices.append(
+                            self._candidate_to_row_index[gt_candidate]
+                        )
+            else:
+                if parsed_gt in self._candidate_to_row_index:
+                    gt_row_indices.append(self._candidate_to_row_index[parsed_gt])
+
+            if not gt_row_indices:
+                rewards.append(None)
+                continue
+
+            if original_query_embedding.ndim == 2:
+                original_query_vector = original_query_embedding[0]
+            else:
+                original_query_vector = original_query_embedding
+
+            if rewritten_query_embedding.ndim == 2:
+                rewritten_query_vector = rewritten_query_embedding[0]
+            else:
+                rewritten_query_vector = rewritten_query_embedding
+
+            best_original_cosine = None
+            best_rewritten_cosine = None
+
+            for gt_row_index in gt_row_indices:
+                try:
+                    gt_vector = self.database.index.reconstruct(gt_row_index)
+                except Exception:
+                    rewards.append(None)
+                    gt_vector = None
+                    break
+
+                original_cosine = float(np.dot(original_query_vector, gt_vector))
+                rewritten_cosine = float(np.dot(rewritten_query_vector, gt_vector))
+
+                if (
+                    best_original_cosine is None
+                    or original_cosine > best_original_cosine
+                ):
+                    best_original_cosine = original_cosine
+                if (
+                    best_rewritten_cosine is None
+                    or rewritten_cosine > best_rewritten_cosine
+                ):
+                    best_rewritten_cosine = rewritten_cosine
+
+            if best_original_cosine is None or best_rewritten_cosine is None:
+                continue
+
             original_rank_for_shaping = (
                 original_hit_location
                 if original_hit_location > 0
@@ -907,23 +979,28 @@ class RetrievalHitReward(BaseReward):
                 else self.database.retrieval_top_k + 1
             )
 
-            if (not original_in_target_top_k) and rewritten_in_target_top_k:
-                reward = 1.0
+            rank_improvement = original_rank_for_shaping - rewritten_rank_for_shaping
+            cosine_improvement = best_rewritten_cosine - best_original_cosine
+
+            if abs(rank_improvement) <= self.rank_margin:
+                rank_reward = 0.0
             else:
-                rank_improvement = (
-                    original_rank_for_shaping - rewritten_rank_for_shaping
+                normalized_rank_improvement = rank_improvement / float(
+                    self.database.retrieval_top_k
                 )
-                if abs(rank_improvement) <= self.rank_margin:
-                    reward = 0.0
-                else:
-                    normalized_rank_improvement = rank_improvement / float(
-                        self.database.retrieval_top_k
-                    )
-                    if normalized_rank_improvement > 1.0:
-                        normalized_rank_improvement = 1.0
-                    elif normalized_rank_improvement < -1.0:
-                        normalized_rank_improvement = -1.0
-                    reward = self.shaping_weight * normalized_rank_improvement
+                if normalized_rank_improvement > 1.0:
+                    normalized_rank_improvement = 1.0
+                elif normalized_rank_improvement < -1.0:
+                    normalized_rank_improvement = -1.0
+                rank_reward = self.shaping_weight * normalized_rank_improvement
+
+            cosine_reward = math.tanh(cosine_improvement / self.cosine_tau)
+
+            reward = cosine_reward + rank_reward
+            if reward > 1.0:
+                reward = 1.0
+            elif reward < -1.0:
+                reward = -1.0
 
             rewards.append(reward)
 
