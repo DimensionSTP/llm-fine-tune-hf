@@ -72,6 +72,7 @@ rewards:
     target_top_k: ${reward.target_top_k}
     shaping_weight: ${reward.shaping_weight}
     rank_margin: ${reward.rank_margin}
+    cosine_tau: ${reward.cosine_tau}
 
   - _target_: src.utils.SingleKVReward
     is_answer_tag: ${reward.is_answer_tag}
