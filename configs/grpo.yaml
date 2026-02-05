@@ -138,6 +138,7 @@ reward:
     equation: 0.0
     retrieval_hit: 0.0
     vlm_single_kv: 0.0
+    vlm_multi_kv: 0.0
 
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
