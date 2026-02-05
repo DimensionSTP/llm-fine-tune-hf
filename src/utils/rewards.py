@@ -963,7 +963,7 @@ class SingleKVReward(BaseReward):
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
         for content, sol, category in zip(contents, solution, reward_categories):
-            if category != "single_kv":
+            if category not in ["single_kv", "vlm_single_kv"]:
                 rewards.append(None)
                 continue
 
@@ -1180,7 +1180,7 @@ class MultiKVReward(SingleKVReward):
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
         for content, sol, category in zip(contents, solution, reward_categories):
-            if category != "multi_kv":
+            if category not in ["multi_kv", "vlm_multi_kv"]:
                 rewards.append(None)
                 continue
 
