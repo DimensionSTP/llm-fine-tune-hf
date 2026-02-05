@@ -9,7 +9,6 @@ import contextlib
 import io
 import queue
 import functools
-import math
 
 import numpy as np
 from rouge_score import rouge_scorer
