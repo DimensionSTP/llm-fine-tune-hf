@@ -758,8 +758,9 @@ class RetrievalHitReward(BaseReward):
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
-        margin: float,
-        tau: float,
+        target_top_k: int,
+        shaping_weight: float,
+        rank_margin: int,
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -773,8 +774,17 @@ class RetrievalHitReward(BaseReward):
         self.database = database
         self.embedding = embedding
         self._database_loaded = False
-        self.margin = margin
-        self.tau = tau
+
+        if target_top_k <= 0:
+            raise ValueError("target_top_k must be > 0")
+        if shaping_weight < 0:
+            raise ValueError("shaping_weight must be >= 0")
+        if rank_margin < 0:
+            raise ValueError("rank_margin must be >= 0")
+
+        self.target_top_k = target_top_k
+        self.shaping_weight = shaping_weight
+        self.rank_margin = rank_margin
 
     @property
     def name(self) -> str:
@@ -884,22 +894,38 @@ class RetrievalHitReward(BaseReward):
                         candidates_from_rewritten.index(parsed_gt) + 1
                     )
 
-            original_score = (
-                0.0
-                if original_hit_location == 0
-                else 1.0 / math.log2(original_hit_location + 1)
+            original_in_target_top_k = 0 < original_hit_location <= self.target_top_k
+            rewritten_in_target_top_k = 0 < rewritten_hit_location <= self.target_top_k
+
+            original_rank_for_shaping = (
+                original_hit_location
+                if original_hit_location > 0
+                else self.database.retrieval_top_k + 1
             )
-            rewritten_score = (
-                0.0
-                if rewritten_hit_location == 0
-                else 1.0 / math.log2(rewritten_hit_location + 1)
+            rewritten_rank_for_shaping = (
+                rewritten_hit_location
+                if rewritten_hit_location > 0
+                else self.database.retrieval_top_k + 1
             )
 
-            delta = rewritten_score - original_score
-            if delta < self.margin:
-                reward = 0.0
+            if (not original_in_target_top_k) and rewritten_in_target_top_k:
+                reward = 1.0
             else:
-                reward = math.tanh(delta / self.tau)
+                rank_improvement = (
+                    original_rank_for_shaping - rewritten_rank_for_shaping
+                )
+                if abs(rank_improvement) <= self.rank_margin:
+                    reward = 0.0
+                else:
+                    normalized_rank_improvement = rank_improvement / float(
+                        self.database.retrieval_top_k
+                    )
+                    if normalized_rank_improvement > 1.0:
+                        normalized_rank_improvement = 1.0
+                    elif normalized_rank_improvement < -1.0:
+                        normalized_rank_improvement = -1.0
+                    reward = self.shaping_weight * normalized_rank_improvement
+
             rewards.append(reward)
 
         return rewards
