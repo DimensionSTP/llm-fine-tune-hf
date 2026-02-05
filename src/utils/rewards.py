@@ -1168,3 +1168,168 @@ class SingleKVReward(BaseReward):
         if not isinstance(row, dict):
             return []
         return [val for _, val in row.items()]
+
+
+class MultiKVReward(SingleKVReward):
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "vlm_multi_kv":
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            pred_json = self._try_parse_json(text=extracted_answer)
+            if pred_json is None:
+                rewards.append(0.0)
+                continue
+
+            gt_json = self._try_parse_json(text=sol)
+            if gt_json is None:
+                rewards.append(None)
+                continue
+
+            kv_total, kv_matched = self._compute_kv_counts(
+                pred_json=pred_json,
+                gt_json=gt_json,
+            )
+            table_total, table_matched = self._compute_table_counts(
+                pred_json=pred_json,
+                gt_json=gt_json,
+            )
+
+            total_items = kv_total + table_total
+            matched_items = kv_matched + table_matched
+
+            if total_items == 0:
+                rewards.append(self.json_parse_weight)
+                continue
+
+            accuracy = matched_items / float(total_items)
+            reward = self.json_parse_weight + (1 - self.json_parse_weight) * accuracy
+            rewards.append(reward)
+
+        return rewards
+
+    def _compute_kv_counts(
+        self,
+        pred_json: Any,
+        gt_json: Any,
+    ) -> tuple[int, int]:
+        pred_leaves = self._extract_leaf_values_excluding_tables(node=pred_json)
+        gt_leaves = self._extract_leaf_values_excluding_tables(node=gt_json)
+
+        if not pred_leaves and not gt_leaves:
+            return 0, 0
+
+        matched = 0
+        remaining_pred = list(pred_leaves)
+        for gt_leaf in gt_leaves:
+            matched_idx = self._find_match_index(
+                candidates=remaining_pred,
+                target=gt_leaf,
+            )
+            if matched_idx is not None:
+                matched += 1
+                remaining_pred.pop(matched_idx)
+
+        total = max(len(gt_leaves), len(pred_leaves))
+        return total, matched
+
+    def _find_match_index(
+        self,
+        candidates: List[Any],
+        target: Any,
+    ) -> Optional[int]:
+        for idx, candidate in enumerate(candidates):
+            if self._values_match(
+                pred_leaf=candidate,
+                gt_leaf=target,
+            ):
+                return idx
+        return None
+
+    def _extract_leaf_values_excluding_tables(
+        self,
+        node: Any,
+    ) -> List[Any]:
+        leaves: List[Any] = []
+
+        def walk(obj: Any) -> None:
+            if isinstance(obj, dict):
+                for key, val in obj.items():
+                    if key == "tables":
+                        continue
+                    walk(val)
+            elif isinstance(obj, list):
+                if any(isinstance(item, (dict, list)) for item in obj):
+                    for item in obj:
+                        walk(item)
+                else:
+                    leaves.append(obj)
+            else:
+                leaves.append(obj)
+
+        walk(node)
+        return leaves
+
+    def _compute_table_counts(
+        self,
+        pred_json: Any,
+        gt_json: Any,
+    ) -> tuple[int, int]:
+        pred_tables = pred_json.get("tables") if isinstance(pred_json, dict) else None
+        gt_tables = gt_json.get("tables") if isinstance(gt_json, dict) else None
+
+        if not isinstance(pred_tables, dict) or not isinstance(gt_tables, dict):
+            return 0, 0
+
+        total_cells = 0
+        matched_cells = 0
+
+        table_names = set(gt_tables.keys()) | set(pred_tables.keys())
+
+        for table_name in table_names:
+            gt_table = gt_tables.get(table_name, {})
+            pred_table = pred_tables.get(table_name, {})
+
+            gt_rows = gt_table.get("rows", []) if isinstance(gt_table, dict) else []
+            pred_rows = (
+                pred_table.get("rows", []) if isinstance(pred_table, dict) else []
+            )
+
+            max_rows = max(len(gt_rows), len(pred_rows))
+            for row_idx in range(max_rows):
+                gt_row = gt_rows[row_idx] if row_idx < len(gt_rows) else {}
+                pred_row = pred_rows[row_idx] if row_idx < len(pred_rows) else {}
+
+                gt_vals = self._row_values_from_row(row=gt_row)
+                pred_vals = self._row_values_from_row(row=pred_row)
+                max_cells = max(len(gt_vals), len(pred_vals))
+
+                for cell_idx in range(max_cells):
+                    total_cells += 1
+                    gt_val = gt_vals[cell_idx] if cell_idx < len(gt_vals) else [""]
+                    pred_val = (
+                        pred_vals[cell_idx] if cell_idx < len(pred_vals) else [""]
+                    )
+                    if self._values_match(
+                        pred_leaf=pred_val,
+                        gt_leaf=gt_val,
+                    ):
+                        matched_cells += 1
+
+        return total_cells, matched_cells
