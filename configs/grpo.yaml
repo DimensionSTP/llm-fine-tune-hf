@@ -128,6 +128,7 @@ reward:
   target_top_k: 10
   shaping_weight: 0.2
   rank_margin: 1
+  cosine_tau: 1e-2
   json_parse_weight: 0.2
   weight:
     think_format: 0.0
