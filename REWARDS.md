@@ -107,7 +107,7 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   section, scores per-cell matches. Otherwise compares the last leaf value with
   normalized matching. Returns `1.0` on match, else `json_parse_weight`. Returns
   `0.0` on parse failure.
-- reward_categories: `single_kv`.
+- reward_categories: `single_kv`, `vlm_single_kv`.
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if value mismatches.
 
@@ -118,7 +118,7 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   cells. Computes accuracy over total items and returns
   `json_parse_weight + (1 - json_parse_weight) * accuracy`. Returns `0.0` on
   parse failure.
-- reward_categories: `multi_kv`.
+- reward_categories: `multi_kv`, `vlm_multi_kv`.
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if accuracy is low.
 
@@ -133,5 +133,7 @@ Use these strings in your dataset's `reward_categories` field:
 - `equation`
 - `retrieval_hit`
 - `single_kv`
+- `vlm_single_kv`
 - `multi_kv`
+- `vlm_multi_kv`
 
