@@ -85,8 +85,11 @@ def train(
                 config=config,
                 data_encoder=data_encoder,
             )
-            if mm_processor_kwargs is not None:
-                patch_grpo_vllm_mm_processor_kwargs(mm_processor_kwargs)
+            hf_overrides = get_vllm_hf_overrides(config=config)
+            patch_grpo_vllm_kwargs(
+                mm_processor_kwargs=mm_processor_kwargs,
+                hf_overrides=hf_overrides,
+            )
 
     if config.fine_tune_method == "gkd":
         trainer_config["teacher_model"] = config.teacher.model
@@ -409,6 +412,7 @@ def test_vllm(
         config=config,
         data_encoder=data_encoder,
     )
+    hf_overrides = get_vllm_hf_overrides(config=config)
 
     try:
         llm = LLM(
@@ -423,6 +427,7 @@ def test_vllm(
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
             mm_processor_kwargs=mm_processor_kwargs,
+            hf_overrides=hf_overrides,
         )
     except Exception:
         model_path = snapshot_download(
@@ -440,6 +445,7 @@ def test_vllm(
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
             mm_processor_kwargs=mm_processor_kwargs,
+            hf_overrides=hf_overrides,
         )
 
     if config.do_sample:
@@ -645,6 +651,7 @@ def test_vllm_multi_turn(
         config=config,
         data_encoder=data_encoder,
     )
+    hf_overrides = get_vllm_hf_overrides(config=config)
 
     try:
         llm = LLM(
@@ -659,6 +666,7 @@ def test_vllm_multi_turn(
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
             mm_processor_kwargs=mm_processor_kwargs,
+            hf_overrides=hf_overrides,
         )
     except Exception:
         model_path = snapshot_download(
@@ -676,6 +684,7 @@ def test_vllm_multi_turn(
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
             mm_processor_kwargs=mm_processor_kwargs,
+            hf_overrides=hf_overrides,
         )
 
     model_max_len = llm.llm_engine.model_config.max_model_len
