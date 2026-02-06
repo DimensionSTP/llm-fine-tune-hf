@@ -31,6 +31,7 @@ class StructuralDataset:
         content_column_name: str,
         modality: str,
         max_pixels: Optional[int],
+        do_resize: bool,
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -46,6 +47,7 @@ class StructuralDataset:
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
+            do_resize=do_resize,
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
@@ -139,6 +141,7 @@ class StructuralDataset:
         self,
         modality: str,
         max_pixels: Optional[int],
+        do_resize: bool,
     ) -> None:
         self.modality = modality
         self.max_pixels = max_pixels
@@ -151,6 +154,7 @@ class StructuralDataset:
             self.modality != "text"
             and self.max_pixels is not None
             and self.max_pixels > 0
+            and do_resize
         )
 
     def _compute_target_size(
@@ -278,6 +282,7 @@ class ConversationalDataset(StructuralDataset):
         reward_categories_column_name: str,
         modality: str,
         max_pixels: Optional[int],
+        do_resize: bool,
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -291,6 +296,7 @@ class ConversationalDataset(StructuralDataset):
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
+            do_resize=do_resize,
         )
 
     def __call__(self) -> Dict[str, HFDataset]:

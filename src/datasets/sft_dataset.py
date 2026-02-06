@@ -36,6 +36,7 @@ class StructuralDataset(Dataset):
         pretrained_model_name: str,
         modality: str,
         max_pixels: Optional[int],
+        do_resize: bool,
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -63,6 +64,7 @@ class StructuralDataset(Dataset):
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
+            do_resize=do_resize,
         )
 
         if is_preprocessed:
@@ -340,6 +342,7 @@ class StructuralDataset(Dataset):
         self,
         modality: str,
         max_pixels: Optional[int],
+        do_resize: bool,
     ) -> None:
         self.modality = modality
         self.max_pixels = max_pixels
@@ -352,6 +355,7 @@ class StructuralDataset(Dataset):
             self.modality != "text"
             and self.max_pixels is not None
             and self.max_pixels > 0
+            and do_resize
         )
 
     def _compute_target_size(
@@ -470,6 +474,7 @@ class ConversationalDataset(StructuralDataset):
         pretrained_model_name: str,
         modality: str,
         max_pixels: Optional[int],
+        do_resize: bool,
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -495,6 +500,7 @@ class ConversationalDataset(StructuralDataset):
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
+            do_resize=do_resize,
         )
 
         if is_preprocessed:
