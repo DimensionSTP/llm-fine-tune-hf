@@ -111,6 +111,8 @@ sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05
 scale_rewards: group
 
+enable_vllm_mm_processor_kwargs: false
+
 reward:
   is_answer_tag: false
   think_start_token: <think>
