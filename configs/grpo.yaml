@@ -113,6 +113,10 @@ sapo_temperature_neg: 1.05
 scale_rewards: group
 
 enable_vllm_mm_processor_kwargs: false
+enable_vllm_hf_overrides: false
+vllm_hf_overrides:
+  rope_scaling:
+    rope_type: mrope
 
 reward:
   is_answer_tag: false
