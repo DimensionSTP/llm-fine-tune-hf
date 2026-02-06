@@ -1091,7 +1091,27 @@ class SingleKVReward(BaseReward):
         try:
             return json.loads(text)
         except Exception:
+            pass
+        if not isinstance(text, str):
             return None
+        fenced = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if fenced:
+            try:
+                return json.loads(fenced.group(1))
+            except Exception:
+                pass
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return json.loads(text[start : end + 1])
+            except Exception:
+                return None
+        return None
 
     @staticmethod
     def _extract_last_leaf_value(node: Any) -> Optional[Any]:
