@@ -4,7 +4,8 @@ from .reward_vector_store import FaissIndex
 from .reward_embedding import VllmEmbedding
 from .vllm_helpers import (
     get_vllm_mm_processor_kwargs,
-    patch_grpo_vllm_mm_processor_kwargs,
+    get_vllm_hf_overrides,
+    patch_grpo_vllm_kwargs,
 )
 from .rewards import (
     RewardManager,
@@ -25,7 +26,8 @@ __all__ = [
     "FaissIndex",
     "VllmEmbedding",
     "get_vllm_mm_processor_kwargs",
-    "patch_grpo_vllm_mm_processor_kwargs",
+    "get_vllm_hf_overrides",
+    "patch_grpo_vllm_kwargs",
     "RewardManager",
     "ThinkFormatReward",
     "AnswerFormatReward",
