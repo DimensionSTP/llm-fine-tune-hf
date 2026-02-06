@@ -13,6 +13,7 @@ structural:
   content_column_name: ${content_column_name}
   modality: ${modality}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
 
 conversational:
   _target_: src.datasets.GRPOConversationalDataset
@@ -27,3 +28,4 @@ conversational:
   reward_categories_column_name: ${reward_categories_column_name}
   modality: ${modality}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}

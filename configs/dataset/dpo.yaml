@@ -14,6 +14,7 @@ structural:
   assistant_column_name: ${assistant_column_name}
   modality: ${modality}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
 
 conversational:
   _target_: src.datasets.DPOConversationalDataset
@@ -28,3 +29,4 @@ conversational:
   rejected_column_name: ${rejected_column_name}
   modality: ${modality}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}

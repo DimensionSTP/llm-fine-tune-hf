@@ -23,6 +23,7 @@ structural:
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
   response_start_template: ${response_start_template}
 
 conversational:
@@ -48,4 +49,5 @@ conversational:
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
   response_start_template: ${response_start_template}
