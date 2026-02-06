@@ -44,6 +44,7 @@ role_column_name: role
 content_column_name: content
 assistant_column_name: assistant
 max_pixels: null
+do_resize: false
 upload_user: Qwen
 model_type: Qwen3-8B
 pretrained_model_name: ${upload_user}/${model_type}
