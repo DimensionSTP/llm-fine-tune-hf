@@ -40,6 +40,14 @@ def get_vllm_hf_overrides(
             resolve=True,
         )
 
+    if isinstance(overrides, dict):
+        rope_scaling = overrides.get("rope_scaling")
+        if isinstance(rope_scaling, dict):
+            legacy_type = rope_scaling.get("type")
+            if "rope_type" not in rope_scaling and legacy_type is not None:
+                rope_scaling["rope_type"] = legacy_type
+            rope_scaling["type"] = None
+
     if not overrides:
         return None
 
