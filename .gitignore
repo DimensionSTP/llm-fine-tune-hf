@@ -31,6 +31,8 @@ baseline/
 tmp*
 !requirements.txt
 !packages.txt
+.skills/
+SKILLS.md
 checkpoints/
 benchmarks/
 adapters/
