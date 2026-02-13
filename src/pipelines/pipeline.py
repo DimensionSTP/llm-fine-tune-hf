@@ -80,17 +80,6 @@ def train(
         reward_manager = setup.get_reward_manager()
         trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
 
-        if config.use_vllm:
-            mm_processor_kwargs = get_vllm_mm_processor_kwargs(
-                config=config,
-                data_encoder=data_encoder,
-            )
-            hf_overrides = get_vllm_hf_overrides(config=config)
-            patch_grpo_vllm_kwargs(
-                mm_processor_kwargs=mm_processor_kwargs,
-                hf_overrides=hf_overrides,
-            )
-
     if config.fine_tune_method == "gkd":
         trainer_config["teacher_model"] = config.teacher.model
 
@@ -408,12 +397,6 @@ def test_vllm(
         divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
         tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
 
-    mm_processor_kwargs = get_vllm_mm_processor_kwargs(
-        config=config,
-        data_encoder=data_encoder,
-    )
-    hf_overrides = get_vllm_hf_overrides(config=config)
-
     try:
         llm = LLM(
             model=config.pretrained_model_name,
@@ -426,8 +409,6 @@ def test_vllm(
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
-            mm_processor_kwargs=mm_processor_kwargs,
-            hf_overrides=hf_overrides,
         )
     except Exception:
         model_path = snapshot_download(
@@ -444,8 +425,6 @@ def test_vllm(
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
-            mm_processor_kwargs=mm_processor_kwargs,
-            hf_overrides=hf_overrides,
         )
 
     if config.do_sample:
@@ -647,12 +626,6 @@ def test_vllm_multi_turn(
         divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
         tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
 
-    mm_processor_kwargs = get_vllm_mm_processor_kwargs(
-        config=config,
-        data_encoder=data_encoder,
-    )
-    hf_overrides = get_vllm_hf_overrides(config=config)
-
     try:
         llm = LLM(
             model=config.pretrained_model_name,
@@ -665,8 +638,6 @@ def test_vllm_multi_turn(
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
-            mm_processor_kwargs=mm_processor_kwargs,
-            hf_overrides=hf_overrides,
         )
     except Exception:
         model_path = snapshot_download(
@@ -683,8 +654,6 @@ def test_vllm_multi_turn(
             gpu_memory_utilization=config.gpu_memory_utilization,
             enable_lora=config.is_peft,
             max_lora_rank=config.peft_config.r,
-            mm_processor_kwargs=mm_processor_kwargs,
-            hf_overrides=hf_overrides,
         )
 
     model_max_len = llm.llm_engine.model_config.max_model_len
