@@ -10,12 +10,8 @@ import pandas as pd
 import torch
 from torch import distributed as dist
 from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data import DataLoader
 
 from transformers import set_seed
-from vllm import LLM, SamplingParams
-from vllm.lora.request import LoRARequest
-from huggingface_hub import snapshot_download
 
 import wandb
 
@@ -147,14 +143,11 @@ def test(
         if world_size > 1
         else None
     )
-    test_loader = DataLoader(
-        dataset=test_dataset,
-        batch_size=config.eval_batch_size,
-        shuffle=False,
+    test_loader = build_test_dataloader(
+        test_dataset=test_dataset,
+        config=config,
         num_workers=setup.num_workers,
-        pin_memory=True,
         sampler=sampler,
-        collate_fn=collate_fn_vlm if config.modality != "text" else None,
     )
 
     model = setup.get_model()
@@ -163,46 +156,15 @@ def test(
     model.to(rank)
 
     try:
-        results = []
-        with torch.inference_mode():
-            for batch in tqdm(
-                test_loader,
-                desc=f"Test {config.dataset_name}",
-                disable=(rank != 0),
-            ):
-                input_ids = batch["input_ids"].to(rank)
-                attention_mask = batch["attention_mask"].to(rank)
-
-                outputs = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    max_new_tokens=config.max_new_tokens,
-                    do_sample=config.do_sample,
-                    **config.generation_config,
-                ).cpu()
-
-                instructions = data_encoder.batch_decode(
-                    batch["input_ids"],
-                    skip_special_tokens=True,
-                )
-
-                generations = data_encoder.batch_decode(
-                    outputs[:, batch["input_ids"].shape[1] :],
-                    skip_special_tokens=True,
-                )
-
-                labels = batch["labels"]
-
-                for instruction, generation, label in zip(
-                    instructions, generations, labels
-                ):
-                    results.append(
-                        {
-                            "instruction": instruction,
-                            "generation": generation,
-                            "label": label,
-                        }
-                    )
+        results = generate_test_results(
+            test_loader=test_loader,
+            model=model,
+            data_encoder=data_encoder,
+            config=config,
+            device=rank,
+            tqdm_desc=f"Test {config.dataset_name}",
+            tqdm_disable=(rank != 0),
+        )
 
         if world_size > 1:
             dist.barrier()
@@ -216,23 +178,11 @@ def test(
                 results = [item for sublist in all_results for item in sublist]
 
         if rank == 0:
-            os.makedirs(
-                config.test_output_dir,
-                exist_ok=True,
+            df = save_test_results_json(
+                results=results,
+                output_dir=config.test_output_dir,
+                output_name=config.test_output_name,
             )
-            test_output_path = os.path.join(
-                config.test_output_dir,
-                f"{config.test_output_name}.json",
-            )
-
-            df = pd.DataFrame(results)
-            df.to_json(
-                test_output_path,
-                orient="records",
-                indent=2,
-                force_ascii=False,
-            )
-
             wandb.log({"test_results": wandb.Table(dataframe=df)})
 
             wandb.run.alert(
@@ -267,76 +217,32 @@ def test_large(
     setup = SetUp(config)
 
     test_dataset = setup.get_test_dataset()
-    test_loader = DataLoader(
-        dataset=test_dataset,
-        batch_size=config.eval_batch_size,
-        shuffle=False,
+    test_loader = build_test_dataloader(
+        test_dataset=test_dataset,
+        config=config,
         num_workers=setup.num_workers,
-        pin_memory=True,
-        collate_fn=collate_fn_vlm if config.modality != "text" else None,
+        sampler=None,
     )
 
     model = setup.get_model()
     data_encoder = setup.get_data_encoder()
 
     try:
-        results = []
-        with torch.inference_mode():
-            for batch in tqdm(
-                test_loader,
-                desc=f"Test {config.dataset_name}",
-            ):
-                input_ids = batch["input_ids"].to(model.device)
-                attention_mask = batch["attention_mask"].to(model.device)
-
-                outputs = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    max_new_tokens=config.max_new_tokens,
-                    do_sample=config.do_sample,
-                    **config.generation_config,
-                ).cpu()
-
-                instructions = data_encoder.batch_decode(
-                    batch["input_ids"],
-                    skip_special_tokens=True,
-                )
-
-                generations = data_encoder.batch_decode(
-                    outputs[:, batch["input_ids"].shape[1] :],
-                    skip_special_tokens=True,
-                )
-
-                labels = batch["labels"]
-
-                for instruction, generation, label in zip(
-                    instructions, generations, labels
-                ):
-                    results.append(
-                        {
-                            "instruction": instruction,
-                            "generation": generation,
-                            "label": label,
-                        }
-                    )
-
-        os.makedirs(
-            config.test_output_dir,
-            exist_ok=True,
-        )
-        test_output_path = os.path.join(
-            config.test_output_dir,
-            f"{config.test_output_name}.json",
+        results = generate_test_results(
+            test_loader=test_loader,
+            model=model,
+            data_encoder=data_encoder,
+            config=config,
+            device=model.device,
+            tqdm_desc=f"Test {config.dataset_name}",
+            tqdm_disable=False,
         )
 
-        df = pd.DataFrame(results)
-        df.to_json(
-            test_output_path,
-            orient="records",
-            indent=2,
-            force_ascii=False,
+        df = save_test_results_json(
+            results=results,
+            output_dir=config.test_output_dir,
+            output_name=config.test_output_name,
         )
-
         wandb.log({"test_results": wandb.Table(dataframe=df)})
 
         wandb.run.alert(
@@ -369,71 +275,14 @@ def test_vllm(
     data_encoder = setup.get_data_encoder()
 
     num_gpus = torch.cuda.device_count()
-
-    devices_limit = num_gpus
-    if config.devices is not None:
-        if isinstance(config.devices, int):
-            devices_limit = config.devices
-        elif isinstance(config.devices, str):
-            devices_limit = len(
-                [d for d in config.devices.split(",") if d.strip() != ""]
-            )
-        elif isinstance(config.devices, list):
-            devices_limit = len(config.devices)
-
-    test_gpu_count = devices_limit
-    if config.test_vllm.gpu_count is not None:
-        test_gpu_count = int(config.test_vllm.gpu_count)
-
-    if test_gpu_count > devices_limit:
-        test_gpu_count = devices_limit
-    if test_gpu_count < 1:
-        test_gpu_count = 1
-
-    tp_size = int(config.test_vllm.tp_size)
-    if tp_size > test_gpu_count:
-        tp_size = test_gpu_count
-    if test_gpu_count % tp_size != 0:
-        divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
-        tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
-
-    try:
-        llm = LLM(
-            model=config.pretrained_model_name,
-            tokenizer=config.pretrained_model_name,
-            revision=config.revision,
-            tensor_parallel_size=tp_size,
-            seed=config.seed,
-            trust_remote_code=True,
-            max_model_len=config.max_length,
-            gpu_memory_utilization=config.gpu_memory_utilization,
-            enable_lora=config.is_peft,
-            max_lora_rank=config.peft_config.r,
-        )
-    except Exception:
-        model_path = snapshot_download(
-            repo_id=config.pretrained_model_name,
-            revision=config.revision,
-        )
-        llm = LLM(
-            model=model_path,
-            tokenizer=model_path,
-            tensor_parallel_size=tp_size,
-            seed=config.seed,
-            trust_remote_code=True,
-            max_model_len=config.max_length,
-            gpu_memory_utilization=config.gpu_memory_utilization,
-            enable_lora=config.is_peft,
-            max_lora_rank=config.peft_config.r,
-        )
-
-    if config.do_sample:
-        generation_config = config.generation_config
-    else:
-        generation_config = {
-            "temperature": 0,
-            "top_p": 1,
-        }
+    tp_size = resolve_vllm_tp_size(
+        config=config,
+        num_gpus=num_gpus,
+    )
+    llm = build_vllm(
+        config=config,
+        tp_size=tp_size,
+    )
 
     eos_token_id = (
         data_encoder.eos_token_id
@@ -441,48 +290,17 @@ def test_vllm(
         else data_encoder.tokenizer.eos_token_id
     )
 
-    sampling_params = SamplingParams(
-        max_tokens=config.max_new_tokens,
-        skip_special_tokens=True,
+    sampling_params = build_sampling_params(
+        config=config,
         stop_token_ids=[eos_token_id],
-        stop=[
-            "### End",
-            "\n### End",
-        ],
-        **generation_config,
     )
-
-    if config.is_peft:
-        lora_request = LoRARequest(
-            lora_name=config.peft_test.adapter_name,
-            lora_int_id=1,
-            lora_path=config.peft_test.adapter_path,
-        )
-
-    file_name = f"{config.dataset_name}.{config.dataset_format}"
-    full_data_path = os.path.join(
-        config.connected_dir,
-        "data",
-        config.test_data_dir,
-        file_name,
+    lora_request = build_lora_request(
+        config=config,
+        lora_int_id=1,
     )
-
-    if config.dataset_format == "parquet":
-        df = pd.read_parquet(full_data_path)
-    elif config.dataset_format in ["json", "jsonl"]:
-        df = pd.read_json(
-            full_data_path,
-            lines=True if config.dataset_format == "jsonl" else False,
-        )
-    elif config.dataset_format in ["csv", "tsv"]:
-        df = pd.read_csv(
-            full_data_path,
-            sep="\t" if config.dataset_format == "tsv" else None,
-        )
-    else:
-        raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
-
-    df = df.fillna("_")
+    df = load_test_dataframe(
+        config=config,
+    )
 
     prompts = []
     labels = []
@@ -598,116 +416,28 @@ def test_vllm_multi_turn(
     data_encoder = setup.get_data_encoder()
 
     num_gpus = torch.cuda.device_count()
-
-    devices_limit = num_gpus
-    if config.devices is not None:
-        if isinstance(config.devices, int):
-            devices_limit = config.devices
-        elif isinstance(config.devices, str):
-            devices_limit = len(
-                [d for d in config.devices.split(",") if d.strip() != ""]
-            )
-        elif isinstance(config.devices, list):
-            devices_limit = len(config.devices)
-
-    test_gpu_count = devices_limit
-    if config.test_vllm.gpu_count is not None:
-        test_gpu_count = int(config.test_vllm.gpu_count)
-
-    if test_gpu_count > devices_limit:
-        test_gpu_count = devices_limit
-    if test_gpu_count < 1:
-        test_gpu_count = 1
-
-    tp_size = int(config.test_vllm.tp_size)
-    if tp_size > test_gpu_count:
-        tp_size = test_gpu_count
-    if test_gpu_count % tp_size != 0:
-        divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
-        tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
-
-    try:
-        llm = LLM(
-            model=config.pretrained_model_name,
-            tokenizer=config.pretrained_model_name,
-            revision=config.revision,
-            tensor_parallel_size=tp_size,
-            seed=config.seed,
-            trust_remote_code=True,
-            max_model_len=config.max_length,
-            gpu_memory_utilization=config.gpu_memory_utilization,
-            enable_lora=config.is_peft,
-            max_lora_rank=config.peft_config.r,
-        )
-    except Exception:
-        model_path = snapshot_download(
-            repo_id=config.pretrained_model_name,
-            revision=config.revision,
-        )
-        llm = LLM(
-            model=model_path,
-            tokenizer=model_path,
-            tensor_parallel_size=tp_size,
-            seed=config.seed,
-            trust_remote_code=True,
-            max_model_len=config.max_length,
-            gpu_memory_utilization=config.gpu_memory_utilization,
-            enable_lora=config.is_peft,
-            max_lora_rank=config.peft_config.r,
-        )
+    tp_size = resolve_vllm_tp_size(
+        config=config,
+        num_gpus=num_gpus,
+    )
+    llm = build_vllm(
+        config=config,
+        tp_size=tp_size,
+    )
 
     model_max_len = llm.llm_engine.model_config.max_model_len
 
-    if config.do_sample:
-        generation_config = config.generation_config
-    else:
-        generation_config = {
-            "temperature": 0,
-            "top_p": 1,
-        }
-
-    sampling_params = SamplingParams(
-        max_tokens=config.max_new_tokens,
-        skip_special_tokens=True,
+    sampling_params = build_sampling_params(
+        config=config,
         stop_token_ids=[data_encoder.eos_token_id],
-        stop=[
-            "### End",
-            "\n### End",
-        ],
-        **generation_config,
     )
-
-    if config.is_peft:
-        lora_request = LoRARequest(
-            lora_name=config.peft_test.adapter_name,
-            lora_int_id=0,
-            lora_path=config.peft_test.adapter_path,
-        )
-
-    file_name = f"{config.dataset_name}.{config.dataset_format}"
-    full_data_path = os.path.join(
-        config.connected_dir,
-        "data",
-        config.test_data_dir,
-        file_name,
+    lora_request = build_lora_request(
+        config=config,
+        lora_int_id=0,
     )
-
-    if config.dataset_format == "parquet":
-        df = pd.read_parquet(full_data_path)
-    elif config.dataset_format in ["json", "jsonl"]:
-        df = pd.read_json(
-            full_data_path,
-            lines=True if config.dataset_format == "jsonl" else False,
-        )
-    elif config.dataset_format in ["csv", "tsv"]:
-        df = pd.read_csv(
-            full_data_path,
-            sep="\t" if config.dataset_format == "tsv" else None,
-        )
-    else:
-        raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
-
-    df = df.fillna("_")
+    df = load_test_dataframe(
+        config=config,
+    )
 
     try:
         results = []
