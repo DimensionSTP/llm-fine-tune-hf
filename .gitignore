@@ -33,6 +33,7 @@ tmp*
 !packages.txt
 .skills/
 SKILLS.md
+AGENTS.md
 checkpoints/
 benchmarks/
 adapters/
