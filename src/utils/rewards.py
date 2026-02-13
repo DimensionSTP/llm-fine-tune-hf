@@ -795,19 +795,6 @@ class RetrievalHitReward(BaseReward):
     def name(self) -> str:
         return f"retrieval_hit@{self.database.retrieval_top_k}_reward"
 
-    def _ensure_ready(self) -> None:
-        if not self._database_loaded:
-            self.database.load()
-            self._database_loaded = True
-
-        if self._candidate_to_row_index is None:
-            self._candidate_to_row_index = {}
-            for row_index, candidate in enumerate(
-                self.database.df[self.database.candidate_column_name].tolist()
-            ):
-                if candidate not in self._candidate_to_row_index:
-                    self._candidate_to_row_index[candidate] = row_index
-
     def compute(
         self,
         completions: List[List[Dict[str, str]]],
@@ -875,37 +862,24 @@ class RetrievalHitReward(BaseReward):
             original_hit_location = 0
             rewritten_hit_location = 0
 
-            if isinstance(gt, str):
-                try:
-                    parsed_gt = literal_eval(str(gt))
-                except (ValueError, SyntaxError):
-                    parsed_gt = gt
-            elif isinstance(gt, np.ndarray):
-                parsed_gt = gt.tolist()
-            else:
-                parsed_gt = gt
+            parsed_gt = self._parse_ground_truth(gt=gt)
+            flat_gt = self._flatten_ground_truth(parsed_gt=parsed_gt)
 
-            if isinstance(parsed_gt, list):
-                gt_set = set(parsed_gt)
+            if flat_gt:
+                try:
+                    gt_lookup: Union[set[Any], List[Any]] = set(flat_gt)
+                except TypeError:
+                    gt_lookup = flat_gt
 
                 for idx, retrieved_candidate in enumerate(candidates_from_original):
-                    if retrieved_candidate in gt_set:
+                    if retrieved_candidate in gt_lookup:
                         original_hit_location = idx + 1
                         break
 
                 for idx, retrieved_candidate in enumerate(candidates_from_rewritten):
-                    if retrieved_candidate in gt_set:
+                    if retrieved_candidate in gt_lookup:
                         rewritten_hit_location = idx + 1
                         break
-            else:
-                if parsed_gt in candidates_from_original:
-                    original_hit_location = (
-                        candidates_from_original.index(parsed_gt) + 1
-                    )
-                if parsed_gt in candidates_from_rewritten:
-                    rewritten_hit_location = (
-                        candidates_from_rewritten.index(parsed_gt) + 1
-                    )
 
             original_in_target_top_k = 0 < original_hit_location <= self.target_top_k
             rewritten_in_target_top_k = 0 < rewritten_hit_location <= self.target_top_k
@@ -916,15 +890,9 @@ class RetrievalHitReward(BaseReward):
                 continue
 
             gt_row_indices = []
-            if isinstance(parsed_gt, list):
-                for gt_candidate in parsed_gt:
-                    if gt_candidate in self._candidate_to_row_index:
-                        gt_row_indices.append(
-                            self._candidate_to_row_index[gt_candidate]
-                        )
-            else:
-                if parsed_gt in self._candidate_to_row_index:
-                    gt_row_indices.append(self._candidate_to_row_index[parsed_gt])
+            for gt_candidate in flat_gt:
+                if gt_candidate in self._candidate_to_row_index:
+                    gt_row_indices.append(self._candidate_to_row_index[gt_candidate])
 
             if not gt_row_indices:
                 rewards.append(None)
@@ -1005,6 +973,51 @@ class RetrievalHitReward(BaseReward):
             rewards.append(reward)
 
         return rewards
+
+    def _ensure_ready(self) -> None:
+        if not self._database_loaded:
+            self.database.load()
+            self._database_loaded = True
+
+        if self._candidate_to_row_index is None:
+            self._candidate_to_row_index = {}
+            for row_index, candidate in enumerate(
+                self.database.df[self.database.candidate_column_name].tolist()
+            ):
+                if candidate not in self._candidate_to_row_index:
+                    self._candidate_to_row_index[candidate] = row_index
+
+    @staticmethod
+    def _parse_ground_truth(
+        gt: Union[str, List[str], np.ndarray, Any],
+    ) -> Union[Any, List[Any]]:
+        if isinstance(gt, str):
+            try:
+                return literal_eval(str(gt))
+            except (ValueError, SyntaxError):
+                return gt
+        if isinstance(gt, np.ndarray):
+            return gt.tolist()
+        return gt
+
+    @staticmethod
+    def _flatten_ground_truth(
+        parsed_gt: Union[Any, List[Any], np.ndarray],
+    ) -> List[Any]:
+        flat_gt: List[Any] = []
+        items: List[Any] = [parsed_gt]
+        index = 0
+        while index < len(items):
+            item = items[index]
+            index += 1
+            if isinstance(item, np.ndarray):
+                items.extend(item.tolist())
+                continue
+            if isinstance(item, list):
+                items.extend(item)
+                continue
+            flat_gt.append(item)
+        return flat_gt
 
 
 class SingleKVReward(BaseReward):
