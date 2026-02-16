@@ -36,7 +36,7 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.code_execution}
-    timeout: ${reward.timeout}
+    timeout: ${reward.code_execution.timeout}
 
   - _target_: src.utils.RougeReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -46,7 +46,7 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.rouge}
-    rouge_type: ${reward.rouge_type}
+    rouge_type: ${reward.rouge.type}
 
   - _target_: src.utils.EquationReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -56,8 +56,8 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.equation}
-    equation_target_column_name: ${reward.equation_target_column_name}
-    equation_numbers_column_name: ${reward.equation_numbers_column_name}
+    equation_target_column_name: ${reward.equation.target_column_name}
+    equation_numbers_column_name: ${reward.equation.numbers_column_name}
 
   - _target_: src.utils.RetrievalHitReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -69,10 +69,10 @@ rewards:
     weight: ${reward.weight.retrieval_hit}
     database: ${reward_database}
     embedding: ${reward_embedding}
-    target_top_k: ${reward.target_top_k}
-    shaping_weight: ${reward.shaping_weight}
-    rank_margin: ${reward.rank_margin}
-    cosine_tau: ${reward.cosine_tau}
+    target_top_k: ${reward.retrieval_hit.target_top_k}
+    shaping_weight: ${reward.retrieval_hit.shaping_weight}
+    rank_margin: ${reward.retrieval_hit.rank_margin}
+    cosine_tau: ${reward.retrieval_hit.cosine_tau}
 
   - _target_: src.utils.SingleKVReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -82,7 +82,7 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.single_kv}
-    json_parse_weight: ${reward.json_parse_weight}
+    json_parse_weight: ${reward.single_kv.json_parse_weight}
 
   - _target_: src.utils.MultiKVReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -92,4 +92,4 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.multi_kv}
-    json_parse_weight: ${reward.json_parse_weight}
+    json_parse_weight: ${reward.multi_kv.json_parse_weight}
