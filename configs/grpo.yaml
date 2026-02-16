@@ -119,18 +119,25 @@ reward:
   answer_start_token: <answer>
   answer_end_token: </answer>
   eos_token: <|im_end|>
-  timeout: 2
-  rouge_type: l
-  equation_target_column_name: target
-  equation_numbers_column_name: numbers
-  embedding_gpu_memory_utilization: 0.1
-  embedding_dim: 1024
-  retrieval_top_k: 250
-  target_top_k: 10
-  shaping_weight: 0.2
-  rank_margin: 1
-  cosine_tau: 1e-2
-  json_parse_weight: 0.2
+  code_execution:
+    timeout: 2
+  rouge:
+    type: l
+  equation:
+    target_column_name: target
+    numbers_column_name: numbers
+  retrieval_hit:
+    gpu_memory_utilization: 0.1
+    dim: 1024
+    top_k: 250
+    target_top_k: 10
+    shaping_weight: 0.2
+    rank_margin: 1
+    cosine_tau: 1e-2
+  single_kv:
+    json_parse_weight: 0.2
+  multi_kv:
+    json_parse_weight: 0.2
   weight:
     think_format: 0.0
     answer_format: 0.0
