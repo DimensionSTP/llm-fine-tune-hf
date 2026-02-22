@@ -15,6 +15,8 @@ import numpy as np
 from rouge_score import rouge_scorer
 from ast import literal_eval
 
+from omegaconf import DictConfig, ListConfig
+
 from src.utils.reward_vector_store import FaissIndex
 from src.utils.reward_embedding import VllmEmbedding
 
@@ -758,10 +760,9 @@ class RetrievalHitReward(BaseReward):
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
-        target_top_k: int,
         shaping_weight: float,
         rank_margin: int,
-        cosine_tau: float,
+        stages: List[Dict[str, Any]],
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -777,19 +778,16 @@ class RetrievalHitReward(BaseReward):
         self._database_loaded = False
         self._candidate_to_row_index = None
 
-        if target_top_k <= 0:
-            raise ValueError("target_top_k must be > 0")
         if shaping_weight < 0:
             raise ValueError("shaping_weight must be >= 0")
         if rank_margin < 0:
             raise ValueError("rank_margin must be >= 0")
-        if cosine_tau <= 0:
-            raise ValueError("cosine_tau must be > 0")
 
-        self.target_top_k = target_top_k
         self.shaping_weight = shaping_weight
         self.rank_margin = rank_margin
-        self.cosine_tau = cosine_tau
+
+        self.stages = stages
+        self._validate_stage_config()
 
     @property
     def name(self) -> str:
@@ -881,98 +879,130 @@ class RetrievalHitReward(BaseReward):
                         rewritten_hit_location = idx + 1
                         break
 
-            original_in_target_top_k = 0 < original_hit_location <= self.target_top_k
-            rewritten_in_target_top_k = 0 < rewritten_hit_location <= self.target_top_k
-
-            if (not original_in_target_top_k) and rewritten_in_target_top_k:
-                reward = 1.0
-                rewards.append(reward)
-                continue
-
-            gt_row_indices = []
-            for gt_candidate in flat_gt:
-                if gt_candidate in self._candidate_to_row_index:
-                    gt_row_indices.append(self._candidate_to_row_index[gt_candidate])
-
-            if not gt_row_indices:
-                rewards.append(None)
-                continue
-
-            if original_query_embedding.ndim == 2:
-                original_query_vector = original_query_embedding[0]
+            if original_hit_location > 0:
+                original_rank_for_shaping = original_hit_location
             else:
-                original_query_vector = original_query_embedding
+                original_rank_for_shaping = self.database.retrieval_top_k + 1
 
-            if rewritten_query_embedding.ndim == 2:
-                rewritten_query_vector = rewritten_query_embedding[0]
+            if rewritten_hit_location > 0:
+                rewritten_rank_for_shaping = rewritten_hit_location
             else:
-                rewritten_query_vector = rewritten_query_embedding
+                rewritten_rank_for_shaping = self.database.retrieval_top_k + 1
 
-            best_original_cosine = None
-            best_rewritten_cosine = None
+            base = (
+                math.log(original_rank_for_shaping)
+                - math.log(rewritten_rank_for_shaping)
+            ) / math.log(self.database.retrieval_top_k + 1)
 
-            for gt_row_index in gt_row_indices:
-                try:
-                    gt_vector = self.database.index.reconstruct(gt_row_index)
-                except Exception:
-                    rewards.append(None)
-                    gt_vector = None
-                    break
+            if (
+                self.rank_margin > 0
+                and abs(original_rank_for_shaping - rewritten_rank_for_shaping)
+                <= self.rank_margin
+            ):
+                base = 0.0
 
-                original_cosine = float(np.dot(original_query_vector, gt_vector))
-                rewritten_cosine = float(np.dot(rewritten_query_vector, gt_vector))
+            base *= self.shaping_weight
 
+            bonus = 0.0
+            penalty = 0.0
+
+            best_bonus_stage = None
+            for stage in self.stages:
+                if rewritten_rank_for_shaping <= stage["k"]:
+                    if best_bonus_stage is None or stage["k"] < best_bonus_stage["k"]:
+                        best_bonus_stage = stage
+
+            if best_bonus_stage is not None:
+                bonus = best_bonus_stage["bonus"]
+
+            best_drop_stage = None
+            for stage in self.stages:
                 if (
-                    best_original_cosine is None
-                    or original_cosine > best_original_cosine
+                    original_rank_for_shaping <= stage["k"]
+                    and rewritten_rank_for_shaping > stage["k"]
                 ):
-                    best_original_cosine = original_cosine
-                if (
-                    best_rewritten_cosine is None
-                    or rewritten_cosine > best_rewritten_cosine
-                ):
-                    best_rewritten_cosine = rewritten_cosine
+                    if best_drop_stage is None or stage["k"] < best_drop_stage["k"]:
+                        best_drop_stage = stage
 
-            if best_original_cosine is None or best_rewritten_cosine is None:
-                continue
+            if best_drop_stage is not None:
+                penalty = best_drop_stage["drop"]
 
-            original_rank_for_shaping = (
-                original_hit_location
-                if original_hit_location > 0
-                else self.database.retrieval_top_k + 1
-            )
-            rewritten_rank_for_shaping = (
-                rewritten_hit_location
-                if rewritten_hit_location > 0
-                else self.database.retrieval_top_k + 1
-            )
+            reward = base + bonus - penalty
 
-            rank_improvement = original_rank_for_shaping - rewritten_rank_for_shaping
-            cosine_improvement = best_rewritten_cosine - best_original_cosine
-
-            if abs(rank_improvement) <= self.rank_margin:
-                rank_reward = 0.0
-            else:
-                normalized_rank_improvement = rank_improvement / float(
-                    self.database.retrieval_top_k
-                )
-                if normalized_rank_improvement > 1.0:
-                    normalized_rank_improvement = 1.0
-                elif normalized_rank_improvement < -1.0:
-                    normalized_rank_improvement = -1.0
-                rank_reward = self.shaping_weight * normalized_rank_improvement
-
-            cosine_reward = math.tanh(cosine_improvement / self.cosine_tau)
-
-            reward = cosine_reward + rank_reward
             if reward > 1.0:
                 reward = 1.0
             elif reward < -1.0:
                 reward = -1.0
 
-            rewards.append(reward)
+            rewards.append(float(reward))
 
         return rewards
+
+    def _validate_stage_config(self) -> None:
+        if (
+            self.stages is None
+            or not isinstance(self.stages, (list, ListConfig))
+            or len(self.stages) == 0
+        ):
+            raise ValueError("stages must be a non-empty list of dicts")
+
+        prev_k: Optional[int] = None
+        prev_bonus: Optional[float] = None
+        prev_drop: Optional[float] = None
+
+        for i, stage in enumerate(self.stages):
+            if not isinstance(stage, (dict, DictConfig)):
+                raise ValueError(f"stages[{i}] must be a dict, got {type(stage)}")
+
+            for key in ("k", "bonus", "drop"):
+                if key not in stage:
+                    raise ValueError(f"stages[{i}] missing required key '{key}'")
+
+            k = stage["k"]
+            bonus = stage["bonus"]
+            drop = stage["drop"]
+
+            if not isinstance(k, int):
+                raise ValueError(f"stages[{i}]['k'] must be int, got {type(k)}")
+            if k <= 0:
+                raise ValueError(f"stages[{i}]['k'] must be >= 1, got {k}")
+            if k > self.database.retrieval_top_k:
+                raise ValueError(
+                    f"stages[{i}]['k'] must be <= retrieval_top_k={self.database.retrieval_top_k}, got {k}"
+                )
+
+            try:
+                bonus_f = float(bonus)
+                drop_f = float(drop)
+            except Exception:
+                raise ValueError(f"stages[{i}] bonus/drop must be numeric")
+
+            if bonus_f < 0:
+                raise ValueError(f"stages[{i}]['bonus'] must be >= 0, got {bonus_f}")
+            if drop_f < 0:
+                raise ValueError(f"stages[{i}]['drop'] must be >= 0, got {drop_f}")
+
+            if prev_k is not None and k > prev_k:
+                raise ValueError(
+                    f"Stage k order invalid at stages[{i}]: require non-increasing k "
+                    f"(tighter later). Got prev_k={prev_k}, k={k}"
+                )
+
+            if prev_bonus is not None and bonus_f < prev_bonus:
+                raise ValueError(
+                    f"Stage bonus order invalid at stages[{i}]: require non-decreasing bonus "
+                    f"(tighter later). Got prev_bonus={prev_bonus}, bonus={bonus_f}"
+                )
+
+            if prev_drop is not None and drop_f < prev_drop:
+                raise ValueError(
+                    f"Stage drop order invalid at stages[{i}]: require non-decreasing drop "
+                    f"(tighter later). Got prev_drop={prev_drop}, drop={drop_f}"
+                )
+
+            prev_k = k
+            prev_bonus = bonus_f
+            prev_drop = drop_f
 
     def _ensure_ready(self) -> None:
         if not self._database_loaded:
