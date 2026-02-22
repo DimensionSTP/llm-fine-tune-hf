@@ -130,10 +130,18 @@ reward:
     gpu_memory_utilization: 0.1
     dim: 1024
     top_k: 250
-    target_top_k: 10
-    shaping_weight: 0.2
-    rank_margin: 1
-    cosine_tau: 1e-2
+    shaping_weight: 1.0
+    rank_margin: 0
+    stages:
+      - k: 20
+        bonus: 0.10
+        drop: 0.10
+      - k: 10
+        bonus: 0.30
+        drop: 0.30
+      - k: 5
+        bonus: 0.50
+        drop: 0.50
   single_kv:
     json_parse_weight: 0.2
   multi_kv:
