@@ -1,4 +1,4 @@
-from typing import Dict, Union, Optional, Any
+from typing import Dict, Union, Optional, Any, Protocol
 import os
 import re
 
@@ -29,6 +29,10 @@ from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_pef
 
 from ..datasets import *
 from src.utils.rewards import RewardManager
+
+
+class DatasetBuilder(Protocol):
+    def __call__(self) -> Dict[str, HFDataset]: ...
 
 
 class SetUp:
@@ -72,16 +76,7 @@ class SetUp:
         return val_dataset
 
     def get_dataset(self) -> Dict[str, HFDataset]:
-        dataset: Union[
-            GRPOStructuralDataset,
-            GRPOConversationalDataset,
-            DPOStructuralDataset,
-            DPOConversationalDataset,
-            KTOStructuralDataset,
-            KTOConversationalDataset,
-            GKDStructuralDataset,
-            GKDConversationalDataset,
-        ] = instantiate(
+        dataset: DatasetBuilder = instantiate(
             self.config.dataset[self.data_type],
         )
         return dataset()
