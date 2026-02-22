@@ -73,10 +73,14 @@ class SetUp:
 
     def get_dataset(self) -> Dict[str, HFDataset]:
         dataset: Union[
-            DPOStructuralDataset,
-            DPOConversationalDataset,
             GRPOStructuralDataset,
             GRPOConversationalDataset,
+            DPOStructuralDataset,
+            DPOConversationalDataset,
+            KTOStructuralDataset,
+            KTOConversationalDataset,
+            GKDStructuralDataset,
+            GKDConversationalDataset,
         ] = instantiate(
             self.config.dataset[self.data_type],
         )
