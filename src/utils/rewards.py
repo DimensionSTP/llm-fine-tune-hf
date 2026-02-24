@@ -240,6 +240,23 @@ class BaseReward(ABC):
         )
         return text.strip()
 
+    @staticmethod
+    def has_category_token(
+        category: Any,
+        token: str,
+    ) -> bool:
+        if not isinstance(category, str):
+            return False
+        if not isinstance(token, str):
+            return False
+
+        token = token.lower().strip()
+        if token == "":
+            return False
+
+        category_tokens = category.lower().split("_")
+        return token in category_tokens
+
 
 class RewardManager:
     def __init__(
@@ -748,7 +765,122 @@ class EquationReward(BaseReward):
             return 0.0
 
 
-class RetrievalHitReward(BaseReward):
+class RetrievalBaseReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        database: FaissIndex,
+        embedding: VllmEmbedding,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+        )
+        self.database = database
+        self.embedding = embedding
+        self._database_loaded = False
+
+    def _ensure_ready(self) -> None:
+        if not self._database_loaded:
+            self.database.load()
+            self._database_loaded = True
+
+    def _get_original_and_rewritten_candidates(
+        self,
+        original_query: str,
+        content: str,
+    ) -> Tuple[List[Any], List[Any]]:
+        candidates_from_original = self._search_candidates(query_text=original_query)
+        extracted_answer = self.extract_answer_from_generation(generation=content)
+        extracted_answer = self.split_on_keywords(text=extracted_answer)
+        candidates_from_rewritten = self._search_candidates(query_text=extracted_answer)
+        return candidates_from_original, candidates_from_rewritten
+
+    def _search_candidates(
+        self,
+        query_text: str,
+    ) -> List[Any]:
+        query_embedding = self.embedding(
+            input_text=query_text,
+            is_query=True,
+        )
+        candidates = self.database.search(query_embedding=query_embedding)
+        candidates = sorted(
+            candidates,
+            key=lambda x: x[self.database.distance_column_name],
+            reverse=True,
+        )
+        return [
+            candidate[self.database.candidate_column_name] for candidate in candidates
+        ]
+
+    @staticmethod
+    def _parse_ground_truth(
+        gt: Union[str, List[str], np.ndarray, Any],
+    ) -> Union[Any, List[Any]]:
+        if isinstance(gt, str):
+            try:
+                return literal_eval(str(gt))
+            except (ValueError, SyntaxError):
+                return gt
+        if isinstance(gt, np.ndarray):
+            return gt.tolist()
+        return gt
+
+    @staticmethod
+    def _flatten_ground_truth(
+        parsed_gt: Union[Any, List[Any], np.ndarray],
+    ) -> List[Any]:
+        flat_gt: List[Any] = []
+        items: List[Any] = [parsed_gt]
+        index = 0
+        while index < len(items):
+            item = items[index]
+            index += 1
+            if isinstance(item, np.ndarray):
+                items.extend(item.tolist())
+                continue
+            if isinstance(item, list):
+                items.extend(item)
+                continue
+            flat_gt.append(item)
+        return flat_gt
+
+    @staticmethod
+    def _build_ground_truth_lookup(
+        flat_gt: List[Any],
+    ) -> Tuple[Union[set[Any], List[Any]], int]:
+        if not flat_gt:
+            return set(), 0
+
+        try:
+            gt_lookup: Union[set[Any], List[Any]] = set(flat_gt)
+            return gt_lookup, len(gt_lookup)
+        except TypeError:
+            unique_gt: List[Any] = []
+            for item in flat_gt:
+                is_new = True
+                for seen in unique_gt:
+                    if item == seen:
+                        is_new = False
+                        break
+                if is_new:
+                    unique_gt.append(item)
+            return unique_gt, len(unique_gt)
+
+
+class RetrievalHitReward(RetrievalBaseReward):
     def __init__(
         self,
         is_answer_tag: bool,
@@ -772,11 +904,9 @@ class RetrievalHitReward(BaseReward):
             answer_end_token=answer_end_token,
             eos_token=eos_token,
             weight=weight,
+            database=database,
+            embedding=embedding,
         )
-        self.database = database
-        self.embedding = embedding
-        self._database_loaded = False
-        self._candidate_to_row_index = None
 
         if shaping_weight < 0:
             raise ValueError("shaping_weight must be >= 0")
@@ -803,7 +933,10 @@ class RetrievalHitReward(BaseReward):
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
         for content, sol, category in zip(contents, solution, reward_categories):
-            if category != "retrieval_hit":
+            if not self.has_category_token(
+                category=category,
+                token="retrieval",
+            ):
                 rewards.append(None)
                 continue
 
@@ -819,43 +952,12 @@ class RetrievalHitReward(BaseReward):
                 continue
 
             self._ensure_ready()
-
-            original_query_embedding = self.embedding(
-                input_text=original_query,
-                is_query=True,
+            candidates_from_original, candidates_from_rewritten = (
+                self._get_original_and_rewritten_candidates(
+                    original_query=original_query,
+                    content=content,
+                )
             )
-            candidates_from_original = self.database.search(
-                query_embedding=original_query_embedding
-            )
-            candidates_from_original = sorted(
-                candidates_from_original,
-                key=lambda x: x[self.database.distance_column_name],
-                reverse=True,
-            )
-            candidates_from_original = [
-                candidate[self.database.candidate_column_name]
-                for candidate in candidates_from_original
-            ]
-
-            extracted_answer = self.extract_answer_from_generation(generation=content)
-            extracted_answer = self.split_on_keywords(text=extracted_answer)
-
-            rewritten_query_embedding = self.embedding(
-                input_text=extracted_answer,
-                is_query=True,
-            )
-            candidates_from_rewritten = self.database.search(
-                query_embedding=rewritten_query_embedding
-            )
-            candidates_from_rewritten = sorted(
-                candidates_from_rewritten,
-                key=lambda x: x[self.database.distance_column_name],
-                reverse=True,
-            )
-            candidates_from_rewritten = [
-                candidate[self.database.candidate_column_name]
-                for candidate in candidates_from_rewritten
-            ]
 
             original_hit_location = 0
             rewritten_hit_location = 0
@@ -864,10 +966,7 @@ class RetrievalHitReward(BaseReward):
             flat_gt = self._flatten_ground_truth(parsed_gt=parsed_gt)
 
             if flat_gt:
-                try:
-                    gt_lookup: Union[set[Any], List[Any]] = set(flat_gt)
-                except TypeError:
-                    gt_lookup = flat_gt
+                gt_lookup, _ = self._build_ground_truth_lookup(flat_gt=flat_gt)
 
                 for idx, retrieved_candidate in enumerate(candidates_from_original):
                     if retrieved_candidate in gt_lookup:
@@ -1004,50 +1103,208 @@ class RetrievalHitReward(BaseReward):
             prev_bonus = bonus_f
             prev_drop = drop_f
 
-    def _ensure_ready(self) -> None:
-        if not self._database_loaded:
-            self.database.load()
-            self._database_loaded = True
 
-        if self._candidate_to_row_index is None:
-            self._candidate_to_row_index = {}
-            for row_index, candidate in enumerate(
-                self.database.df[self.database.candidate_column_name].tolist()
+class RetrievalnDCGReward(RetrievalBaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        database: FaissIndex,
+        embedding: VllmEmbedding,
+        ndcg_top_ks: List[int],
+        alpha: float,
+        epsilon: float,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+            database=database,
+            embedding=embedding,
+        )
+        self.ndcg_top_ks = ndcg_top_ks
+        self.alpha = alpha
+
+        if epsilon <= 0:
+            raise ValueError("epsilon must be > 0")
+        if alpha < 0:
+            raise ValueError("alpha must be >= 0")
+        self._validate_ndcg_top_ks()
+        self.ndcg_top_ks = [int(k) for k in self.ndcg_top_ks]
+        self.ndcg_weights = self._build_ndcg_weights(
+            ndcg_top_ks=self.ndcg_top_ks,
+            alpha=self.alpha,
+        )
+        self.epsilon = epsilon
+
+    @property
+    def name(self) -> str:
+        ks = ",".join(str(k) for k in self.ndcg_top_ks)
+        return f"retrieval_ndcg@{ks}_reward"
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[Dict[str, Union[str, List[str]]]],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if not self.has_category_token(
+                category=category,
+                token="retrieval",
             ):
-                if candidate not in self._candidate_to_row_index:
-                    self._candidate_to_row_index[candidate] = row_index
+                rewards.append(None)
+                continue
+
+            original_query = sol["query"]
+            gt = sol["candidate"]
+
+            if not original_query:
+                rewards.append(None)
+                continue
+
+            if not gt:
+                rewards.append(None)
+                continue
+
+            self._ensure_ready()
+            candidates_from_original, candidates_from_rewritten = (
+                self._get_original_and_rewritten_candidates(
+                    original_query=original_query,
+                    content=content,
+                )
+            )
+
+            parsed_gt = self._parse_ground_truth(gt=gt)
+            flat_gt = self._flatten_ground_truth(parsed_gt=parsed_gt)
+
+            gt_lookup, num_relevant = self._build_ground_truth_lookup(flat_gt=flat_gt)
+            if num_relevant == 0:
+                rewards.append(None)
+                continue
+
+            reward = 0.0
+            for k, weight in zip(self.ndcg_top_ks, self.ndcg_weights):
+                original_ndcg = self._compute_ndcg(
+                    ranked_candidates=candidates_from_original,
+                    gt_lookup=gt_lookup,
+                    num_relevant=num_relevant,
+                    top_k=k,
+                )
+                rewritten_ndcg = self._compute_ndcg(
+                    ranked_candidates=candidates_from_rewritten,
+                    gt_lookup=gt_lookup,
+                    num_relevant=num_relevant,
+                    top_k=k,
+                )
+                normalized_delta = self._normalize_delta(
+                    original_ndcg=original_ndcg,
+                    rewritten_ndcg=rewritten_ndcg,
+                    epsilon=self.epsilon,
+                )
+                reward += weight * normalized_delta
+
+            if reward > 1.0:
+                reward = 1.0
+            elif reward < -1.0:
+                reward = -1.0
+
+            rewards.append(float(reward))
+
+        return rewards
+
+    def _validate_ndcg_top_ks(self) -> None:
+        if (
+            self.ndcg_top_ks is None
+            or not isinstance(self.ndcg_top_ks, (list, ListConfig))
+            or len(self.ndcg_top_ks) == 0
+        ):
+            raise ValueError("ndcg_top_ks must be a non-empty list of ints")
+
+        prev_k: Optional[int] = None
+        for i, k in enumerate(self.ndcg_top_ks):
+            if not isinstance(k, int):
+                raise ValueError(f"ndcg_top_ks[{i}] must be int, got {type(k)}")
+            if k <= 0:
+                raise ValueError(f"ndcg_top_ks[{i}] must be >= 1, got {k}")
+            if k > self.database.retrieval_top_k:
+                raise ValueError(
+                    f"ndcg_top_ks[{i}] must be <= retrieval_top_k={self.database.retrieval_top_k}, got {k}"
+                )
+            if prev_k is not None and k <= prev_k:
+                raise ValueError(
+                    f"ndcg_top_ks must be strictly increasing. Got prev_k={prev_k}, k={k}"
+                )
+            prev_k = k
 
     @staticmethod
-    def _parse_ground_truth(
-        gt: Union[str, List[str], np.ndarray, Any],
-    ) -> Union[Any, List[Any]]:
-        if isinstance(gt, str):
-            try:
-                return literal_eval(str(gt))
-            except (ValueError, SyntaxError):
-                return gt
-        if isinstance(gt, np.ndarray):
-            return gt.tolist()
-        return gt
+    def _build_ndcg_weights(
+        ndcg_top_ks: List[int],
+        alpha: float,
+    ) -> List[float]:
+        raw_weights = [float(k) ** (-alpha) for k in ndcg_top_ks]
+        weight_sum = float(sum(raw_weights))
+        if weight_sum <= 0:
+            raise ValueError("invalid ndcg weights: sum must be > 0")
+        return [weight / weight_sum for weight in raw_weights]
 
     @staticmethod
-    def _flatten_ground_truth(
-        parsed_gt: Union[Any, List[Any], np.ndarray],
-    ) -> List[Any]:
-        flat_gt: List[Any] = []
-        items: List[Any] = [parsed_gt]
-        index = 0
-        while index < len(items):
-            item = items[index]
-            index += 1
-            if isinstance(item, np.ndarray):
-                items.extend(item.tolist())
-                continue
-            if isinstance(item, list):
-                items.extend(item)
-                continue
-            flat_gt.append(item)
-        return flat_gt
+    def _normalize_delta(
+        original_ndcg: float,
+        rewritten_ndcg: float,
+        epsilon: float,
+    ) -> float:
+        delta = rewritten_ndcg - original_ndcg
+        if delta >= 0:
+            denom = (1.0 - original_ndcg) + epsilon
+        else:
+            denom = original_ndcg + epsilon
+        return delta / denom
+
+    @staticmethod
+    def _compute_ndcg(
+        ranked_candidates: List[Any],
+        gt_lookup: Union[set[Any], List[Any]],
+        num_relevant: int,
+        top_k: int,
+    ) -> float:
+        if num_relevant <= 0:
+            return 0.0
+
+        limit = min(top_k, len(ranked_candidates))
+        if limit <= 0:
+            return 0.0
+
+        dcg = 0.0
+        for rank_index in range(limit):
+            candidate = ranked_candidates[rank_index]
+            if candidate in gt_lookup:
+                dcg += 1.0 / math.log2(rank_index + 2)
+
+        ideal_hits = min(num_relevant, limit)
+        if ideal_hits <= 0:
+            return 0.0
+
+        idcg = 0.0
+        for rank_index in range(ideal_hits):
+            idcg += 1.0 / math.log2(rank_index + 2)
+
+        if idcg <= 0:
+            return 0.0
+
+        return dcg / idcg
 
 
 class SingleKVReward(BaseReward):
@@ -1083,7 +1340,10 @@ class SingleKVReward(BaseReward):
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
         for content, sol, category in zip(contents, solution, reward_categories):
-            if category not in ["single_kv", "vlm_single_kv"]:
+            if not self.has_category_token(
+                category=category,
+                token="kv",
+            ):
                 rewards.append(None)
                 continue
 
@@ -1329,7 +1589,10 @@ class MultiKVReward(SingleKVReward):
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
         for content, sol, category in zip(contents, solution, reward_categories):
-            if category not in ["multi_kv", "vlm_multi_kv"]:
+            if not self.has_category_token(
+                category=category,
+                token="kv",
+            ):
                 rewards.append(None)
                 continue
 
