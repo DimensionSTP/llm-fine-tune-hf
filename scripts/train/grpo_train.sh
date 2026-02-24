@@ -43,13 +43,6 @@ sapo_temperature_pos=1.0
 sapo_temperature_neg=1.05
 scale_rewards=group
 is_answer_tag=True
-think_format_weight=0.0
-answer_format_weight=0.0
-match_weight=2.0
-code_execution_weight=0.0
-rouge_weight=0.0
-equation_weight=0.0
-retrieval_hit_weight=0.0
 lr=5e-7
 weight_decay=1e-1
 warmup_ratio=5e-2
@@ -57,6 +50,33 @@ epoch=2
 step=250
 workers_ratio=8
 use_all_workers=False
+
+declare -A reward_weights=(
+    ["think_format"]=0.0
+    ["answer_format"]=0.0
+    ["match"]=2.0
+    ["code_execution"]=0.0
+    ["rouge"]=0.0
+    ["equation"]=0.0
+    ["retrieval_hit"]=0.0
+    ["retrieval_ndcg"]=0.0
+)
+
+reward_weight_keys=(
+    "think_format"
+    "answer_format"
+    "match"
+    "code_execution"
+    "rouge"
+    "equation"
+    "retrieval_hit"
+    "retrieval_ndcg"
+)
+
+reward_weight_args=()
+for key in "${reward_weight_keys[@]}"; do
+    reward_weight_args+=("reward.weight.${key}=${reward_weights[$key]}")
+done
 
 accelerate launch main.py --config-name=grpo.yaml mode=train \
     modality=$modality \
@@ -102,13 +122,7 @@ accelerate launch main.py --config-name=grpo.yaml mode=train \
     sapo_temperature_neg=$sapo_temperature_neg \
     scale_rewards=$scale_rewards \
     reward.is_answer_tag=$is_answer_tag \
-    reward.weight.think_format=$think_format_weight \
-    reward.weight.answer_format=$answer_format_weight \
-    reward.weight.match=$match_weight \
-    reward.weight.code_execution=$code_execution_weight \
-    reward.weight.rouge=$rouge_weight \
-    reward.weight.equation=$equation_weight \
-    reward.weight.retrieval_hit=$retrieval_hit_weight \
+    "${reward_weight_args[@]}" \
     lr=$lr \
     weight_decay=$weight_decay \
     warmup_ratio=$warmup_ratio \
