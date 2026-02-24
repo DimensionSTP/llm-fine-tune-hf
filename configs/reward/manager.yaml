@@ -69,9 +69,23 @@ rewards:
     weight: ${reward.weight.retrieval_hit}
     database: ${reward_database}
     embedding: ${reward_embedding}
-    shaping_weight: ${reward.retrieval_hit.shaping_weight}
-    rank_margin: ${reward.retrieval_hit.rank_margin}
-    stages: ${reward.retrieval_hit.stages}
+    shaping_weight: ${reward.retrieval.hit.shaping_weight}
+    rank_margin: ${reward.retrieval.hit.rank_margin}
+    stages: ${reward.retrieval.hit.stages}
+
+  - _target_: src.utils.RetrievalnDCGReward
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
+    eos_token: ${reward.eos_token}
+    weight: ${reward.weight.retrieval_ndcg}
+    database: ${reward_database}
+    embedding: ${reward_embedding}
+    ndcg_top_ks: ${reward.retrieval.ndcg.top_ks}
+    alpha: ${reward.retrieval.ndcg.alpha}
+    epsilon: ${reward.retrieval.ndcg.epsilon}
 
   - _target_: src.utils.SingleKVReward
     is_answer_tag: ${reward.is_answer_tag}

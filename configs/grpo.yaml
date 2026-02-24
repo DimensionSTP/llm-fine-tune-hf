@@ -126,22 +126,27 @@ reward:
   equation:
     target_column_name: target
     numbers_column_name: numbers
-  retrieval_hit:
+  retrieval:
     gpu_memory_utilization: 0.1
     dim: 1024
     top_k: 250
-    shaping_weight: 1.0
-    rank_margin: 0
-    stages:
-      - k: 20
-        bonus: 0.10
-        drop: 0.10
-      - k: 10
-        bonus: 0.30
-        drop: 0.30
-      - k: 5
-        bonus: 0.50
-        drop: 0.50
+    hit:
+      shaping_weight: 1.0
+      rank_margin: 0
+      stages:
+        - k: 20
+          bonus: 0.10
+          drop: 0.10
+        - k: 10
+          bonus: 0.30
+          drop: 0.30
+        - k: 5
+          bonus: 0.50
+          drop: 0.50
+    ndcg:
+      top_ks: [1, 3, 5, 10]
+      alpha: 0.5
+      epsilon: 1.0e-8
   single_kv:
     json_parse_weight: 0.2
   multi_kv:
@@ -154,6 +159,7 @@ reward:
     rouge: 0.0
     equation: 0.0
     retrieval_hit: 0.0
+    retrieval_ndcg: 0.0
     single_kv: 0.0
     multi_kv: 0.0
 
