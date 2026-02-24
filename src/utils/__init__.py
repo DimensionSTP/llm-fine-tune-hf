@@ -21,6 +21,7 @@ from .rewards import (
     RougeReward,
     EquationReward,
     RetrievalHitReward,
+    RetrievalnDCGReward,
     SingleKVReward,
     MultiKVReward,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "RougeReward",
     "EquationReward",
     "RetrievalHitReward",
+    "RetrievalnDCGReward",
     "SingleKVReward",
     "MultiKVReward",
 ]
