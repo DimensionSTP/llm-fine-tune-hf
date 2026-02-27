@@ -34,6 +34,8 @@ tmp*
 .skills/
 SKILLS.md
 AGENTS.md
+CLAUDE.md
+deep-research-report.md
 checkpoints/
 benchmarks/
 adapters/
