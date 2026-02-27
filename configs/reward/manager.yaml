@@ -83,6 +83,7 @@ rewards:
     weight: ${reward.weight.retrieval_ndcg}
     database: ${reward_database}
     embedding: ${reward_embedding}
+    reward_mode: ${reward.retrieval.ndcg.reward_mode}
     ndcg_top_ks: ${reward.retrieval.ndcg.top_ks}
     alpha: ${reward.retrieval.ndcg.alpha}
     epsilon: ${reward.retrieval.ndcg.epsilon}

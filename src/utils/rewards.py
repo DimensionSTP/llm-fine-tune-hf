@@ -1116,6 +1116,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
+        reward_mode: str,
         ndcg_top_ks: List[int],
         alpha: float,
         epsilon: float,
@@ -1131,20 +1132,20 @@ class RetrievalnDCGReward(RetrievalBaseReward):
             database=database,
             embedding=embedding,
         )
-        self.ndcg_top_ks = ndcg_top_ks
-        self.alpha = alpha
-
-        if epsilon <= 0:
-            raise ValueError("epsilon must be > 0")
+        if reward_mode not in ["relative", "absolute"]:
+            raise ValueError("reward_mode must be one of ['relative', 'absolute']")
         if alpha < 0:
             raise ValueError("alpha must be >= 0")
-        self._validate_ndcg_top_ks()
-        self.ndcg_top_ks = [int(k) for k in self.ndcg_top_ks]
-        self.ndcg_weights = self._build_ndcg_weights(
-            ndcg_top_ks=self.ndcg_top_ks,
-            alpha=self.alpha,
-        )
+        if reward_mode == "relative" and epsilon <= 0:
+            raise ValueError("epsilon must be > 0 for relative reward_mode")
+
+        self.reward_mode = reward_mode
+        self.ndcg_top_ks = [int(k) for k in ndcg_top_ks]
+        self.alpha = alpha
         self.epsilon = epsilon
+
+        self._validate_ndcg_top_ks()
+        self.ndcg_weights = self._build_ndcg_weights()
 
     @property
     def name(self) -> str:
@@ -1197,24 +1198,27 @@ class RetrievalnDCGReward(RetrievalBaseReward):
 
             reward = 0.0
             for k, weight in zip(self.ndcg_top_ks, self.ndcg_weights):
-                original_ndcg = self._compute_ndcg(
-                    ranked_candidates=candidates_from_original,
-                    gt_lookup=gt_lookup,
-                    num_relevant=num_relevant,
-                    top_k=k,
-                )
                 rewritten_ndcg = self._compute_ndcg(
                     ranked_candidates=candidates_from_rewritten,
                     gt_lookup=gt_lookup,
                     num_relevant=num_relevant,
                     top_k=k,
                 )
-                normalized_delta = self._normalize_delta(
-                    original_ndcg=original_ndcg,
-                    rewritten_ndcg=rewritten_ndcg,
-                    epsilon=self.epsilon,
-                )
-                reward += weight * normalized_delta
+                if self.reward_mode == "relative":
+                    original_ndcg = self._compute_ndcg(
+                        ranked_candidates=candidates_from_original,
+                        gt_lookup=gt_lookup,
+                        num_relevant=num_relevant,
+                        top_k=k,
+                    )
+                    reward_component = self._normalize_delta(
+                        original_ndcg=original_ndcg,
+                        rewritten_ndcg=rewritten_ndcg,
+                        epsilon=self.epsilon,
+                    )
+                else:
+                    reward_component = rewritten_ndcg
+                reward += weight * reward_component
 
             if reward > 1.0:
                 reward = 1.0
@@ -1249,12 +1253,8 @@ class RetrievalnDCGReward(RetrievalBaseReward):
                 )
             prev_k = k
 
-    @staticmethod
-    def _build_ndcg_weights(
-        ndcg_top_ks: List[int],
-        alpha: float,
-    ) -> List[float]:
-        raw_weights = [float(k) ** (-alpha) for k in ndcg_top_ks]
+    def _build_ndcg_weights(self) -> List[float]:
+        raw_weights = [float(k) ** (-self.alpha) for k in self.ndcg_top_ks]
         weight_sum = float(sum(raw_weights))
         if weight_sum <= 0:
             raise ValueError("invalid ndcg weights: sum must be > 0")

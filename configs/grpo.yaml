@@ -144,6 +144,7 @@ reward:
           bonus: 0.50
           drop: 0.50
     ndcg:
+      reward_mode: relative
       top_ks: [1, 3, 5, 10]
       alpha: 0.5
       epsilon: 1.0e-8
