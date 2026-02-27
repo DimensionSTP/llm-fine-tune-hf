@@ -83,13 +83,13 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - Purpose: Reward query rewriting that improves retrieval hits/ranks.
 - Logic: Embeds the original query and the rewritten query (prediction), runs
   retrieval, and compares hit positions against ground-truth candidates. Gives
-  `1.0` when only rewritten hits in top-k, otherwise a shaped score based on
-  rank improvement.
-- reward_categories: `retrieval_hit`.
+  a shaped score based on rank improvement and stage bonus/drop.
+- reward_categories: any category containing the `retrieval` token
+  (e.g., `retrieval`, `retrieval_hit`, `retrieval_ndcg`).
 - Extra options:
-  - `target_top_k`: hit threshold for a "success".
   - `shaping_weight`: scaling for rank-improvement shaping.
   - `rank_margin`: ignore small rank changes within this margin.
+  - `stages`: rank-stage bonus/drop settings.
   - `reward_database` config (`configs/reward/database.yaml`):
     - `data_path`, `embedding_model_detail`, `indices_name`, `items_name`,
       `items_format`, `dim`, `retrieval_top_k`, `distance_column_name`,
@@ -100,6 +100,23 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
       `instruction_length`, `instruction`, `device_id`, `master_addr`,
       `master_port`, `nccl_socket_ifname`, `nccl_ib_disable`.
 
+### RetrievalnDCGReward
+
+- Purpose: Reward retrieval quality of rewritten queries using weighted nDCG.
+- Logic: Computes weighted nDCG over configured cutoffs (`top_ks`) using
+  power-law weights (`k^-alpha` normalized). Supports two reward modes:
+  - `relative`: headroom-normalized delta from original to rewritten query.
+  - `absolute`: rewritten-query nDCG only.
+- reward_categories: any category containing the `retrieval` token
+  (e.g., `retrieval`, `retrieval_hit`, `retrieval_ndcg`).
+- Extra options:
+  - `reward_mode`: `relative` (default) or `absolute`.
+  - `top_ks`: nDCG cutoff list (strictly increasing, each <= retrieval top-k).
+  - `alpha`: power exponent for cutoff weights.
+  - `epsilon`: numerical stabilizer (used in `relative` mode).
+  - `reward_database` / `reward_embedding`: same retrieval backends as
+    `RetrievalHitReward`.
+
 ### SingleKVReward
 
 - Purpose: Single key-value extraction reward for JSON outputs.
@@ -107,7 +124,8 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   section, scores per-cell matches. Otherwise compares the last leaf value with
   normalized matching. Returns `1.0` on match, else `json_parse_weight`. Returns
   `0.0` on parse failure.
-- reward_categories: `single_kv`, `vlm_single_kv`.
+- reward_categories: any category containing the `kv` token
+  (e.g., `single_kv`, `vlm_single_kv`).
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if value mismatches.
 
@@ -118,22 +136,23 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   cells. Computes accuracy over total items and returns
   `json_parse_weight + (1 - json_parse_weight) * accuracy`. Returns `0.0` on
   parse failure.
-- reward_categories: `multi_kv`, `vlm_multi_kv`.
+- reward_categories: any category containing the `kv` token
+  (e.g., `multi_kv`, `vlm_multi_kv`).
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if accuracy is low.
 
 ## reward_categories Quick Reference
 
-Use these strings in your dataset's `reward_categories` field:
+Current matching rules in `src/utils/rewards.py`:
 
 - `math`
 - `choice`
 - `code`
 - `rouge`
 - `equation`
-- `retrieval_hit`
-- `single_kv`
-- `vlm_single_kv`
-- `multi_kv`
-- `vlm_multi_kv`
-
+- Retrieval-family rewards (`RetrievalHitReward`, `RetrievalnDCGReward`) run
+  when category contains token `retrieval`.
+  Examples: `retrieval`, `retrieval_hit`, `retrieval_ndcg`.
+- KV-family rewards (`SingleKVReward`, `MultiKVReward`) run when category
+  contains token `kv`.
+  Examples: `single_kv`, `multi_kv`, `vlm_single_kv`, `vlm_multi_kv`.
