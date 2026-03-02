@@ -921,7 +921,10 @@ class RetrievalHitReward(RetrievalBaseReward):
 
     @property
     def name(self) -> str:
-        return f"retrieval_hit@{self.database.retrieval_top_k}_reward"
+        stage_ks = ",".join(str(int(stage["k"])) for stage in self.stages)
+        return (
+            f"retrieval_hit@{self.database.retrieval_top_k}_stages[{stage_ks}]_reward"
+        )
 
     def compute(
         self,
@@ -1150,7 +1153,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
     @property
     def name(self) -> str:
         ks = ",".join(str(k) for k in self.ndcg_top_ks)
-        return f"retrieval_ndcg@{ks}_reward"
+        return f"retrieval_ndcg@{ks}_{self.reward_mode}_reward"
 
     def compute(
         self,
