@@ -7,7 +7,7 @@ num_gpus: ${devices}
 seed: ${seed}
 gpu_memory_utilization: ${reward.retrieval.gpu_memory_utilization}
 max_length: ${max_new_tokens}
-instruction_length: 32
+instruction_length: 64
 instruction: |
   Given a query, retrieve relevant passages that answer the query.
 device_id: null
