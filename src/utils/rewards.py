@@ -1202,13 +1202,17 @@ class RetrievalnDCGReward(RetrievalBaseReward):
                 continue
 
             self._ensure_ready()
-            candidates_from_original, candidates_from_rewritten = (
-                self._get_original_and_rewritten_candidates(
-                    original_query=original_query,
-                    content=content,
+            cached_original_ndcg = self._get_cached_original_ndcg(solution=sol)
+            candidates_from_rewritten = self._get_rewritten_candidates(
+                content=content,
+                retrieval_top_k=self.retrieval_top_k,
+            )
+            candidates_from_original = None
+            if self.reward_mode == "relative" and cached_original_ndcg is None:
+                candidates_from_original = self._search_candidates(
+                    query_text=original_query,
                     retrieval_top_k=self.retrieval_top_k,
                 )
-            )
 
             parsed_gt = self._parse_ground_truth(gt=gt)
             flat_gt = self._flatten_ground_truth(parsed_gt=parsed_gt)
@@ -1227,12 +1231,19 @@ class RetrievalnDCGReward(RetrievalBaseReward):
                     top_k=k,
                 )
                 if self.reward_mode == "relative":
-                    original_ndcg = self._compute_ndcg(
-                        ranked_candidates=candidates_from_original,
-                        gt_lookup=gt_lookup,
-                        num_relevant=num_relevant,
-                        top_k=k,
-                    )
+                    if cached_original_ndcg is not None:
+                        original_ndcg = cached_original_ndcg[k]
+                    else:
+                        if candidates_from_original is None:
+                            raise ValueError(
+                                "candidates_from_original must be available when original_ndcg cache is missing"
+                            )
+                        original_ndcg = self._compute_ndcg(
+                            ranked_candidates=candidates_from_original,
+                            gt_lookup=gt_lookup,
+                            num_relevant=num_relevant,
+                            top_k=k,
+                        )
                     reward_component = self._normalize_delta(
                         original_ndcg=original_ndcg,
                         rewritten_ndcg=rewritten_ndcg,
@@ -1250,6 +1261,48 @@ class RetrievalnDCGReward(RetrievalBaseReward):
             rewards.append(float(reward))
 
         return rewards
+
+    def _get_cached_original_ndcg(
+        self,
+        solution: Dict[str, Any],
+    ) -> Optional[Dict[int, float]]:
+        original_ndcg = solution.get("original_ndcg")
+        if not isinstance(original_ndcg, dict):
+            return None
+
+        cached_original_ndcg: Dict[int, float] = {}
+        for k in self.ndcg_top_ks:
+            key = str(k)
+            if key not in original_ndcg:
+                return None
+
+            value = original_ndcg[key]
+            if value is None:
+                return None
+
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                return None
+
+            if not math.isfinite(numeric_value):
+                return None
+
+            cached_original_ndcg[k] = numeric_value
+
+        return cached_original_ndcg
+
+    def _get_rewritten_candidates(
+        self,
+        content: str,
+        retrieval_top_k: int,
+    ) -> List[Any]:
+        extracted_answer = self.extract_answer_from_generation(generation=content)
+        extracted_answer = self.split_on_keywords(text=extracted_answer)
+        return self._search_candidates(
+            query_text=extracted_answer,
+            retrieval_top_k=retrieval_top_k,
+        )
 
     def _validate_ndcg_top_ks(self) -> None:
         if (
