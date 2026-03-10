@@ -16,7 +16,6 @@ class FaissIndex:
         items_name: str,
         items_format: str,
         dim: int,
-        retrieval_top_k: int,
         distance_column_name: str,
         candidate_column_name: str,
     ) -> None:
@@ -40,7 +39,6 @@ class FaissIndex:
         self.df = None
         self.loaded = False
 
-        self.retrieval_top_k = retrieval_top_k
         self.distance_column_name = distance_column_name
         self.candidate_column_name = candidate_column_name
 
@@ -53,6 +51,7 @@ class FaissIndex:
     def search(
         self,
         query_embedding: np.ndarray,
+        retrieval_top_k: int,
     ) -> List[Dict[str, Any]]:
         if not self.loaded:
             self.load()
@@ -64,9 +63,12 @@ class FaissIndex:
         else:
             raise ValueError("query_embedding must be 1D or 2D array")
 
+        if retrieval_top_k <= 0:
+            raise ValueError(f"retrieval_top_k must be >= 1, got {retrieval_top_k}")
+
         distances, indices = self.index.search(
             query_embedding,
-            k=self.retrieval_top_k,
+            k=retrieval_top_k,
         )
 
         candidates = []

@@ -800,22 +800,33 @@ class RetrievalBaseReward(BaseReward):
         self,
         original_query: str,
         content: str,
+        retrieval_top_k: int,
     ) -> Tuple[List[Any], List[Any]]:
-        candidates_from_original = self._search_candidates(query_text=original_query)
+        candidates_from_original = self._search_candidates(
+            query_text=original_query,
+            retrieval_top_k=retrieval_top_k,
+        )
         extracted_answer = self.extract_answer_from_generation(generation=content)
         extracted_answer = self.split_on_keywords(text=extracted_answer)
-        candidates_from_rewritten = self._search_candidates(query_text=extracted_answer)
+        candidates_from_rewritten = self._search_candidates(
+            query_text=extracted_answer,
+            retrieval_top_k=retrieval_top_k,
+        )
         return candidates_from_original, candidates_from_rewritten
 
     def _search_candidates(
         self,
         query_text: str,
+        retrieval_top_k: int,
     ) -> List[Any]:
         query_embedding = self.embedding(
             input_text=query_text,
             is_query=True,
         )
-        candidates = self.database.search(query_embedding=query_embedding)
+        candidates = self.database.search(
+            query_embedding=query_embedding,
+            retrieval_top_k=retrieval_top_k,
+        )
         candidates = sorted(
             candidates,
             key=lambda x: x[self.database.distance_column_name],
@@ -892,6 +903,7 @@ class RetrievalHitReward(RetrievalBaseReward):
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
+        retrieval_top_k: int,
         shaping_weight: float,
         rank_margin: int,
         stages: List[Dict[str, Any]],
@@ -908,11 +920,14 @@ class RetrievalHitReward(RetrievalBaseReward):
             embedding=embedding,
         )
 
+        if retrieval_top_k <= 0:
+            raise ValueError("retrieval_top_k must be >= 1")
         if shaping_weight < 0:
             raise ValueError("shaping_weight must be >= 0")
         if rank_margin < 0:
             raise ValueError("rank_margin must be >= 0")
 
+        self.retrieval_top_k = retrieval_top_k
         self.shaping_weight = shaping_weight
         self.rank_margin = rank_margin
 
@@ -922,9 +937,7 @@ class RetrievalHitReward(RetrievalBaseReward):
     @property
     def name(self) -> str:
         stage_ks = ",".join(str(int(stage["k"])) for stage in self.stages)
-        return (
-            f"retrieval_hit@{self.database.retrieval_top_k}_stages[{stage_ks}]_reward"
-        )
+        return f"retrieval_hit@{self.retrieval_top_k}_stages[{stage_ks}]_reward"
 
     def compute(
         self,
@@ -959,6 +972,7 @@ class RetrievalHitReward(RetrievalBaseReward):
                 self._get_original_and_rewritten_candidates(
                     original_query=original_query,
                     content=content,
+                    retrieval_top_k=self.retrieval_top_k,
                 )
             )
 
@@ -984,17 +998,17 @@ class RetrievalHitReward(RetrievalBaseReward):
             if original_hit_location > 0:
                 original_rank_for_shaping = original_hit_location
             else:
-                original_rank_for_shaping = self.database.retrieval_top_k + 1
+                original_rank_for_shaping = self.retrieval_top_k + 1
 
             if rewritten_hit_location > 0:
                 rewritten_rank_for_shaping = rewritten_hit_location
             else:
-                rewritten_rank_for_shaping = self.database.retrieval_top_k + 1
+                rewritten_rank_for_shaping = self.retrieval_top_k + 1
 
             base = (
                 math.log(original_rank_for_shaping)
                 - math.log(rewritten_rank_for_shaping)
-            ) / math.log(self.database.retrieval_top_k + 1)
+            ) / math.log(self.retrieval_top_k + 1)
 
             if (
                 self.rank_margin > 0
@@ -1068,9 +1082,9 @@ class RetrievalHitReward(RetrievalBaseReward):
                 raise ValueError(f"stages[{i}]['k'] must be int, got {type(k)}")
             if k <= 0:
                 raise ValueError(f"stages[{i}]['k'] must be >= 1, got {k}")
-            if k > self.database.retrieval_top_k:
+            if k > self.retrieval_top_k:
                 raise ValueError(
-                    f"stages[{i}]['k'] must be <= retrieval_top_k={self.database.retrieval_top_k}, got {k}"
+                    f"stages[{i}]['k'] must be <= retrieval_top_k={self.retrieval_top_k}, got {k}"
                 )
 
             try:
@@ -1119,6 +1133,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
+        retrieval_top_k: Optional[int],
         reward_mode: str,
         ndcg_top_ks: List[int],
         alpha: float,
@@ -1144,6 +1159,9 @@ class RetrievalnDCGReward(RetrievalBaseReward):
 
         self.reward_mode = reward_mode
         self.ndcg_top_ks = [int(k) for k in ndcg_top_ks]
+        self.retrieval_top_k = self._resolve_retrieval_top_k(
+            retrieval_top_k=retrieval_top_k,
+        )
         self.alpha = alpha
         self.epsilon = epsilon
 
@@ -1188,6 +1206,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
                 self._get_original_and_rewritten_candidates(
                     original_query=original_query,
                     content=content,
+                    retrieval_top_k=self.retrieval_top_k,
                 )
             )
 
@@ -1246,15 +1265,34 @@ class RetrievalnDCGReward(RetrievalBaseReward):
                 raise ValueError(f"ndcg_top_ks[{i}] must be int, got {type(k)}")
             if k <= 0:
                 raise ValueError(f"ndcg_top_ks[{i}] must be >= 1, got {k}")
-            if k > self.database.retrieval_top_k:
+            if k > self.retrieval_top_k:
                 raise ValueError(
-                    f"ndcg_top_ks[{i}] must be <= retrieval_top_k={self.database.retrieval_top_k}, got {k}"
+                    f"ndcg_top_ks[{i}] must be <= retrieval_top_k={self.retrieval_top_k}, got {k}"
                 )
             if prev_k is not None and k <= prev_k:
                 raise ValueError(
                     f"ndcg_top_ks must be strictly increasing. Got prev_k={prev_k}, k={k}"
                 )
             prev_k = k
+
+    def _resolve_retrieval_top_k(
+        self,
+        retrieval_top_k: Optional[int],
+    ) -> int:
+        if len(self.ndcg_top_ks) == 0:
+            raise ValueError("ndcg_top_ks must be a non-empty list of ints")
+
+        max_ndcg_top_k = max(self.ndcg_top_ks)
+        if retrieval_top_k is None:
+            return max_ndcg_top_k
+        if retrieval_top_k <= 0:
+            raise ValueError("retrieval_top_k must be >= 1")
+        if retrieval_top_k < max_ndcg_top_k:
+            raise ValueError(
+                "retrieval_top_k must be >= max(ndcg_top_ks). "
+                f"Got retrieval_top_k={retrieval_top_k}, max_ndcg_top_k={max_ndcg_top_k}"
+            )
+        return retrieval_top_k
 
     def _build_ndcg_weights(self) -> List[float]:
         raw_weights = [float(k) ** (-self.alpha) for k in self.ndcg_top_ks]
