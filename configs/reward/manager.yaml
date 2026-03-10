@@ -69,6 +69,7 @@ rewards:
     weight: ${reward.weight.retrieval_hit}
     database: ${reward_database}
     embedding: ${reward_embedding}
+    retrieval_top_k: ${reward.retrieval.hit.top_k}
     shaping_weight: ${reward.retrieval.hit.shaping_weight}
     rank_margin: ${reward.retrieval.hit.rank_margin}
     stages: ${reward.retrieval.hit.stages}
@@ -83,6 +84,7 @@ rewards:
     weight: ${reward.weight.retrieval_ndcg}
     database: ${reward_database}
     embedding: ${reward_embedding}
+    retrieval_top_k: ${reward.retrieval.ndcg.top_k}
     reward_mode: ${reward.retrieval.ndcg.reward_mode}
     ndcg_top_ks: ${reward.retrieval.ndcg.top_ks}
     alpha: ${reward.retrieval.ndcg.alpha}
