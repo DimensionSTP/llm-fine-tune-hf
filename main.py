@@ -41,6 +41,10 @@ import hydra
 from omegaconf import DictConfig
 
 from src.pipelines import *
+from src.utils.hydra_resolvers import register_hydra_resolvers
+
+
+register_hydra_resolvers()
 
 
 @hydra.main(
