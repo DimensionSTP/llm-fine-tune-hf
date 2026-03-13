@@ -6,7 +6,7 @@
 
 Any Structured Datasets
 
-### Quick setup
+### Quick setup (conda)
 
 ```bash
 # clone project
@@ -19,6 +19,16 @@ conda activate myenv
 
 # install requirements
 pip install -r requirements.txt
+```
+
+### Quick setup (pyproject.toml)
+
+```bash
+# install project dependencies from pyproject.toml
+pip install .
+
+# [OPTIONAL] editable install for development
+pip install -e .
 ```
 
 ### .env file setting
