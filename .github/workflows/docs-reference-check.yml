@@ -1,0 +1,69 @@
+name: Docs Reference Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  docs-reference-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docs references
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            "README.md"
+            "CONTRIBUTING.md"
+            "CHANGELOG.md"
+            "SECURITY.md"
+            ".env.example"
+          )
+
+          for f in "${required_files[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "Missing required file: $f"
+              exit 1
+            fi
+          done
+
+          docs=(
+            "README.md"
+            "CONTRIBUTING.md"
+            "CHANGELOG.md"
+            "SECURITY.md"
+          )
+
+          missing=0
+          for doc in "${docs[@]}"; do
+            while IFS= read -r raw_link; do
+              link="${raw_link%%#*}"
+              if [[ -z "$link" ]]; then
+                continue
+              fi
+              case "$link" in
+                http://*|https://*|mailto:*)
+                  continue
+                  ;;
+              esac
+              base_dir="$(dirname "$doc")"
+              target="$(realpath -m "$base_dir/$link")"
+              if [[ ! -e "$target" ]]; then
+                echo "Broken local link in $doc -> $raw_link"
+                missing=1
+              fi
+            done < <(grep -oE '\[[^]]+\]\(([^)]+)\)' "$doc" | sed -E 's/.*\(([^)]+)\)/\1/')
+          done
+
+          if [[ "$missing" -ne 0 ]]; then
+            echo "Detected broken local markdown links."
+            exit 1
+          fi
+
+          echo "All doc reference checks passed."

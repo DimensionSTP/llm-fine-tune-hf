@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/
+    about: Do not report security issues publicly. Contact maintainers privately.
