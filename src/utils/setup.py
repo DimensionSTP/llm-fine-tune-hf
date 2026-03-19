@@ -299,6 +299,7 @@ class SetUp:
         training_arguments: TrainingArguments = instantiate(
             self.config.training_arguments,
             dataloader_num_workers=self.num_workers,
+            _convert_="all",
         )
         return training_arguments
 
