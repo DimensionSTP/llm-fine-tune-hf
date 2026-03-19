@@ -1,7 +1,6 @@
 _target_: trl.GRPOConfig
 use_liger_kernel: false
 seed: ${seed}
-max_prompt_length: ${max_length}
 max_completion_length: ${max_new_tokens}
 output_dir: ${output_dir}
 do_eval: ${use_validation}
