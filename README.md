@@ -31,6 +31,10 @@ pip install .
 pip install -e .
 ```
 
+### Execution contract
+
+- See `TRAINING_EVAL_CONTRACT.md` for required runtime inputs, supported modes, and output path expectations.
+
 ### .env file setting
 
 ```shell
