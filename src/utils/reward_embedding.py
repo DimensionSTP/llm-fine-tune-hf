@@ -98,7 +98,6 @@ class VllmEmbedding:
         if self.model is None:
             self.model = LLM(
                 model=self.model_id,
-                task="embed",
                 tensor_parallel_size=self.tensor_parallel_size,
                 seed=self.seed,
                 trust_remote_code=True,
