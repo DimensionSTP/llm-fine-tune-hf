@@ -1,18 +1,14 @@
 # Training and Evaluation Contract
 
-This document defines the minimum execution contract for `llm-fine-tune-hf`.
+## Scope
 
-## Runtime Inputs
+Contract for `llm-fine-tune-hf` runtime interface, supported execution modes, and expected outputs.
 
-- Required environment variables:
-  - `PROJECT_DIR`
-  - `CONNECTED_DIR`
-  - `DEVICES`
-  - `HF_HOME`
-  - `USER_NAME`
-- Primary config entrypoint: `configs/sft.yaml`.
-- Main execution command:
-  - `python main.py mode=<mode>`
+## Entry Point
+
+- Main command: `python main.py mode=<mode>`
+- Config root: `configs/`
+- Default config: `configs/sft.yaml`
 
 ## Supported Modes
 
@@ -22,23 +18,43 @@ This document defines the minimum execution contract for `llm-fine-tune-hf`.
 - `test_vllm`
 - `test_vllm_multi_turn`
 
-Any other mode must fail with `ValueError`.
+Unsupported mode must fail with `ValueError`.
 
-## Output Path Contract
+## Required Runtime Inputs
 
-From `configs/sft.yaml`:
+Environment variables:
 
-- Training checkpoints:
-  - `${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}`
-- Test outputs:
-  - `${connected_dir}/tests/${model_type}`
+- `PROJECT_DIR`
+- `CONNECTED_DIR`
+- `DEVICES`
+- `HF_HOME`
+- `USER_NAME`
 
-When mode is `train`, checkpoints must be written to `output_dir`.
-When mode is a test mode, result artifacts must be written under `test_output_dir`.
+Dependency notes:
 
-## Backward-Compatibility Rule
+- Base install excludes `flash-attn`.
+- Optional GPU install path:
+  - `pip install ".[gpu]"`
+  - or pinned Git install command from README.
 
-- Changes to mode names, required env vars, or default output path keys must be reflected in:
-  - `README.md`
-  - `CHANGELOG.md`
-  - this contract document
+## Output Contract
+
+- `train`: checkpoint/model artifacts must be written to config-defined output directory.
+- `test*`: evaluation/generation artifacts must be written to mode-specific test output paths.
+- Runs must log enough metadata (model, dataset, key runtime options) for reproducibility.
+
+## Compatibility Rules
+
+When changing mode names, required env vars, or output path schema, update in same change-set:
+
+- `README.md` / `README_ko.md`
+- `USAGE_GUIDE.md` / `USAGE_GUIDE_ko.md`
+- this contract
+- `CHANGELOG.md`
+
+## Validation Checklist
+
+1. All supported modes start successfully with valid config.
+2. Invalid mode fails explicitly.
+3. Output artifacts are generated for each tested mode.
+4. Optional `flash-attn` path is documented and tested in GPU environment.

@@ -31,6 +31,16 @@ pip install .
 pip install -e .
 ```
 
+### Optional GPU dependency (flash-attn)
+
+```bash
+# Option A: install optional GPU extra from pyproject
+pip install ".[gpu]"
+
+# Option B: install directly from pinned Git commit
+python -m pip install "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
+```
+
 ### Execution contract
 
 - See `TRAINING_EVAL_CONTRACT.md` for required runtime inputs, supported modes, and output path expectations.
