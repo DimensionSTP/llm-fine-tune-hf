@@ -2,6 +2,12 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.7.3] - 2026-03-24
+
+- Remove stale references to deleted Korean documentation files from the training and evaluation contract.
+- Align release/documentation sync guidance with the current English documentation set.
+- Prepare a patch release for documentation-contract consistency after KO document removal.
+
 ## [v1.7.2] - 2026-03-23
 
 - Remove outdated Korean docs (`*_ko.md`) to prevent EN/KO content drift; keep EN docs as canonical source for now.

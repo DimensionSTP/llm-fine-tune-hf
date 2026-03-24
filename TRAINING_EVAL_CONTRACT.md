@@ -47,8 +47,8 @@ Dependency notes:
 
 When changing mode names, required env vars, or output path schema, update in same change-set:
 
-- `README.md` / `README_ko.md`
-- `USAGE_GUIDE.md` / `USAGE_GUIDE_ko.md`
+- `README.md`
+- `USAGE_GUIDE.md`
 - this contract
 - `CHANGELOG.md`
 
