@@ -104,7 +104,7 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 
 - Purpose: Reward retrieval quality of rewritten queries using weighted nDCG.
 - Logic: Computes weighted nDCG over configured cutoffs (`top_ks`) using
-  power-law weights (`k^-alpha` normalized). Supports two reward modes:
+  power-law weights with configurable cutoff emphasis. Supports two reward modes:
   - `relative`: headroom-normalized delta from original to rewritten query.
   - `absolute`: rewritten-query nDCG only.
 - reward_categories: any category containing the `retrieval` token
@@ -113,6 +113,9 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   - `reward_mode`: `relative` (default) or `absolute`.
   - `top_ks`: nDCG cutoff list (strictly increasing, each <= retrieval top-k).
   - `alpha`: power exponent for cutoff weights.
+  - `weighting_mode`: `small_k` for smaller-cutoff emphasis (`k^-alpha`),
+    `large_k` for larger-cutoff emphasis (`k^alpha`). Current GRPO default is
+    `large_k`.
   - `epsilon`: numerical stabilizer (used in `relative` mode).
   - `reward_database` / `reward_embedding`: same retrieval backends as
     `RetrievalHitReward`.
