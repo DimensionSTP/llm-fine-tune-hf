@@ -70,9 +70,10 @@ def _reward_save_suffix(
         ndcg_cfg = retrieval_cfg.get("ndcg", {}) if isinstance(
             retrieval_cfg, (dict, DictConfig)
         ) else {}
-        mode = ndcg_cfg.get("reward_mode", "na")
+        reward_mode = ndcg_cfg.get("reward_mode", "na")
+        weighting_mode = ndcg_cfg.get("weighting_mode", "na")
         ks = _extract_top_ks(ndcg_cfg.get("top_ks"))
-        parts.append(f"rndcg-{mode}-k{ks}")
+        parts.append(f"rndcg-{reward_mode}-{weighting_mode}-k{ks}")
 
     if _is_active_reward(reward_weight.get("retrieval_hit")):
         retrieval_cfg = reward.get("retrieval", {})

@@ -1137,6 +1137,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         reward_mode: str,
         ndcg_top_ks: List[int],
         alpha: float,
+        weighting_mode: str,
         epsilon: float,
     ) -> None:
         super().__init__(
@@ -1154,6 +1155,8 @@ class RetrievalnDCGReward(RetrievalBaseReward):
             raise ValueError("reward_mode must be one of ['relative', 'absolute']")
         if alpha < 0:
             raise ValueError("alpha must be >= 0")
+        if weighting_mode not in ["small_k", "large_k"]:
+            raise ValueError("weighting_mode must be one of ['small_k', 'large_k']")
         if reward_mode == "relative" and epsilon <= 0:
             raise ValueError("epsilon must be > 0 for relative reward_mode")
 
@@ -1163,6 +1166,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
             retrieval_top_k=retrieval_top_k,
         )
         self.alpha = alpha
+        self.weighting_mode = weighting_mode
         self.epsilon = epsilon
 
         self._validate_ndcg_top_ks()
@@ -1171,7 +1175,9 @@ class RetrievalnDCGReward(RetrievalBaseReward):
     @property
     def name(self) -> str:
         ks = ",".join(str(k) for k in self.ndcg_top_ks)
-        return f"retrieval_ndcg@{ks}_{self.reward_mode}_reward"
+        return (
+            f"retrieval_ndcg@{ks}_{self.reward_mode}_{self.weighting_mode}_reward"
+        )
 
     def compute(
         self,
@@ -1348,7 +1354,10 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         return retrieval_top_k
 
     def _build_ndcg_weights(self) -> List[float]:
-        raw_weights = [float(k) ** (-self.alpha) for k in self.ndcg_top_ks]
+        if self.weighting_mode == "small_k":
+            raw_weights = [float(k) ** (-self.alpha) for k in self.ndcg_top_ks]
+        else:
+            raw_weights = [float(k) ** self.alpha for k in self.ndcg_top_ks]
         weight_sum = float(sum(raw_weights))
         if weight_sum <= 0:
             raise ValueError("invalid ndcg weights: sum must be > 0")
