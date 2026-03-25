@@ -2,6 +2,14 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.8.0] - 2026-03-25
+
+- Add `reward.retrieval.ndcg.weighting_mode` to support configurable nDCG cutoff emphasis for retrieval rewards.
+- Support both `small_k` (`k^-alpha`) and `large_k` (`k^alpha`) weighting modes in `RetrievalnDCGReward`.
+- Update the default GRPO retrieval nDCG configuration to use `weighting_mode: large_k`.
+- Include `weighting_mode` in reward naming and Hydra reward-save suffix generation for clearer experiment identification.
+- Update reward documentation to explain the new weighting behavior and current default.
+
 ## [v1.7.3] - 2026-03-24
 
 - Remove stale references to deleted Korean documentation files from the training and evaluation contract.

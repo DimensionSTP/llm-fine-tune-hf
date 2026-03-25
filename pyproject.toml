@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-fine-tune-hf"
-version = "1.7.3"
+version = "1.8.0"
 description = "LLM/VLM fine-tuning and evaluation pipelines"
 readme = "README.md"
 requires-python = ">=3.10"
