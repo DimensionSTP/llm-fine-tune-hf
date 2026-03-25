@@ -148,6 +148,7 @@ reward:
       reward_mode: relative
       top_ks: [1, 3, 5, 10]
       alpha: 0.5
+      weighting_mode: large_k
       epsilon: 1.0e-8
   single_kv:
     json_parse_weight: 0.2
