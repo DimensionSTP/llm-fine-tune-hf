@@ -84,12 +84,37 @@ def _reward_save_suffix(
         stage_ks = _extract_stage_ks(hit_cfg.get("stages"))
         parts.append(f"rhit-k{top_k}-st{stage_ks}")
 
+    if _is_active_reward(reward_weight.get("match")):
+        match_cfg = reward.get("match", {})
+        incorrect_penalty = match_cfg.get("incorrect_penalty", 0.0) if isinstance(
+            match_cfg, (dict, DictConfig)
+        ) else 0.0
+        if _to_float(incorrect_penalty) > 0.0:
+            parts.append(f"match-neg{_fmt_float(incorrect_penalty)}")
+
     if _is_active_reward(reward_weight.get("code_execution")):
         code_cfg = reward.get("code_execution", {})
         timeout = code_cfg.get("timeout", "na") if isinstance(
             code_cfg, (dict, DictConfig)
         ) else "na"
         parts.append(f"code-t{timeout}")
+        wrong_output_penalty = (
+            code_cfg.get("wrong_output_penalty", 0.0)
+            if isinstance(code_cfg, (dict, DictConfig))
+            else 0.0
+        )
+        non_executable_penalty = (
+            code_cfg.get("non_executable_penalty", 0.0)
+            if isinstance(code_cfg, (dict, DictConfig))
+            else 0.0
+        )
+        if (
+            _to_float(wrong_output_penalty) > 0.0
+            or _to_float(non_executable_penalty) > 0.0
+        ):
+            parts.append(
+                f"codeneg-w{_fmt_float(wrong_output_penalty)}-x{_fmt_float(non_executable_penalty)}"
+            )
 
     if _is_active_reward(reward_weight.get("rouge")):
         rouge_cfg = reward.get("rouge", {})

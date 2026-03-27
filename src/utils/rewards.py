@@ -353,6 +353,28 @@ class AnswerFormatReward(BaseReward):
 
 
 class MatchReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        weight: float,
+        incorrect_penalty: float,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            weight=weight,
+        )
+        self.incorrect_penalty = incorrect_penalty
+
     def compute(
         self,
         completions: List[List[Dict[str, str]]],
@@ -400,7 +422,7 @@ class MatchReward(BaseReward):
                     rewards.append(1.0)
                     continue
 
-            rewards.append(0.0)
+            rewards.append(-self.incorrect_penalty)
 
         return rewards
 
@@ -450,6 +472,8 @@ class CodeExecutionReward(BaseReward):
         eos_token: str,
         weight: float,
         timeout: int,
+        wrong_output_penalty: float,
+        non_executable_penalty: float,
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -461,6 +485,8 @@ class CodeExecutionReward(BaseReward):
             weight=weight,
         )
         self.timeout = timeout
+        self.wrong_output_penalty = wrong_output_penalty
+        self.non_executable_penalty = non_executable_penalty
 
     def compute(
         self,
@@ -485,7 +511,7 @@ class CodeExecutionReward(BaseReward):
 
             answer_code = self.parse_python_code(text=extracted_answer)
             if not answer_code:
-                rewards.append(0.0)
+                rewards.append(-self.non_executable_penalty)
                 continue
 
             answer_result = self.execute_python_code(
@@ -493,7 +519,7 @@ class CodeExecutionReward(BaseReward):
                 timeout=self.timeout,
             )
             if answer_result["status"] != "success":
-                rewards.append(0.0)
+                rewards.append(-self.non_executable_penalty)
                 continue
 
             solution_code = self.parse_python_code(text=sol)
@@ -512,7 +538,7 @@ class CodeExecutionReward(BaseReward):
             if answer_result["output"] == solution_result["output"]:
                 rewards.append(1.0)
             else:
-                rewards.append(0.5)
+                rewards.append(0.5 - self.wrong_output_penalty)
 
         return rewards
 
