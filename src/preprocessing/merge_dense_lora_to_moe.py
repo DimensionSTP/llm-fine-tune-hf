@@ -37,7 +37,9 @@ def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
     raise ValueError(f"Unknown dtype: {dtype_str}")
 
 
-def _list_expert_ffn_weight_keys(state_dict: Dict[str, torch.Tensor]) -> List[str]:
+def _list_explicit_expert_ffn_weight_keys(
+    state_dict: Dict[str, torch.Tensor]
+) -> List[str]:
     pat = re.compile(
         r"^model\.layers\.(\d+)\.mlp\.(?:experts|expert)\.(\d+)\.(up_proj|gate_proj|down_proj)\.weight$"
     )
@@ -57,6 +59,45 @@ def _infer_num_layers_and_experts_from_keys(keys: List[str]) -> Tuple[int, int]:
     if layer_max < 0 or expert_max < 0:
         raise RuntimeError("Could not infer layers/experts from expert FFN keys.")
     return layer_max + 1, expert_max + 1
+
+
+def _detect_moe_layout(
+    state_dict: Dict[str, torch.Tensor],
+) -> str:
+    explicit_keys = _list_explicit_expert_ffn_weight_keys(state_dict=state_dict)
+    if len(explicit_keys) > 0:
+        return "explicit"
+
+    packed_gate_up_pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts\.gate_up_proj$")
+    packed_down_pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts\.down_proj$")
+    if any(packed_gate_up_pat.match(k) for k in state_dict) and any(
+        packed_down_pat.match(k) for k in state_dict
+    ):
+        return "mixtral_packed"
+
+    raise RuntimeError(
+        "No supported expert FFN layout found. Expected explicit expert weights or Mixtral packed expert tensors."
+    )
+
+
+def _infer_moe_shape(
+    model: torch.nn.Module,
+    state_dict: Dict[str, torch.Tensor],
+) -> Tuple[str, int, int]:
+    layout = _detect_moe_layout(state_dict=state_dict)
+    num_layers = len(model.model.layers)
+
+    if layout == "explicit":
+        _, num_experts = _infer_num_layers_and_experts_from_keys(
+            keys=_list_explicit_expert_ffn_weight_keys(state_dict=state_dict)
+        )
+        return layout, num_layers, num_experts
+
+    gate_up_key = "model.layers.0.mlp.experts.gate_up_proj"
+    if gate_up_key not in state_dict:
+        raise RuntimeError(f"Missing Mixtral packed key: {gate_up_key}")
+    num_experts = int(state_dict[gate_up_key].shape[0])
+    return layout, num_layers, num_experts
 
 
 def _validate_list_length(
@@ -171,12 +212,48 @@ def _apply_lora_delta_inplace(
     delta = (lora.B @ lora.A) * (
         lora.scale * float(alpha_override) * float(weight_coef)
     )
-    base_weight.add_(
-        delta.to(
-            dtype=base_weight.dtype,
-            device=base_weight.device,
+    with torch.no_grad():
+        base_weight.add_(
+            delta.to(
+                dtype=base_weight.dtype,
+                device=base_weight.device,
+            )
         )
+
+
+def _apply_lora_delta_to_mixtral_expert_inplace(
+    gate_up_weight: torch.Tensor,
+    down_weight: torch.Tensor,
+    proj: str,
+    lora: LoraWeights,
+    alpha_override: float,
+    weight_coef: float = 1.0,
+) -> None:
+    delta = (lora.B @ lora.A) * (
+        lora.scale * float(alpha_override) * float(weight_coef)
     )
+    delta = delta.to(
+        dtype=gate_up_weight.dtype if proj in ["gate_proj", "up_proj"] else down_weight.dtype,
+        device=gate_up_weight.device if proj in ["gate_proj", "up_proj"] else down_weight.device,
+    )
+
+    with torch.no_grad():
+        if proj in [
+            "gate_proj",
+            "up_proj",
+        ]:
+            intermediate_size = gate_up_weight.shape[0] // 2
+            if proj == "gate_proj":
+                gate_up_weight[:intermediate_size].add_(delta)
+                return
+            gate_up_weight[intermediate_size:].add_(delta)
+            return
+
+        if proj == "down_proj":
+            down_weight.add_(delta)
+            return
+
+    raise ValueError(f"Unsupported proj for Mixtral packed experts: {proj}")
 
 
 def _resolve_adapter_plan(
@@ -368,13 +445,9 @@ def merge_dense_lora_to_moe(
     moe_model.eval()
     state_dict = moe_model.state_dict()
 
-    expert_keys = _list_expert_ffn_weight_keys(state_dict=state_dict)
-    if not expert_keys:
-        raise RuntimeError(
-            "No expert FFN keys found. This does not look like a MoE checkpoint with FFN experts."
-        )
-    num_layers, num_experts_found = _infer_num_layers_and_experts_from_keys(
-        keys=expert_keys
+    moe_layout, num_layers, num_experts_found = _infer_moe_shape(
+        model=moe_model,
+        state_dict=state_dict,
     )
 
     num_experts_cfg = int(d2m_cfg.moe.num_experts)
@@ -435,12 +508,6 @@ def merge_dense_lora_to_moe(
                 lora_cfg = lora_cfg_for_adapter[ap]
 
                 for proj in ffn_projs:
-                    expert_w_key = f"model.layers.{layer}.mlp.experts.{e}.{proj}.weight"
-                    if expert_w_key not in state_dict:
-                        raise KeyError(
-                            f"Expected expert weight key not found: {expert_w_key}"
-                        )
-
                     dense_w_key = f"model.layers.{layer}.mlp.{proj}.weight"
                     lora = _collect_lora_for_target(
                         lora_state_dict=lora_state_dict,
@@ -451,12 +518,41 @@ def merge_dense_lora_to_moe(
                         missing_ffn_modules += 1
                         continue
 
-                    _apply_lora_delta_inplace(
-                        base_weight=state_dict[expert_w_key],
-                        lora=lora,
-                        alpha_override=alpha,
-                        weight_coef=1.0,
-                    )
+                    if moe_layout == "explicit":
+                        expert_w_key = (
+                            f"model.layers.{layer}.mlp.experts.{e}.{proj}.weight"
+                        )
+                        if expert_w_key not in state_dict:
+                            raise KeyError(
+                                f"Expected expert weight key not found: {expert_w_key}"
+                            )
+
+                        _apply_lora_delta_inplace(
+                            base_weight=state_dict[expert_w_key],
+                            lora=lora,
+                            alpha_override=alpha,
+                            weight_coef=1.0,
+                        )
+                    else:
+                        gate_up_key = f"model.layers.{layer}.mlp.experts.gate_up_proj"
+                        down_key = f"model.layers.{layer}.mlp.experts.down_proj"
+                        if gate_up_key not in state_dict:
+                            raise KeyError(
+                                f"Expected Mixtral packed key not found: {gate_up_key}"
+                            )
+                        if down_key not in state_dict:
+                            raise KeyError(
+                                f"Expected Mixtral packed key not found: {down_key}"
+                            )
+
+                        _apply_lora_delta_to_mixtral_expert_inplace(
+                            gate_up_weight=state_dict[gate_up_key][e],
+                            down_weight=state_dict[down_key][e],
+                            proj=proj,
+                            lora=lora,
+                            alpha_override=alpha,
+                            weight_coef=1.0,
+                        )
                     merged_ffn += 1
 
         if merge_attn:
@@ -505,6 +601,7 @@ def merge_dense_lora_to_moe(
         "mode": mode,
         "num_layers": num_layers,
         "num_experts": num_experts_cfg,
+        "moe_layout": moe_layout,
         "targets": OmegaConf.to_container(
             d2m_cfg.targets,
             resolve=True,

@@ -36,13 +36,17 @@ def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
 
 
 def _is_expert_ffn_key(key: str) -> bool:
-    return (
-        re.match(
-            r"^model\.layers\.\d+\.mlp\.experts\.\d+\.(up_proj|gate_proj|down_proj)\.weight$",
-            key,
-        )
-        is not None
+    explicit_match = re.match(
+        r"^model\.layers\.\d+\.mlp\.experts\.\d+\.(up_proj|gate_proj|down_proj)\.weight$",
+        key,
     )
+    if explicit_match is not None:
+        return True
+    packed_match = re.match(
+        r"^model\.layers\.\d+\.mlp\.experts\.(gate_up_proj|down_proj)$",
+        key,
+    )
+    return packed_match is not None
 
 
 def _is_attn_key(
@@ -336,6 +340,65 @@ def _max_abs_diff(
     return float((actual - expected).abs().max().item())
 
 
+def _detect_moe_layout(
+    state_dict: Dict[str, torch.Tensor],
+) -> str:
+    if any(
+        re.match(
+            r"^model\.layers\.\d+\.mlp\.experts\.\d+\.(up_proj|gate_proj|down_proj)\.weight$",
+            key,
+        )
+        is not None
+        for key in state_dict.keys()
+    ):
+        return "explicit"
+
+    if any(
+        re.match(r"^model\.layers\.\d+\.mlp\.experts\.gate_up_proj$", key) is not None
+        for key in state_dict.keys()
+    ):
+        return "mixtral_packed"
+
+    raise RuntimeError("Unsupported MoE layout for verification.")
+
+
+def _get_ffn_weight_delta(
+    base_state_dict: Dict[str, torch.Tensor],
+    merged_state_dict: Dict[str, torch.Tensor],
+    moe_layout: str,
+    layer: int,
+    expert: int,
+    proj: str,
+) -> torch.Tensor:
+    if moe_layout == "explicit":
+        expert_key = f"model.layers.{int(layer)}.mlp.experts.{int(expert)}.{proj}.weight"
+        return (
+            merged_state_dict[expert_key].float() - base_state_dict[expert_key].float()
+        )
+
+    if moe_layout == "mixtral_packed":
+        if proj in [
+            "gate_proj",
+            "up_proj",
+        ]:
+            gate_up_key = f"model.layers.{int(layer)}.mlp.experts.gate_up_proj"
+            base_gate_up = base_state_dict[gate_up_key].float()[int(expert)]
+            merged_gate_up = merged_state_dict[gate_up_key].float()[int(expert)]
+            intermediate_size = base_gate_up.shape[0] // 2
+            if proj == "gate_proj":
+                return merged_gate_up[:intermediate_size] - base_gate_up[:intermediate_size]
+            return merged_gate_up[intermediate_size:] - base_gate_up[intermediate_size:]
+
+        if proj == "down_proj":
+            down_key = f"model.layers.{int(layer)}.mlp.experts.down_proj"
+            return (
+                merged_state_dict[down_key].float()[int(expert)]
+                - base_state_dict[down_key].float()[int(expert)]
+            )
+
+    raise ValueError(f"Unsupported layout/proj combination: {moe_layout}, {proj}")
+
+
 @hydra.main(
     config_path="../../configs/",
     config_name="sft.yaml",
@@ -371,6 +434,7 @@ def verify_lora_merge(
     merged_state_dict = {
         k: v.detach().cpu() for k, v in merged_model.state_dict().items()
     }
+    moe_layout = _detect_moe_layout(state_dict=base_state_dict)
 
     attn_projs = [str(x) for x in list(d2m_cfg.targets.attn_projs)]
     merge_attn = bool(d2m_cfg.targets.merge_attention)
@@ -557,9 +621,14 @@ def verify_lora_merge(
                 weight_coef=1.0,
             )
 
-            base_weight = base_state_dict[expert_key].float()
-            merged_weight = merged_state_dict[expert_key].float()
-            actual = merged_weight - base_weight
+            actual = _get_ffn_weight_delta(
+                base_state_dict=base_state_dict,
+                merged_state_dict=merged_state_dict,
+                moe_layout=moe_layout,
+                layer=int(layer),
+                expert=int(expert),
+                proj=proj,
+            )
 
             max_abs_diff = _max_abs_diff(
                 actual=actual,
@@ -672,6 +741,7 @@ def verify_lora_merge(
     report = {
         "base_moe_dir": base_moe_dir,
         "merged_dir": merged_dir,
+        "moe_layout": moe_layout,
         "changed_keys": len(changed),
         "allowed_changed_keys": len(allowed_changed),
         "merge_attention": merge_attn,
