@@ -27,6 +27,7 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.match}
+    incorrect_penalty: ${reward.match.incorrect_penalty}
 
   - _target_: src.utils.CodeExecutionReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -37,6 +38,8 @@ rewards:
     eos_token: ${reward.eos_token}
     weight: ${reward.weight.code_execution}
     timeout: ${reward.code_execution.timeout}
+    wrong_output_penalty: ${reward.code_execution.wrong_output_penalty}
+    non_executable_penalty: ${reward.code_execution.non_executable_penalty}
 
   - _target_: src.utils.RougeReward
     is_answer_tag: ${reward.is_answer_tag}

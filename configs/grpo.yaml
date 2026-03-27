@@ -119,8 +119,12 @@ reward:
   answer_start_token: <answer>
   answer_end_token: </answer>
   eos_token: <|im_end|>
+  match:
+    incorrect_penalty: 0.0
   code_execution:
     timeout: 2
+    wrong_output_penalty: 0.0
+    non_executable_penalty: 0.0
   rouge:
     type: l
   equation:
