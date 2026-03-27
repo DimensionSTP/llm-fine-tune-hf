@@ -2,6 +2,16 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.9.0] - 2026-03-27
+
+- Add configurable negative reward penalties for GRPO match and code-execution rewards.
+- Wire negative-penalty settings through `configs/grpo.yaml` and `configs/reward/manager.yaml`.
+- Include active negative-penalty settings in Hydra artifact suffix generation for clearer experiment tracking.
+- Add Mixtral-style dense-to-MoE preprocessing and verification utilities for non-Qwen model families.
+- Add Ministral3 text-backbone extraction and verification preprocessing entrypoints.
+- Extend dense-LoRA-to-MoE merge and verification logic to support packed-expert MoE layouts.
+- Export the new preprocessing entrypoints from `src.preprocessing`.
+
 ## [v1.8.0] - 2026-03-25
 
 - Add `reward.retrieval.ndcg.weighting_mode` to support configurable nDCG cutoff emphasis for retrieval rewards.
