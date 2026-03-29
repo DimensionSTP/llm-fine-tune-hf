@@ -1,4 +1,4 @@
-from typing import Dict, Union, Optional, Any, Protocol
+from typing import Dict, Union, Optional, Protocol, Any
 import os
 import re
 
@@ -14,6 +14,7 @@ import torch
 from torch.utils.data import Dataset
 
 from transformers import (
+    AutoConfig,
     AutoTokenizer,
     AutoProcessor,
     PreTrainedTokenizer,
@@ -100,6 +101,7 @@ class SetUp:
 
         quantization_config = None
         device_map = None
+        pretrained_config = None
         if not is_inference and self.config.is_quantized:
             quantization_config_dict = OmegaConf.to_container(
                 self.config.quantization_config,
@@ -112,10 +114,27 @@ class SetUp:
         if getattr(self.config, "mode", "train") == "test_large":
             device_map = "auto"
 
+        if not self.config.is_quantized:
+            pretrained_config = AutoConfig.from_pretrained(
+                pretrained_model_name,
+                revision=self.revision,
+                trust_remote_code=True,
+            )
+            if getattr(pretrained_config, "quantization_config", None) is None:
+                pretrained_config_dict = pretrained_config.to_dict()
+                pretrained_config_dict.pop(
+                    "quantization_config",
+                    None,
+                )
+                pretrained_config = pretrained_config.__class__.from_dict(
+                    pretrained_config_dict,
+                )
+            pretrained_config.output_hidden_states = False
+
         if self.config.modality == "text":
             model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_name_or_path=pretrained_model_name,
-                output_hidden_states=False,
+                config=pretrained_config,
                 torch_dtype=self.torch_dtype,
                 attn_implementation=self.config.attn_implementation,
                 quantization_config=quantization_config,
@@ -125,7 +144,7 @@ class SetUp:
         else:
             model = AutoModelForImageTextToText.from_pretrained(
                 pretrained_model_name_or_path=pretrained_model_name,
-                output_hidden_states=False,
+                config=pretrained_config,
                 torch_dtype=self.torch_dtype,
                 attn_implementation=self.config.attn_implementation,
                 quantization_config=quantization_config,
