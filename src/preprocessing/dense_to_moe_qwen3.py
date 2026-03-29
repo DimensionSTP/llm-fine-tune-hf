@@ -39,22 +39,25 @@ def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
 
 
 def init_router_weights(
-    router_param: torch.nn.Parameter,
+    router_module: torch.nn.Module,
     init_type: str,
     gain: float,
 ) -> None:
+    if not hasattr(router_module, "weight"):
+        raise ValueError("Router module does not have a weight parameter.")
+    weight = router_module.weight
     if init_type == "zeros":
-        torch.nn.init.zeros_(router_param.weight)
+        torch.nn.init.zeros_(weight)
         return
     if init_type == "xavier_uniform":
         torch.nn.init.xavier_uniform_(
-            router_param.weight,
+            weight,
             gain=gain,
         )
         return
     if init_type == "kaiming_uniform":
         torch.nn.init.kaiming_uniform_(
-            router_param.weight,
+            weight,
             a=0.0,
         )
         return
@@ -89,6 +92,35 @@ def copy_dense_mlp_to_all_experts(
             continue
 
         experts = moe_mlp.experts
+        if hasattr(experts, "gate_up_proj") and hasattr(experts, "down_proj"):
+            gate_up_proj = experts.gate_up_proj
+            down_proj = experts.down_proj
+            if gate_up_proj.shape[0] != num_experts or down_proj.shape[0] != num_experts:
+                raise ValueError(
+                    f"Layer {layer_idx}: packed experts mismatch: gate_up={gate_up_proj.shape[0]} down={down_proj.shape[0]} expected={num_experts}"
+                )
+
+            intermediate_size = dense_mlp.gate_proj.weight.shape[0]
+            with torch.no_grad():
+                gate_up_proj[:, :intermediate_size, :].copy_(
+                    dense_mlp.gate_proj.weight.detach().unsqueeze(0).expand_as(
+                        gate_up_proj[:, :intermediate_size, :]
+                    )
+                )
+                gate_up_proj[:, intermediate_size:, :].copy_(
+                    dense_mlp.up_proj.weight.detach().unsqueeze(0).expand_as(
+                        gate_up_proj[:, intermediate_size:, :]
+                    )
+                )
+                down_proj.copy_(
+                    dense_mlp.down_proj.weight.detach().unsqueeze(0).expand_as(
+                        down_proj
+                    )
+                )
+            copied += num_experts * 3
+            layers += 1
+            continue
+
         if len(experts) != num_experts:
             raise ValueError(
                 f"Layer {layer_idx}: experts len mismatch: {len(experts)} vs {num_experts}"
@@ -180,9 +212,9 @@ def dense_to_moe(
     routers_inited = 0
     for layer in moe_model.model.layers:
         mlp = layer.mlp
-        if hasattr(mlp, "gate") and isinstance(mlp.gate, torch.nn.Linear):
+        if hasattr(mlp, "gate") and hasattr(mlp.gate, "weight"):
             init_router_weights(
-                mlp.gate,
+                router_module=mlp.gate,
                 init_type=init_type,
                 gain=gain,
             )

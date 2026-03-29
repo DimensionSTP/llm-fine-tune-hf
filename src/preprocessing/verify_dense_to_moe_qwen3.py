@@ -57,6 +57,33 @@ def _find_expert_weight_key(
     return k
 
 
+def _get_packed_expert_weight(
+    state_dict: Dict[str, torch.Tensor],
+    layer: int,
+    expert: int,
+    proj: str,
+) -> torch.Tensor:
+    gate_up_key = f"model.layers.{layer}.mlp.experts.gate_up_proj"
+    down_key = f"model.layers.{layer}.mlp.experts.down_proj"
+
+    if gate_up_key not in state_dict or down_key not in state_dict:
+        raise KeyError(
+            f"Missing packed expert keys for layer {layer}: {gate_up_key}, {down_key}"
+        )
+
+    gate_up = state_dict[gate_up_key]
+    down = state_dict[down_key]
+    intermediate_size = gate_up.shape[1] // 2
+
+    if proj == "gate_proj":
+        return gate_up[expert, :intermediate_size, :]
+    if proj == "up_proj":
+        return gate_up[expert, intermediate_size:, :]
+    if proj == "down_proj":
+        return down[expert]
+    raise ValueError(f"Unsupported proj: {proj}")
+
+
 def _max_abs_diff(
     a: torch.Tensor,
     b: torch.Tensor,
@@ -134,21 +161,30 @@ def verify_dense_to_moe(
     if model_type != "qwen3_moe":
         raise RuntimeError(f"Expected model_type 'qwen3_moe', got '{model_type}'")
 
-    for k in ["num_experts", "num_experts_per_tok", "moe_intermediate_size"]:
+    required_keys = ["num_experts_per_tok", "moe_intermediate_size"]
+    for k in required_keys:
         if k not in cfg_dict:
             raise RuntimeError(f"Missing MoE field in config: {k}")
+    if "num_experts" not in cfg_dict and "num_local_experts" not in cfg_dict:
+        raise RuntimeError("Missing MoE field in config: num_experts or num_local_experts")
+
+    num_experts = int(cfg_dict.get("num_experts", cfg_dict.get("num_local_experts")))
     print(
-        f"[config] num_experts={cfg_dict['num_experts']}, top_k={cfg_dict['num_experts_per_tok']}, moe_intermediate_size={cfg_dict['moe_intermediate_size']}"
+        f"[config] num_experts={num_experts}, top_k={cfg_dict['num_experts_per_tok']}, moe_intermediate_size={cfg_dict['moe_intermediate_size']}"
     )
 
     num_layers = _infer_num_layers(model=moe_model)
-    num_experts = int(cfg_dict["num_experts"])
     touched_layers = 0
 
     for l in range(num_layers):
         mlp = moe_model.model.layers[l].mlp
         if hasattr(mlp, "experts"):
-            if len(mlp.experts) != num_experts:
+            if hasattr(mlp.experts, "gate_up_proj") and hasattr(mlp.experts, "down_proj"):
+                if mlp.experts.gate_up_proj.shape[0] != num_experts:
+                    raise RuntimeError(
+                        f"Layer {l}: packed experts {mlp.experts.gate_up_proj.shape[0]} != config num_experts {num_experts}"
+                    )
+            elif len(mlp.experts) != num_experts:
                 raise RuntimeError(
                     f"Layer {l}: experts len {len(mlp.experts)} != config num_experts {num_experts}"
                 )
@@ -193,15 +229,24 @@ def verify_dense_to_moe(
                     layer=layer,
                     proj=proj,
                 )
-                expert_k = _find_expert_weight_key(
-                    state_dict=moe_state_dict,
-                    layer=layer,
-                    expert=expert,
-                    proj=proj,
-                )
 
                 a = dense_sd[dense_k].detach().to("cpu")
-                b = moe_state_dict[expert_k].detach().to("cpu")
+                try:
+                    expert_k = _find_expert_weight_key(
+                        state_dict=moe_state_dict,
+                        layer=layer,
+                        expert=expert,
+                        proj=proj,
+                    )
+                    b = moe_state_dict[expert_k].detach().to("cpu")
+                except KeyError:
+                    expert_k = f"model.layers.{layer}.mlp.experts[{expert}].{proj}"
+                    b = _get_packed_expert_weight(
+                        state_dict=moe_state_dict,
+                        layer=layer,
+                        expert=expert,
+                        proj=proj,
+                    ).detach().to("cpu")
 
                 mad = _max_abs_diff(
                     a=a,
