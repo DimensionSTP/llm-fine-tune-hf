@@ -21,6 +21,13 @@ from src.utils.reward_vector_store import FaissIndex
 from src.utils.reward_embedding import VllmEmbedding
 
 
+def format_reward_name_float(
+    value: float,
+) -> str:
+    formatted = f"{value:g}"
+    return formatted.replace(".", "p")
+
+
 class BaseReward(ABC):
     def __init__(
         self,
@@ -375,6 +382,13 @@ class MatchReward(BaseReward):
         )
         self.incorrect_penalty = incorrect_penalty
 
+    @property
+    def name(self) -> str:
+        if self.incorrect_penalty <= 0.0:
+            return super().name
+        penalty = format_reward_name_float(value=self.incorrect_penalty)
+        return f"{super().name}_neg{penalty}"
+
     def compute(
         self,
         completions: List[List[Dict[str, str]]],
@@ -487,6 +501,22 @@ class CodeExecutionReward(BaseReward):
         self.timeout = timeout
         self.wrong_output_penalty = wrong_output_penalty
         self.non_executable_penalty = non_executable_penalty
+
+    @property
+    def name(self) -> str:
+        if (
+            self.wrong_output_penalty <= 0.0
+            and self.non_executable_penalty <= 0.0
+        ):
+            return super().name
+
+        wrong_penalty = format_reward_name_float(value=self.wrong_output_penalty)
+        non_executable_penalty = format_reward_name_float(
+            value=self.non_executable_penalty,
+        )
+        return (
+            f"{super().name}_negw{wrong_penalty}_negx{non_executable_penalty}"
+        )
 
     def compute(
         self,
