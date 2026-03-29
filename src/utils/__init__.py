@@ -3,6 +3,7 @@ from .collate_fns import collate_fn_vlm
 from .reward_vector_store import FaissIndex
 from .reward_embedding import VllmEmbedding
 from .hydra_resolvers import register_hydra_resolvers
+from .vllm_sync import patch_qwen_packed_moe_vllm_sync, patch_sparse_decoder_moe_vllm_sync
 from .test_utils import (
     build_test_dataloader,
     generate_test_results,
@@ -33,6 +34,8 @@ __all__ = [
     "FaissIndex",
     "VllmEmbedding",
     "register_hydra_resolvers",
+    "patch_qwen_packed_moe_vllm_sync",
+    "patch_sparse_decoder_moe_vllm_sync",
     "build_test_dataloader",
     "generate_test_results",
     "save_test_results_json",
