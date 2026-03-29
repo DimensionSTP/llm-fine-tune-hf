@@ -87,6 +87,18 @@ def train(
         processing_class=data_encoder,
         **trainer_config,
     )
+    if patch_qwen_packed_moe_vllm_sync(
+        trainer=trainer,
+        config=config,
+    ):
+        print("[patch] Applied Qwen packed-MoE vLLM sync filter for router-with-lora GRPO.")
+    elif patch_sparse_decoder_moe_vllm_sync(
+        trainer=trainer,
+        config=config,
+    ):
+        print(
+            "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
+        )
 
     try:
         trainer.train(
