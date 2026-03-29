@@ -4,13 +4,15 @@ All notable changes to this repository are documented in this file.
 
 ## [v1.9.0] - 2026-03-27
 
-- Add configurable negative reward penalties for GRPO match and code-execution rewards.
+- Add configurable negative reward penalties for GRPO `MatchReward` and `CodeExecutionReward`.
 - Wire negative-penalty settings through `configs/grpo.yaml` and `configs/reward/manager.yaml`.
-- Include active negative-penalty settings in Hydra artifact suffix generation for clearer experiment tracking.
-- Add Mixtral-style dense-to-MoE preprocessing and verification utilities for non-Qwen model families.
-- Add Ministral3 text-backbone extraction and verification preprocessing entrypoints.
+- Include active negative-penalty settings in Hydra artifact suffix generation and reward metric naming for clearer experiment tracking and logging.
+- Support the current Qwen3 packed-expert MoE layout in dense-to-MoE preprocessing and verification.
 - Extend dense-LoRA-to-MoE merge and verification logic to support packed-expert MoE layouts.
-- Export the new preprocessing entrypoints from `src.preprocessing`.
+- Add sparse-decoder dense-to-MoE preprocessing and verification entrypoints, and export stable public aliases from `src.preprocessing`.
+- Add vLLM sync helpers for router-with-lora sparse MoE trainers and apply them in GRPO pipeline wiring when compatible checkpoints are used.
+- Harden model setup loading for Transformers 5.3 compatibility.
+- Ignore `*.stdout` and `*.stderr` nohup-style outputs in Git.
 
 ## [v1.8.0] - 2026-03-25
 
