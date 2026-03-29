@@ -107,7 +107,7 @@ def _get_expert_proj_tensor(
     config_path="../../configs/",
     config_name="sft.yaml",
 )
-def verify_dense_to_moe_mixtral(
+def verify_dense_to_moe(
     config: DictConfig,
 ) -> None:
     d2m_cfg = config.dense_to_moe
@@ -278,4 +278,4 @@ def verify_dense_to_moe_mixtral(
 
 
 if __name__ == "__main__":
-    verify_dense_to_moe_mixtral()
+    verify_dense_to_moe()

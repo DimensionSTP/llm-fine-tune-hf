@@ -28,11 +28,8 @@ from omegaconf import DictConfig
 
 
 SUPPORTED_DENSE_MODEL_TYPES = {
+    "falcon3",
     "llama",
-    "mistral",
-    "mistral3",
-    "ministral",
-    "ministral3",
 }
 
 
@@ -149,7 +146,7 @@ def copy_dense_mlp_to_mixtral_experts(
     config_path="../../configs/",
     config_name="sft.yaml",
 )
-def dense_to_moe_mixtral(
+def dense_to_moe(
     config: DictConfig,
 ) -> None:
     d2m_cfg = config.dense_to_moe
@@ -180,7 +177,7 @@ def dense_to_moe_mixtral(
     dense_model_type = str(getattr(dense_cfg, "model_type", ""))
     if dense_model_type not in SUPPORTED_DENSE_MODEL_TYPES:
         raise ValueError(
-            "dense_to_moe_mixtral supports only "
+            "dense_to_moe supports only "
             + f"{sorted(SUPPORTED_DENSE_MODEL_TYPES)}, got '{dense_model_type}'"
         )
 
@@ -242,4 +239,4 @@ def dense_to_moe_mixtral(
 
 
 if __name__ == "__main__":
-    dense_to_moe_mixtral()
+    dense_to_moe()
