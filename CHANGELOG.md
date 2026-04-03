@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.9.1] - 2026-04-03
+
+- Sync `packages.txt`, `requirements.txt`, and `pyproject.toml` with the current validated runtime environment.
+- Update packaging metadata and direct dependency pins so install-time and runtime dependency manifests stay aligned.
+
 ## [v1.9.0] - 2026-03-27
 
 - Add configurable negative reward penalties for GRPO `MatchReward` and `CodeExecutionReward`.
