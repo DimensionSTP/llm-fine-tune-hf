@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.9.2] - 2026-04-06
+
+- Sync `packages.txt`, `requirements.txt`, and `pyproject.toml` with the current `joshpp` runtime freeze after compatibility-driven dependency adjustments.
+- Update direct packaging dependency pins (including `vllm`-line compatibility levels) so install-time and runtime manifests stay consistent.
+
 ## [v1.9.1] - 2026-04-03
 
 - Sync `packages.txt`, `requirements.txt`, and `pyproject.toml` with the current validated runtime environment.
