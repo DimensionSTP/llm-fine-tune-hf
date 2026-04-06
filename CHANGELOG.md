@@ -2,6 +2,16 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.10.0] - 2026-04-07
+
+- Add full Async GRPO training support with new config set, training-arguments profile, trainer profile, runtime lifecycle utility, and `scripts/train/async_grpo_train.sh`.
+- Add SDPO training support with new method config, training-arguments profile, trainer profile, and `scripts/train/sdpo_train.sh`.
+- Wire async GRPO server lifecycle handling into the main training pipeline and refresh related documentation for runtime behavior.
+- Align existing method/trainer/training-argument configs with TRL 1.0 schema expectations across GRPO, GKD, DPO, and SFT paths.
+- Improve multimodal training compatibility by supporting `pixel_position_ids` in VLM collate functions.
+- Add reward adapter logging outputs and refine reward/hydra resolver wiring used by the updated trainer paths.
+- Reorder and extend exported utility surfaces to support the new async runtime and method entrypoints.
+
 ## [v1.9.2] - 2026-04-06
 
 - Sync `packages.txt`, `requirements.txt`, and `pyproject.toml` with the current `joshpp` runtime freeze after compatibility-driven dependency adjustments.
