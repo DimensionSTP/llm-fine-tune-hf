@@ -2,6 +2,8 @@ _target_: trl.DPOConfig
 use_liger_kernel: false
 seed: ${seed}
 max_length: ${max_length}
+truncation_mode: ${truncation_mode}
+pad_to_multiple_of: ${pad_to_multiple_of}
 output_dir: ${output_dir}
 do_eval: ${use_validation}
 eval_strategy: ${eval_strategy}

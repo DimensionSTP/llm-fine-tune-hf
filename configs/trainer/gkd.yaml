@@ -1,1 +1,1 @@
-_target_: trl.GKDTrainer
+_target_: trl.experimental.gkd.GKDTrainer

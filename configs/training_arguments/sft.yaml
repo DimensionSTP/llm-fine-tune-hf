@@ -2,8 +2,11 @@ _target_: trl.SFTConfig
 dataset_text_field: null
 dataset_kwargs:
   skip_prepare_dataset: true
+chat_template_path: ${chat_template_path}
 use_liger_kernel: false
 packing: false
+truncation_mode: ${truncation_mode}
+pad_to_multiple_of: ${pad_to_multiple_of}
 seed: ${seed}
 max_length: ${max_length}
 output_dir: ${output_dir}

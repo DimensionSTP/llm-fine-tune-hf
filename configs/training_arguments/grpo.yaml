@@ -2,6 +2,7 @@ _target_: trl.GRPOConfig
 use_liger_kernel: false
 seed: ${seed}
 max_completion_length: ${max_new_tokens}
+pad_to_multiple_of: ${pad_to_multiple_of}
 output_dir: ${output_dir}
 do_eval: ${use_validation}
 eval_strategy: ${eval_strategy}
