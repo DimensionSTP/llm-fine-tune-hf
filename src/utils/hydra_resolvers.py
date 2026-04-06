@@ -65,25 +65,6 @@ def _reward_save_suffix(
 
     parts = []
 
-    if _is_active_reward(reward_weight.get("retrieval_ndcg")):
-        retrieval_cfg = reward.get("retrieval", {})
-        ndcg_cfg = retrieval_cfg.get("ndcg", {}) if isinstance(
-            retrieval_cfg, (dict, DictConfig)
-        ) else {}
-        reward_mode = ndcg_cfg.get("reward_mode", "na")
-        weighting_mode = ndcg_cfg.get("weighting_mode", "na")
-        ks = _extract_top_ks(ndcg_cfg.get("top_ks"))
-        parts.append(f"rndcg-{reward_mode}-{weighting_mode}-k{ks}")
-
-    if _is_active_reward(reward_weight.get("retrieval_hit")):
-        retrieval_cfg = reward.get("retrieval", {})
-        hit_cfg = retrieval_cfg.get("hit", {}) if isinstance(
-            retrieval_cfg, (dict, DictConfig)
-        ) else {}
-        top_k = hit_cfg.get("top_k", "na")
-        stage_ks = _extract_stage_ks(hit_cfg.get("stages"))
-        parts.append(f"rhit-k{top_k}-st{stage_ks}")
-
     if _is_active_reward(reward_weight.get("match")):
         match_cfg = reward.get("match", {})
         incorrect_penalty = match_cfg.get("incorrect_penalty", 0.0) if isinstance(
@@ -122,6 +103,25 @@ def _reward_save_suffix(
             rouge_cfg, (dict, DictConfig)
         ) else "na"
         parts.append(f"rouge-{rouge_type}")
+
+    if _is_active_reward(reward_weight.get("retrieval_hit")):
+        retrieval_cfg = reward.get("retrieval", {})
+        hit_cfg = retrieval_cfg.get("hit", {}) if isinstance(
+            retrieval_cfg, (dict, DictConfig)
+        ) else {}
+        top_k = hit_cfg.get("top_k", "na")
+        stage_ks = _extract_stage_ks(hit_cfg.get("stages"))
+        parts.append(f"rhit-k{top_k}-st{stage_ks}")
+
+    if _is_active_reward(reward_weight.get("retrieval_ndcg")):
+        retrieval_cfg = reward.get("retrieval", {})
+        ndcg_cfg = retrieval_cfg.get("ndcg", {}) if isinstance(
+            retrieval_cfg, (dict, DictConfig)
+        ) else {}
+        reward_mode = ndcg_cfg.get("reward_mode", "na")
+        weighting_mode = ndcg_cfg.get("weighting_mode", "na")
+        ks = _extract_top_ks(ndcg_cfg.get("top_ks"))
+        parts.append(f"rndcg-{reward_mode}-{weighting_mode}-k{ks}")
 
     if _is_active_reward(reward_weight.get("single_kv")):
         single_kv_cfg = reward.get("single_kv", {})

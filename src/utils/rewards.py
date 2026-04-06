@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Optional, Callable, Union, Any
+from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
 from abc import ABC, abstractmethod
 import re
@@ -8,7 +8,6 @@ import multiprocessing as mp
 import contextlib
 import io
 import queue
-import functools
 import math
 
 import numpy as np
@@ -273,20 +272,101 @@ class RewardManager:
         self.rewards = [reward for reward in rewards if reward.weight > 0]
 
     def get_reward_funcs(self) -> List[Callable]:
-        funcs = []
-        for reward in self.rewards:
+        return [RewardFunctionAdapter(reward=reward) for reward in self.rewards]
 
-            @functools.wraps(reward.__call__)
-            def wrapper(
-                *args,
-                _reward=reward,
-                **kwargs,
-            ):
-                return _reward(*args, **kwargs)
 
-            wrapper.__name__ = reward.name
-            funcs.append(wrapper)
-        return funcs
+class NamespacedLogger:
+    def __init__(
+        self,
+        reward_name: str,
+        callback: Callable[[str, Any], None],
+    ) -> None:
+        self.reward_name = reward_name
+        self.callback = callback
+
+    def __call__(
+        self,
+        key: str,
+        value: Any,
+    ) -> None:
+        self.callback(
+            f"{self.reward_name}/{key}",
+            value,
+        )
+
+
+class RewardFunctionAdapter:
+    def __init__(
+        self,
+        reward: BaseReward,
+    ) -> None:
+        self.reward = reward
+        self.__name__ = reward.name
+
+    def __call__(
+        self,
+        *args,
+        **kwargs,
+    ) -> List[Optional[float]]:
+        patched_kwargs = dict(kwargs)
+        log_extra = patched_kwargs.get("log_extra")
+        log_metric = patched_kwargs.get("log_metric")
+
+        if callable(log_extra):
+            patched_kwargs["log_extra"] = NamespacedLogger(
+                reward_name=self.reward.name,
+                callback=log_extra,
+            )
+
+        if callable(log_metric):
+            patched_kwargs["log_metric"] = NamespacedLogger(
+                reward_name=self.reward.name,
+                callback=log_metric,
+            )
+
+        rewards = self.reward(
+            *args,
+            **patched_kwargs,
+        )
+        self.log_reward_outputs(
+            rewards=rewards,
+            log_extra=log_extra if callable(log_extra) else None,
+            log_metric=log_metric if callable(log_metric) else None,
+        )
+        return rewards
+
+    def log_reward_outputs(
+        self,
+        rewards: List[Optional[float]],
+        log_extra: Optional[Callable[[str, Any], None]],
+        log_metric: Optional[Callable[[str, Any], None]],
+    ) -> None:
+        if log_extra is not None:
+            log_extra(
+                f"{self.reward.name}/reward",
+                rewards,
+            )
+
+        if log_metric is None:
+            return
+
+        total_count = len(rewards)
+        if total_count == 0:
+            return
+
+        valid_rewards = [reward for reward in rewards if reward is not None]
+        log_metric(
+            f"{self.reward.name}/coverage",
+            len(valid_rewards) / total_count,
+        )
+        if len(valid_rewards) == 0:
+            return
+
+        mean_reward = sum(valid_rewards) / len(valid_rewards)
+        log_metric(
+            f"{self.reward.name}/mean",
+            mean_reward,
+        )
 
 
 class ThinkFormatReward(BaseReward):
