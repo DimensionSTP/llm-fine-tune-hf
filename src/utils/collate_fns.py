@@ -18,7 +18,11 @@ def collate_fn_vlm(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tens
                 items,
                 dim=0,
             )
-        elif key == "input_ids" or key == "attention_mask":
+        elif key in {
+            "input_ids",
+            "attention_mask",
+            "pixel_position_ids",
+        }:
             collated[key] = torch.stack(
                 items,
                 dim=0,
