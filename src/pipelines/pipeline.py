@@ -34,7 +34,13 @@ def train(
         set_seed(config.seed)
 
     is_distributed = "RANK" in os.environ and "WORLD_SIZE" in os.environ
-    if (not is_distributed) and (config.devices is not None):
+    async_runtime_state = resolve_async_runtime_state(
+        config=config,
+        rank=rank,
+    )
+    async_runtime_enabled = async_runtime_state["enabled"]
+
+    if (not is_distributed) and (config.devices is not None) and (not async_runtime_enabled):
         if isinstance(config.devices, int):
             num_gpus = min(config.devices, torch.cuda.device_count())
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(num_gpus)))
@@ -44,6 +50,16 @@ def train(
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, config.devices))
 
     setup = SetUp(config)
+    if run_async_inference_server(
+        config=config,
+        runtime_state=async_runtime_state,
+    ):
+        return
+
+    async_vllm_process, async_vllm_log_handle = start_async_training_runtime(
+        config=config,
+        runtime_state=async_runtime_state,
+    )
 
     if config.fine_tune_method == "sft":
         train_dataset = setup.get_train_dataset()
@@ -52,7 +68,17 @@ def train(
         train_dataset = setup.get_dataset()["train"]
         val_dataset = setup.get_dataset()["val"]
 
-    model = setup.get_model()
+    if config.fine_tune_method == "async_grpo":
+        model = config.pretrained_model_name
+        if config.is_preprocessed:
+            merged_model_path = os.path.join(
+                config.merged_model_path,
+                config.pretrained_model_name,
+            )
+            if os.path.exists(merged_model_path):
+                model = merged_model_path
+    else:
+        model = setup.get_model()
     data_encoder = setup.get_data_encoder()
 
     training_arguments = setup.get_training_arguments()
@@ -72,35 +98,42 @@ def train(
 
     TrainerClass = get_class(config.trainer._target_)
 
-    if config.fine_tune_method == "grpo":
+    if config.fine_tune_method in {"grpo", "async_grpo", "sdpo"}:
         reward_manager = setup.get_reward_manager()
         trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
 
     if config.fine_tune_method == "gkd":
         trainer_config["teacher_model"] = config.teacher.model
 
-    trainer = TrainerClass(
-        model=model,
-        args=training_arguments,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
-        processing_class=data_encoder,
+    trainer_kwargs = {
+        "model": model,
+        "args": training_arguments,
+        "train_dataset": train_dataset,
+        "processing_class": data_encoder,
         **trainer_config,
-    )
-    if patch_qwen_packed_moe_vllm_sync(
-        trainer=trainer,
-        config=config,
-    ):
-        print("[patch] Applied Qwen packed-MoE vLLM sync filter for router-with-lora GRPO.")
-    elif patch_sparse_decoder_moe_vllm_sync(
-        trainer=trainer,
-        config=config,
-    ):
-        print(
-            "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
-        )
+    }
+    if config.fine_tune_method != "async_grpo":
+        trainer_kwargs["eval_dataset"] = val_dataset
 
     try:
+        trainer = TrainerClass(
+            **trainer_kwargs,
+        )
+        if patch_qwen_packed_moe_vllm_sync(
+            trainer=trainer,
+            config=config,
+        ):
+            print(
+                "[patch] Applied Qwen packed-MoE vLLM sync filter for router-with-lora GRPO."
+            )
+        elif patch_sparse_decoder_moe_vllm_sync(
+            trainer=trainer,
+            config=config,
+        ):
+            print(
+                "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
+            )
+
         trainer.train(
             resume_from_checkpoint=(
                 config.resume_from_checkpoint if config.resume_training else None
@@ -122,6 +155,13 @@ def train(
                 level="ERROR",
             )
         raise e
+    finally:
+        stop_async_training_runtime(
+            config=config,
+            runtime_state=async_runtime_state,
+            process=async_vllm_process,
+            log_handle=async_vllm_log_handle,
+        )
 
 
 def test(
