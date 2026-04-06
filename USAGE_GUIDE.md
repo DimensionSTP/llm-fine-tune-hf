@@ -56,10 +56,31 @@ python main.py mode=test_vllm_multi_turn
 - `bash scripts/preprocessing/preprocess.sh`
 - `bash scripts/preprocessing/preprocess_dataset.sh`
 - `bash scripts/train/train.sh`
+- `bash scripts/train/async_grpo_train.sh`
 - `bash scripts/test/test.sh`
 - `bash scripts/test/test_large.sh`
 - `bash scripts/test/test_vllm.sh`
 - `bash scripts/test/test_vllm_multi_turn.sh`
+
+Async GRPO server flow:
+
+```bash
+# script-managed server start/stop
+# requirement: even number of GPUs and >=2 GPUs
+bash scripts/train/async_grpo_train.sh
+```
+
+```bash
+# config-only path (without train script)
+# world_size=1: half GPUs for vLLM and half GPUs for trainer
+# world_size=2: rank0=trainer, rank1=vLLM server
+python main.py --config-name=async_grpo.yaml mode=train
+```
+
+```bash
+# fallback cleanup for script-managed server
+if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm_server.pid)"; fi
+```
 
 ## Common Runtime Options
 

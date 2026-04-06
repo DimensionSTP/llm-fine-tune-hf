@@ -109,6 +109,28 @@ bash scripts/preprocessing/preprocess_dataset.sh
 bash scripts/train/train.sh
 ```
 
+* async GRPO train
+
+```shell
+# script starts/stops vLLM server automatically
+# requirement: even number of GPUs and >=2 GPUs
+bash scripts/train/async_grpo_train.sh
+```
+
+```shell
+# config-only path (without script)
+# world_size=1: half GPUs for vLLM and half GPUs for trainer
+# world_size=2: rank0=trainer, rank1=vLLM server
+python main.py --config-name=async_grpo.yaml mode=train
+```
+
+```shell
+# safe stop
+# 1) script/main runtime stops managed server automatically on exit
+# 2) fallback manual cleanup for script-managed server
+if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm_server.pid)"; fi
+```
+
 * test
 
 ```shell
