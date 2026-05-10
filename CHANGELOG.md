@@ -2,6 +2,12 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.11.0] - 2026-05-11
+
+- Add configurable GRPO image source and image path decoding for multimodal dataset loading.
+- Expose image path decoding settings through `configs/grpo.yaml` and `configs/dataset/grpo.yaml`.
+- Decode configured GRPO image sources during dataset construction so image paths can be resolved before training.
+
 ## [v1.10.0] - 2026-04-07
 
 - Add full Async GRPO training support with new config set, training-arguments profile, trainer profile, runtime lifecycle utility, and `scripts/train/async_grpo_train.sh`.
