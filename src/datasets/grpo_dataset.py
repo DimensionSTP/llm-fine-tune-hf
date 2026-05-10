@@ -32,6 +32,7 @@ class StructuralDataset:
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        decode_image_paths: bool = False,
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -44,6 +45,7 @@ class StructuralDataset:
         self.reward_categories_column_name = reward_categories_column_name
         self.role_column_name = role_column_name
         self.content_column_name = content_column_name
+        self.decode_image_paths = decode_image_paths
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -102,6 +104,10 @@ class StructuralDataset:
             train_dataset = dataset
 
         val_dataset = split_dataset["test"]
+
+        if self.decode_image_paths:
+            train_dataset = self._decode_image_paths(train_dataset)
+            val_dataset = self._decode_image_paths(val_dataset)
 
         return {
             "train": train_dataset,
@@ -267,6 +273,37 @@ class StructuralDataset:
             example["image"] = self._resize_single_image(image=example["image"])
         return example
 
+    def _decode_image_value(
+        self,
+        image: Any,
+    ) -> Any:
+        if isinstance(image, list):
+            return [self._decode_image_value(image=item) for item in image]
+
+        pil_image = self._load_image(image=image)
+        if pil_image is None:
+            raise ValueError(
+                f"Failed to decode image source with decode_image_paths=True: {repr(image)[:200]}"
+            )
+
+        return pil_image
+
+    def _decode_image_columns(
+        self,
+        example: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if "images" in example and example["images"] is not None:
+            example["images"] = self._decode_image_value(image=example["images"])
+        if "image" in example and example["image"] is not None:
+            example["image"] = self._decode_image_value(image=example["image"])
+        return example
+
+    def _decode_image_paths(
+        self,
+        dataset: HFDataset,
+    ) -> HFDataset:
+        return dataset.with_transform(self._decode_image_columns)
+
 
 class ConversationalDataset(StructuralDataset):
     def __init__(
@@ -283,6 +320,7 @@ class ConversationalDataset(StructuralDataset):
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        decode_image_paths: bool = False,
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -293,6 +331,7 @@ class ConversationalDataset(StructuralDataset):
         self.prompt_column_name = prompt_column_name
         self.solution_column_name = solution_column_name
         self.reward_categories_column_name = reward_categories_column_name
+        self.decode_image_paths = decode_image_paths
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -353,6 +392,10 @@ class ConversationalDataset(StructuralDataset):
             train_dataset = dataset
 
         val_dataset = split_dataset["test"]
+
+        if self.decode_image_paths:
+            train_dataset = self._decode_image_paths(train_dataset)
+            val_dataset = self._decode_image_paths(val_dataset)
 
         return {
             "train": train_dataset,
