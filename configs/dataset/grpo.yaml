@@ -14,6 +14,7 @@ structural:
   modality: ${modality}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  decode_image_paths: ${decode_image_paths}
 
 conversational:
   _target_: src.datasets.GRPOConversationalDataset
@@ -29,3 +30,4 @@ conversational:
   modality: ${modality}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  decode_image_paths: ${decode_image_paths}
