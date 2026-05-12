@@ -98,6 +98,7 @@ def train(
 
     TrainerClass = get_class(config.trainer._target_)
 
+    reward_manager = None
     if config.fine_tune_method in {"grpo", "async_grpo", "sdpo"}:
         reward_manager = setup.get_reward_manager()
         trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
@@ -132,6 +133,16 @@ def train(
         ):
             print(
                 "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
+            )
+        if (
+            reward_manager is not None
+            and config.use_vllm
+            and config.vllm_mode == "colocate"
+            and hasattr(trainer, "vllm_generation")
+        ):
+            prepare_colocated_vllm_models(
+                reward_manager=reward_manager,
+                generation_model=trainer.vllm_generation.llm,
             )
 
         trainer.train(

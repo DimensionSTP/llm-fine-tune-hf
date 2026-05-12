@@ -75,7 +75,7 @@ class VllmEmbedding:
         self,
         input_text: str,
     ) -> np.ndarray:
-        model = self._get_model()
+        model = self.get_model()
         output = model.embed(
             prompts=input_text,
             use_tqdm=False,
@@ -94,7 +94,7 @@ class VllmEmbedding:
         instruction = f"Instruct: {self.instruction}\nQuery:{query}"
         return instruction
 
-    def _get_model(self) -> LLM:
+    def get_model(self) -> LLM:
         if self.model is None:
             self.model = LLM(
                 model=self.model_id,
