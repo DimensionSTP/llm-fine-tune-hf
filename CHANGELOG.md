@@ -2,6 +2,15 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.12.0] - 2026-05-12
+
+- Add colocated vLLM runtime utilities for graph recapture handling before colocated trainer execution.
+- Export colocated vLLM runtime helper APIs from `src.utils` for reuse by GRPO training paths.
+- Prepare reward vLLM models before colocated GRPO training so colocated runtime state is ready before trainer execution.
+- Sync `packages.txt` with the current `joshpp` runtime freeze after the training-stack refresh.
+- Update install-time and runtime pins for `huggingface-hub==1.14.0`, `numpy==2.4.4`, `transformers==5.8.0`, `trl==1.4.0`, and `vllm==0.18.0` across `requirements.txt` and `pyproject.toml`.
+- Preserve the existing `flash-attn` direct Git install path while aligning the core LLM/VLM training dependency manifests with the validated environment.
+
 ## [v1.11.0] - 2026-05-11
 
 - Add configurable GRPO image source and image path decoding for multimodal dataset loading.
