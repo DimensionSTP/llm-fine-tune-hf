@@ -27,6 +27,10 @@ from .test_utils import (
     load_test_dataframe,
 )
 from .vllm_sync import patch_qwen_packed_moe_vllm_sync, patch_sparse_decoder_moe_vllm_sync
+from .vllm_runtime import (
+    prepare_colocated_vllm_models,
+    recapture_vllm_cuda_graphs,
+)
 from .async_grpo_runtime import (
     resolve_async_runtime_state,
     run_async_inference_server,
@@ -61,6 +65,8 @@ __all__ = [
     "load_test_dataframe",
     "patch_qwen_packed_moe_vllm_sync",
     "patch_sparse_decoder_moe_vllm_sync",
+    "prepare_colocated_vllm_models",
+    "recapture_vllm_cuda_graphs",
     "resolve_async_runtime_state",
     "run_async_inference_server",
     "start_async_training_runtime",
