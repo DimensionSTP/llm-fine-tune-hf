@@ -98,7 +98,13 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
     - `model_path`, `model_base`, `model_ft_data`, `model_default_upload_user`,
       `num_gpus`, `seed`, `gpu_memory_utilization`, `max_length`,
       `instruction_length`, `instruction`, `device_id`, `master_addr`,
-      `master_port`, `nccl_socket_ifname`, `nccl_ib_disable`.
+      `master_port`, `nccl_socket_ifname`, `nccl_ib_disable`,
+      `preserved_env_keys`, `isolated_env_keys`.
+    - `preserved_env_keys` are restored after reward embedding vLLM
+      initialization so colocated training keeps the original distributed
+      environment.
+    - `isolated_env_keys` are temporarily removed before reward embedding vLLM
+      initialization to avoid inheriting trainer rank state.
 
 ### RetrievalnDCGReward
 
