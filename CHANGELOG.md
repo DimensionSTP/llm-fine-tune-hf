@@ -2,6 +2,15 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.13.0] - 2026-05-14
+
+- Add configurable GRPO vLLM sync strategy support, including the `lora_streaming` strategy for streaming LoRA-merged weights into vLLM without full adapter merge/unmerge cycles.
+- Add reward embedding vLLM environment isolation controls so retrieval rewards can initialize vLLM without inheriting trainer rank state, then restore the preserved distributed environment.
+- Construct training arguments with the resolved DeepSpeed config at instantiation time so trainer setup receives the expected distributed strategy configuration.
+- Guard colocated vLLM graph recapture by training method and clean up colocated runtime helper internals.
+- Disable GRPO `bf16_full_eval` by default to avoid full-evaluation dtype issues in the current GRPO runtime path.
+- Compact reward name formatting and refresh README, usage guide, and reward documentation for the new vLLM runtime and reward embedding options.
+
 ## [v1.12.0] - 2026-05-12
 
 - Add colocated vLLM runtime utilities for graph recapture handling before colocated trainer execution.
