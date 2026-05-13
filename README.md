@@ -193,6 +193,19 @@ is_peft={True or False}
 strategy=deepspeed
 ```
 
+* GRPO vLLM weight sync strategy
+
+```shell
+vllm_sync_strategy={default or lora_streaming}
+```
+
+* Reward embedding vLLM environment isolation
+
+```shell
+reward_embedding.preserved_env_keys=[RANK,WORLD_SIZE,LOCAL_RANK,CUDA_VISIBLE_DEVICES,MASTER_ADDR,MASTER_PORT,NCCL_SOCKET_IFNAME,NCCL_IB_DISABLE,VLLM_WORKER_MULTIPROC_METHOD]
+reward_embedding.isolated_env_keys=[RANK,WORLD_SIZE,LOCAL_RANK]
+```
+
 * Upload user name and model name at HuggingFace Model card
 
 ```shell

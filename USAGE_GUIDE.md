@@ -87,6 +87,8 @@ if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm
 - Data/tokenization: `is_sft`, `is_preprocessed`, `left_padding`, `max_length`
 - Training strategy: `strategy=deepspeed`
 - PEFT/quantization: `is_quantized`, `is_peft`
+- GRPO/vLLM: `use_vllm`, `vllm_mode`, `vllm_sync_strategy`
+- Retrieval rewards: `reward_embedding.preserved_env_keys`, `reward_embedding.isolated_env_keys`
 - Model card/upload metadata: `upload_user`, `model_type`
 
 ## Validation Checklist
