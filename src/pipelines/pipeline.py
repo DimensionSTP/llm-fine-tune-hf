@@ -68,6 +68,11 @@ def train(
         train_dataset = setup.get_dataset()["train"]
         val_dataset = setup.get_dataset()["val"]
 
+    ds_config = setup.get_ds_config()
+    training_arguments = setup.get_training_arguments(
+        ds_config=ds_config,
+    )
+
     if config.fine_tune_method == "async_grpo":
         model = config.pretrained_model_name
         if config.is_preprocessed:
@@ -80,12 +85,6 @@ def train(
     else:
         model = setup.get_model()
     data_encoder = setup.get_data_encoder()
-
-    training_arguments = setup.get_training_arguments()
-
-    ds_config = setup.get_ds_config()
-    if ds_config:
-        training_arguments.deepspeed = ds_config
 
     trainer_config = OmegaConf.to_container(
         config.trainer,

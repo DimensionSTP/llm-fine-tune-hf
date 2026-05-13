@@ -314,10 +314,19 @@ class SetUp:
 
         return data_encoder
 
-    def get_training_arguments(self) -> TrainingArguments:
+    def get_training_arguments(
+        self,
+        ds_config: Optional[Dict[str, Any]] = None,
+    ) -> TrainingArguments:
+        training_argument_kwargs = {
+            "dataloader_num_workers": self.num_workers,
+        }
+        if ds_config is not None:
+            training_argument_kwargs["deepspeed"] = ds_config
+
         training_arguments: TrainingArguments = instantiate(
             self.config.training_arguments,
-            dataloader_num_workers=self.num_workers,
+            **training_argument_kwargs,
             _convert_="all",
         )
         return training_arguments
