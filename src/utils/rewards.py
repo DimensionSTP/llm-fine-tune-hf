@@ -1,5 +1,4 @@
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any
-
 from abc import ABC, abstractmethod
 import re
 import json
@@ -584,19 +583,14 @@ class CodeExecutionReward(BaseReward):
 
     @property
     def name(self) -> str:
-        if (
-            self.wrong_output_penalty <= 0.0
-            and self.non_executable_penalty <= 0.0
-        ):
+        if self.wrong_output_penalty <= 0.0 and self.non_executable_penalty <= 0.0:
             return super().name
 
         wrong_penalty = format_reward_name_float(value=self.wrong_output_penalty)
         non_executable_penalty = format_reward_name_float(
             value=self.non_executable_penalty,
         )
-        return (
-            f"{super().name}_negw{wrong_penalty}_negx{non_executable_penalty}"
-        )
+        return f"{super().name}_negw{wrong_penalty}_negx{non_executable_penalty}"
 
     def compute(
         self,
@@ -1311,9 +1305,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
     @property
     def name(self) -> str:
         ks = ",".join(str(k) for k in self.ndcg_top_ks)
-        return (
-            f"retrieval_ndcg@{ks}_{self.reward_mode}_{self.weighting_mode}_reward"
-        )
+        return f"retrieval_ndcg@{ks}_{self.reward_mode}_{self.weighting_mode}_reward"
 
     def compute(
         self,
