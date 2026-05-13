@@ -20,15 +20,7 @@ def _build_router_with_lora_sync(
 
         model = self.model
         accelerator = self.accelerator
-        deepspeed_plugin = accelerator.state.deepspeed_plugin
-        zero_stage_3 = deepspeed_plugin is not None and deepspeed_plugin.zero_stage == 3
-
-        if zero_stage_3:
-            import deepspeed
-
-            gather_if_zero3 = deepspeed.zero.GatheredParameters
-        else:
-            gather_if_zero3 = nullcontext
+        gather_if_zero3 = _get_gather_context(accelerator=accelerator)
 
         with gather_if_zero3(list(model.parameters())):
             model.merge_adapter()

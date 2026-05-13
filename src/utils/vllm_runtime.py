@@ -5,12 +5,12 @@ from vllm import LLM
 from src.utils.reward_embedding import VllmEmbedding
 
 
-class RewardManagerLike(Protocol):
+class _RewardManagerLike(Protocol):
     rewards: List[object]
 
 
 def prepare_colocated_vllm_models(
-    reward_manager: RewardManagerLike,
+    reward_manager: _RewardManagerLike,
     generation_model: LLM,
 ) -> None:
     embeddings = _collect_reward_vllm_embeddings(reward_manager=reward_manager)
@@ -33,7 +33,7 @@ def recapture_vllm_cuda_graphs(
 
 
 def _collect_reward_vllm_embeddings(
-    reward_manager: RewardManagerLike,
+    reward_manager: _RewardManagerLike,
 ) -> List[VllmEmbedding]:
     embeddings = []
     seen_ids = set()
