@@ -134,7 +134,8 @@ def train(
                 "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
             )
         if (
-            reward_manager is not None
+            config.fine_tune_method in {"grpo", "sdpo"}
+            and reward_manager is not None
             and config.use_vllm
             and config.vllm_mode == "colocate"
             and hasattr(trainer, "vllm_generation")
