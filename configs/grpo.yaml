@@ -109,6 +109,7 @@ importance_sampling_level: token
 loss_type: sapo
 use_vllm: true
 vllm_mode: colocate
+vllm_sync_strategy: default
 vllm_tensor_parallel_size: ${devices}
 sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05

@@ -133,6 +133,11 @@ def train(
             print(
                 "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
             )
+        elif patch_lora_streaming_vllm_sync(
+            trainer=trainer,
+            config=config,
+        ):
+            print("[patch] Applied streaming LoRA vLLM sync for GRPO.")
         if (
             config.fine_tune_method in {"grpo", "sdpo"}
             and reward_manager is not None
