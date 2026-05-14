@@ -22,7 +22,7 @@ zero_optimization:
 gradient_clipping: ${max_grad_norm}
 prescale_gradients: false
 wall_clock_breakdown: false
-memory_breakdown: true
+memory_breakdown: false
 checkpoint:
   tag_validation: ignore
   load_universal: true
