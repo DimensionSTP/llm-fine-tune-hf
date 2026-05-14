@@ -140,6 +140,8 @@ mistral_common==1.10.0
 ml_dtypes==0.5.4
 mne==1.11.0
 model-hosting-container-standards==0.1.14
+mpi4py==4.1.1
+mpich==5.0.1
 mpmath==1.3.0
 msgpack==1.1.2
 msgspec==0.20.0

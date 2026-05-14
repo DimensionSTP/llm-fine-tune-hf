@@ -2,6 +2,13 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.13.1] - 2026-05-14
+
+- Use reentrant gradient checkpointing by default across SFT, DPO, KTO, GKD, SDPO, GRPO, and Async GRPO training configs.
+- Disable DeepSpeed memory breakdown logging in the default DeepSpeed config to avoid unnecessary memory-breakdown collection during standard runs.
+- Sync `packages.txt` with the current validated runtime freeze, including `mpi4py==4.1.1` and `mpich==5.0.1` in the full environment snapshot.
+- Keep direct install dependency pins unchanged because the newly recorded MPI packages are not imported by the project code or required as direct package dependencies.
+
 ## [v1.13.0] - 2026-05-14
 
 - Add configurable GRPO vLLM sync strategy support, including the `lora_streaming` strategy for streaming LoRA-merged weights into vLLM without full adapter merge/unmerge cycles.
