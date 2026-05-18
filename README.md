@@ -206,6 +206,26 @@ reward_embedding.preserved_env_keys=[RANK,WORLD_SIZE,LOCAL_RANK,CUDA_VISIBLE_DEV
 reward_embedding.isolated_env_keys=[RANK,WORLD_SIZE,LOCAL_RANK]
 ```
 
+* LoRA merge shard size
+
+```shell
+merge_max_shard_size={null or shard size such as 6GB}
+```
+
+* Pack unpacked Qwen MoE expert tensors after LoRA merge
+
+```shell
+merge_pack_qwen_moe_experts={True or False}
+```
+
+```shell
+python src/postprocessing/merge_lora.py merge_max_shard_size=6GB merge_pack_qwen_moe_experts=True
+```
+
+Use `merge_pack_qwen_moe_experts=True` only for Qwen MoE checkpoints saved with unpacked per-expert tensors. Non-Qwen or already-packed checkpoints should keep the default `false`.
+
+Packing rewrites safetensors shards through a temporary directory, so reserve enough disk space for another copy of the merged checkpoint.
+
 * Upload user name and model name at HuggingFace Model card
 
 ```shell

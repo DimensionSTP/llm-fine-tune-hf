@@ -57,6 +57,7 @@ python main.py mode=test_vllm_multi_turn
 - `bash scripts/preprocessing/preprocess_dataset.sh`
 - `bash scripts/train/train.sh`
 - `bash scripts/train/async_grpo_train.sh`
+- `bash scripts/postprocessing/merge_lora.sh`
 - `bash scripts/test/test.sh`
 - `bash scripts/test/test_large.sh`
 - `bash scripts/test/test_vllm.sh`
@@ -87,6 +88,7 @@ if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm
 - Data/tokenization: `is_sft`, `is_preprocessed`, `left_padding`, `max_length`
 - Training strategy: `strategy=deepspeed`
 - PEFT/quantization: `is_quantized`, `is_peft`
+- LoRA merge: `merge_max_shard_size`, `merge_pack_qwen_moe_experts`
 - GRPO/vLLM: `use_vllm`, `vllm_mode`, `vllm_sync_strategy`
 - Retrieval rewards: `reward_embedding.preserved_env_keys`, `reward_embedding.isolated_env_keys`
 - Model card/upload metadata: `upload_user`, `model_type`
