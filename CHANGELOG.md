@@ -2,6 +2,13 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.14.0] - 2026-05-18
+
+- Add LoRA merge output sharding support so merged checkpoints can be saved with configurable `merge_max_shard_size` limits.
+- Add optional Qwen MoE expert tensor packing for LoRA-merged checkpoints saved with unpacked per-expert tensors.
+- Add `merge_max_shard_size` and `merge_pack_qwen_moe_experts` defaults across SFT, DPO, KTO, GKD, SDPO, GRPO, and Async GRPO configs.
+- Document LoRA merge sharding and Qwen MoE expert packing options in README and the usage guide.
+
 ## [v1.13.1] - 2026-05-14
 
 - Use reentrant gradient checkpointing by default across SFT, DPO, KTO, GKD, SDPO, GRPO, and Async GRPO training configs.
