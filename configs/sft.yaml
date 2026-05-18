@@ -47,6 +47,8 @@ upload_user: Qwen
 model_type: Qwen3-8B
 pretrained_model_name: ${upload_user}/${model_type}
 merge_path: ${connected_dir}/merged
+merge_max_shard_size: null
+merge_pack_qwen_moe_experts: false
 custom_data_encoder_path: ${merge_path}/${pretrained_model_name}
 revision: main
 reference_data_encoder_name: Qwen/Qwen3-8B
