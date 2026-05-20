@@ -206,6 +206,22 @@ reward_embedding.preserved_env_keys=[RANK,WORLD_SIZE,LOCAL_RANK,CUDA_VISIBLE_DEV
 reward_embedding.isolated_env_keys=[RANK,WORLD_SIZE,LOCAL_RANK]
 ```
 
+* SFT response end template
+
+```shell
+response_end_template={null or template such as <|im_end|>}
+```
+
+`null` uses the tokenizer EOS token when masking SFT assistant labels.
+
+* Reward extraction profile
+
+```shell
+reward.extraction_profile={default or gemma4}
+```
+
+`default` keeps existing extraction behavior. `gemma4` strips Gemma channel/turn/tool stop markers before answer extraction. This affects rewards that call `extract_answer_from_generation()`; raw format rewards still check the original completion format.
+
 * LoRA merge shard size
 
 ```shell
