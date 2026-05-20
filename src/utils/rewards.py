@@ -35,6 +35,7 @@ class BaseReward(ABC):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
     ) -> None:
         self.is_answer_tag = is_answer_tag
@@ -43,6 +44,7 @@ class BaseReward(ABC):
         self.answer_start_token = answer_start_token
         self.answer_end_token = answer_end_token
         self.eos_token = eos_token
+        self.extraction_profile = extraction_profile
         self.weight = weight
 
     @property
@@ -93,6 +95,8 @@ class BaseReward(ABC):
     ) -> str:
         if not isinstance(generation, str):
             return ""
+
+        generation = self._normalize_generation_for_extraction(generation=generation)
 
         if self.is_answer_tag:
             match = re.search(
@@ -161,6 +165,47 @@ class BaseReward(ABC):
             return match.group(1).strip()
 
         return generation
+
+    def _normalize_generation_for_extraction(
+        self,
+        generation: str,
+    ) -> str:
+        if self.extraction_profile == "default":
+            return generation
+        if self.extraction_profile == "gemma4":
+            return self._normalize_gemma4_generation(generation=generation)
+        raise ValueError(
+            f"Unsupported reward extraction profile: {self.extraction_profile}"
+        )
+
+    @staticmethod
+    def _normalize_gemma4_generation(
+        generation: str,
+    ) -> str:
+        text = generation.strip()
+        text = re.sub(
+            r"<\|channel\>thought\b.*?<channel\|>",
+            "",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        text = re.sub(
+            r"^\s*<\|turn\>model\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"^\s*<\|channel\>[A-Za-z0-9_\-]+\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        for stop_token in ("<turn|>", "<eos>", "<|tool_response|>"):
+            stop_index = text.find(stop_token)
+            if stop_index != -1:
+                text = text[:stop_index]
+        return text.strip()
 
     @staticmethod
     def split_on_keywords(text: str) -> str:
@@ -377,6 +422,7 @@ class ThinkFormatReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         is_enable_thinking: bool,
     ) -> None:
@@ -387,6 +433,7 @@ class ThinkFormatReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.is_enable_thinking = is_enable_thinking
@@ -447,6 +494,7 @@ class MatchReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         incorrect_penalty: float,
     ) -> None:
@@ -457,6 +505,7 @@ class MatchReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.incorrect_penalty = incorrect_penalty
@@ -563,6 +612,7 @@ class CodeExecutionReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         timeout: int,
         wrong_output_penalty: float,
@@ -575,6 +625,7 @@ class CodeExecutionReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.timeout = timeout
@@ -747,6 +798,7 @@ class RougeReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         rouge_type: str,
     ) -> None:
@@ -757,6 +809,7 @@ class RougeReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.rouge_type = rouge_type
@@ -824,6 +877,7 @@ class EquationReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         equation_target_column_name: str,
         equation_numbers_column_name: str,
@@ -835,6 +889,7 @@ class EquationReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.equation_target_column_name = equation_target_column_name
@@ -904,6 +959,7 @@ class RetrievalBaseReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
@@ -915,6 +971,7 @@ class RetrievalBaseReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.database = database
@@ -1030,6 +1087,7 @@ class RetrievalHitReward(RetrievalBaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
@@ -1045,6 +1103,7 @@ class RetrievalHitReward(RetrievalBaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
             database=database,
             embedding=embedding,
@@ -1260,6 +1319,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         database: FaissIndex,
         embedding: VllmEmbedding,
@@ -1277,6 +1337,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
             database=database,
             embedding=embedding,
@@ -1547,6 +1608,7 @@ class SingleKVReward(BaseReward):
         answer_start_token: str,
         answer_end_token: str,
         eos_token: str,
+        extraction_profile: str,
         weight: float,
         json_parse_weight: float,
     ) -> None:
@@ -1557,6 +1619,7 @@ class SingleKVReward(BaseReward):
             answer_start_token=answer_start_token,
             answer_end_token=answer_end_token,
             eos_token=eos_token,
+            extraction_profile=extraction_profile,
             weight=weight,
         )
         self.json_parse_weight = json_parse_weight
