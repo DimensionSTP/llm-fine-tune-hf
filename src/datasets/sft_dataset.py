@@ -44,6 +44,7 @@ class StructuralDataset(Dataset):
         is_enable_thinking: bool,
         max_length: int,
         response_start_template: str,
+        response_end_template: Optional[str],
     ) -> None:
         self.data_path = data_path
         self.split = split
@@ -133,8 +134,11 @@ class StructuralDataset(Dataset):
             if modality == "text"
             else self.data_encoder.tokenizer.eos_token
         )
+        response_end_text = (
+            self.eos_token if response_end_template is None else response_end_template
+        )
         self.response_end_tokens = self.data_encoder(
-            text=self.eos_token,
+            text=response_end_text,
             return_tensors="pt",
             add_special_tokens=False,
         )["input_ids"].squeeze(0)
@@ -319,6 +323,13 @@ class StructuralDataset(Dataset):
             else:
                 labels[content_start:] = input_ids[content_start:]
 
+        attention_mask = encoded.get("attention_mask")
+        if attention_mask is not None:
+            labels = labels.masked_fill(
+                attention_mask == 0,
+                self.ignore_index,
+            )
+
         encoded["labels"] = labels
         return encoded
 
@@ -482,6 +493,7 @@ class ConversationalDataset(StructuralDataset):
         is_enable_thinking: bool,
         max_length: int,
         response_start_template: str,
+        response_end_template: Optional[str],
     ) -> None:
         self.data_path = data_path
         self.split = split
@@ -568,8 +580,11 @@ class ConversationalDataset(StructuralDataset):
             if modality == "text"
             else self.data_encoder.tokenizer.eos_token
         )
+        response_end_text = (
+            self.eos_token if response_end_template is None else response_end_template
+        )
         self.response_end_tokens = self.data_encoder(
-            text=self.eos_token,
+            text=response_end_text,
             return_tensors="pt",
             add_special_tokens=False,
         )["input_ids"].squeeze(0)
