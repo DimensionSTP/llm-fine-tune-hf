@@ -7,6 +7,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.think_format}
     is_enable_thinking: ${is_enable_thinking}
 
@@ -17,6 +18,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.answer_format}
 
   - _target_: src.utils.MatchReward
@@ -26,6 +28,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.match}
     incorrect_penalty: ${reward.match.incorrect_penalty}
 
@@ -36,6 +39,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.code_execution}
     timeout: ${reward.code_execution.timeout}
     wrong_output_penalty: ${reward.code_execution.wrong_output_penalty}
@@ -48,6 +52,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.rouge}
     rouge_type: ${reward.rouge.type}
 
@@ -58,6 +63,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.equation}
     equation_target_column_name: ${reward.equation.target_column_name}
     equation_numbers_column_name: ${reward.equation.numbers_column_name}
@@ -69,6 +75,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.retrieval_hit}
     database: ${reward_database}
     embedding: ${reward_embedding}
@@ -84,6 +91,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.retrieval_ndcg}
     database: ${reward_database}
     embedding: ${reward_embedding}
@@ -101,6 +109,7 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.single_kv}
     json_parse_weight: ${reward.single_kv.json_parse_weight}
 
@@ -111,5 +120,6 @@ rewards:
     answer_start_token: ${reward.answer_start_token}
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.multi_kv}
     json_parse_weight: ${reward.multi_kv.json_parse_weight}

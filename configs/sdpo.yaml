@@ -118,6 +118,7 @@ use_successful_as_teacher: true
 success_reward_threshold: 1.0
 
 reward:
+  extraction_profile: default
   is_answer_tag: false
   think_start_token: <think>
   think_end_token: </think>

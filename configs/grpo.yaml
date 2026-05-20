@@ -118,6 +118,7 @@ sapo_temperature_neg: 1.05
 scale_rewards: group
 
 reward:
+  extraction_profile: default
   is_answer_tag: false
   think_start_token: <think>
   think_end_token: </think>

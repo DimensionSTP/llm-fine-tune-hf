@@ -129,6 +129,7 @@ async_runtime:
     dev_mode: true
 
 reward:
+  extraction_profile: default
   is_answer_tag: false
   think_start_token: <think>
   think_end_token: </think>
