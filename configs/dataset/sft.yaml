@@ -25,6 +25,7 @@ structural:
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   response_start_template: ${response_start_template}
+  response_end_template: ${response_end_template}
 
 conversational:
   _target_: src.datasets.SFTConversationalDataset
@@ -51,3 +52,4 @@ conversational:
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   response_start_template: ${response_start_template}
+  response_end_template: ${response_end_template}
