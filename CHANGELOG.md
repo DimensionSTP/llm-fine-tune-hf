@@ -2,6 +2,15 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.15.0] - 2026-05-20
+
+- Add configurable SFT response-end masking through `response_end_template`, allowing assistant-label masking to use either tokenizer EOS or an explicit response terminator.
+- Wire `response_end_template` through SFT dataset configs and the main SFT config defaults.
+- Add reward extraction profiles with `default` and `gemma4` handling so answer extraction can normalize Gemma channel, turn, and tool stop markers before reward scoring.
+- Wire `reward.extraction_profile` through GRPO, Async GRPO, SDPO, and reward manager configs for all reward classes that use answer extraction.
+- Document SFT response-end masking and reward extraction profile options in README and the usage guide.
+- Restore trailing newlines in updated config files to keep YAML files editor- and tooling-friendly.
+
 ## [v1.14.0] - 2026-05-18
 
 - Add LoRA merge output sharding support so merged checkpoints can be saved with configurable `merge_max_shard_size` limits.
