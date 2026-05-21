@@ -199,6 +199,18 @@ strategy=deepspeed
 vllm_sync_strategy={default or lora_streaming}
 ```
 
+* GRPO completion termination override
+
+```shell
+completion_termination.enabled={True or False}
+completion_termination.terminal_token_texts=[</answer>]
+completion_termination.terminal_token_ids=[]
+completion_termination.infer_finished_from_short_completion={True or False}
+completion_termination.include_model_generation_eos={True or False}
+```
+
+`completion_termination` is GRPO-only and disabled by default. It extends TRL's truncated-completion masking beyond tokenizer EOS/PAD by treating configured terminal token ids or token texts as valid completion terminators. `infer_finished_from_short_completion=True` also treats generations shorter than `max_completion_length` as terminated. SDPO and async GRPO do not use this option.
+
 * Reward embedding vLLM environment isolation
 
 ```shell
