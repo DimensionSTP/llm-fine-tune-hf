@@ -2,6 +2,14 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.17.0] - 2026-05-21
+
+- Add a GRPO completion termination patch that treats configured terminal token ids, terminal token texts, tokenizer EOS/PAD, and optionally model generation EOS as valid completion terminators.
+- Support `completion_termination.infer_finished_from_short_completion` so completions shorter than `max_completion_length` can be treated as finished instead of truncated.
+- Wire the completion termination patch into the GRPO training pipeline while leaving SDPO and Async GRPO unaffected.
+- Add disabled-by-default `completion_termination` settings to `configs/grpo.yaml`.
+- Export `patch_grpo_completion_termination` from `src.utils` and document GRPO completion termination options in README.
+
 ## [v1.16.0] - 2026-05-21
 
 - Add `GroundingBBoxReward` for page-level bounding-box grounding rewards with schema, page-match, IoU, center-in-box, large-box, hard-negative, and duplicate-positive shaping.
