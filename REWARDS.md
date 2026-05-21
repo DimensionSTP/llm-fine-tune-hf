@@ -150,6 +150,43 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if accuracy is low.
 
+### GroundingBBoxReward
+
+- Purpose: Ground a field answer to page-level bounding boxes and reject
+  missing evidence when the target is not found.
+- Logic: Parses JSON from the extracted answer. For labels whose
+  `grounding_status` is `found`, scores schema validity, page match, best-box
+  IoU, IoU-threshold bonuses, and center-in-ground-truth bonus. Penalizes overly
+  large predicted boxes and overlap with `hard_negative_evidence`. For labels
+  whose `grounding_status` is not `found`, a prediction with non-`found`
+  `grounding_status` and empty `evidence_occurrences` receives `max_reward`.
+  Invalid JSON returns `0.0`; samples without matching category return `None`.
+- reward_categories: any category containing
+  `reward.grounding_bbox.category_token` (default: `ground`).
+- Expected label schema in `solution`:
+  - `grounding_status`: `found` or a non-`found` status.
+  - `coord_system`: optional coordinate-system string checked against predicted
+    boxes when present.
+  - `positive_occurrences`: required for `found` labels. Each occurrence should
+    provide `page` plus either `fragments[].bbox` or `envelope_bbox`.
+  - `hard_negative_evidence`: optional list of boxes with `page` and `bbox`.
+- Expected prediction schema:
+  - `field_path`: field identifier string.
+  - `grounding_status`: predicted grounding status.
+  - `evidence_occurrences`: list of predicted occurrences. Each occurrence uses
+    the same `page`, `fragments[].bbox`, or `envelope_bbox` shape as labels.
+- Extra options:
+  - `category_token`: category token that activates this reward.
+  - `format_reward`, `schema_reward`, `page_reward`: base shaping components.
+  - `iou_weight`, `iou_05_threshold`, `iou_05_bonus`, `iou_07_threshold`,
+    `iou_07_bonus`, `center_in_gt_bonus`: positive grounding match shaping.
+  - `large_box_area_threshold`, `large_box_penalty`: large-box penalty.
+  - `hard_negative_iou_threshold`, `hard_negative_overlap_penalty`: hard
+    negative overlap penalty.
+  - `positive_duplicate_iou_threshold`: filters hard negatives that duplicate a
+    positive target.
+  - `min_reward`, `max_reward`: final clipping bounds.
+
 ## reward_categories Quick Reference
 
 Current matching rules in `src/utils/rewards.py`:
@@ -165,3 +202,5 @@ Current matching rules in `src/utils/rewards.py`:
 - KV-family rewards (`SingleKVReward`, `MultiKVReward`) run when category
   contains token `kv`.
   Examples: `single_kv`, `multi_kv`, `vlm_single_kv`, `vlm_multi_kv`.
+- `GroundingBBoxReward` runs when category contains the configured
+  `reward.grounding_bbox.category_token` (default: `ground`).

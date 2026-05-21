@@ -222,6 +222,19 @@ reward.extraction_profile={default or gemma4}
 
 `default` keeps existing extraction behavior. `gemma4` strips Gemma channel/turn/tool stop markers before answer extraction. This affects rewards that call `extract_answer_from_generation()`; raw format rewards still check the original completion format.
 
+* Grounding bbox reward
+
+```shell
+reward.weight.grounding_bbox={0.0 or positive float}
+reward.grounding_bbox.category_token=ground
+```
+
+`grounding_bbox` is disabled by default. It is evaluated only when the sample reward category contains `reward.grounding_bbox.category_token`.
+
+The label in `solution` should be a JSON object with `grounding_status`, optional `coord_system`, `positive_occurrences` for found targets, and optional `hard_negative_evidence`. Model answers should return JSON with `field_path`, `grounding_status`, and `evidence_occurrences`. Bounding boxes use `[x1, y1, x2, y2]` with page numbers in each occurrence or fragment.
+
+For labels whose `grounding_status` is not `found`, the reward treats an answer with non-`found` status and empty `evidence_occurrences` as the correct negative grounding result.
+
 * LoRA merge shard size
 
 ```shell
