@@ -117,6 +117,13 @@ sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05
 scale_rewards: group
 
+completion_termination:
+  enabled: false
+  infer_finished_from_short_completion: false
+  terminal_token_texts: []
+  terminal_token_ids: []
+  include_model_generation_eos: false
+
 reward:
   extraction_profile: default
   is_answer_tag: false
