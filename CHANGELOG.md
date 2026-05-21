@@ -2,6 +2,14 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.16.0] - 2026-05-21
+
+- Add `GroundingBBoxReward` for page-level bounding-box grounding rewards with schema, page-match, IoU, center-in-box, large-box, hard-negative, and duplicate-positive shaping.
+- Export `GroundingBBoxReward` from `src.utils` for reward manager construction and downstream imports.
+- Wire grounding bbox reward configuration through GRPO, Async GRPO, SDPO, and the reward manager, keeping `reward.weight.grounding_bbox` disabled by default.
+- Document grounding bbox reward usage, label/prediction schema, activation by reward category token, and non-found grounding behavior in README and `REWARDS.md`.
+- Preserve the intended SFT dataset config EOF discipline.
+
 ## [v1.15.0] - 2026-05-20
 
 - Add configurable SFT response-end masking through `response_end_template`, allowing assistant-label masking to use either tokenizer EOS or an explicit response terminator.
