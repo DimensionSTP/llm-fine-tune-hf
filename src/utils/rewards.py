@@ -2041,3 +2041,530 @@ class MultiKVReward(SingleKVReward):
                         matched_cells += 1
 
         return total_cells, matched_cells
+
+
+class GroundingBBoxReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        extraction_profile: str,
+        weight: float,
+        category_token: str,
+        format_reward: float,
+        schema_reward: float,
+        page_reward: float,
+        iou_weight: float,
+        iou_05_threshold: float,
+        iou_05_bonus: float,
+        iou_07_threshold: float,
+        iou_07_bonus: float,
+        center_in_gt_bonus: float,
+        large_box_area_threshold: float,
+        large_box_penalty: float,
+        hard_negative_iou_threshold: float,
+        hard_negative_overlap_penalty: float,
+        positive_duplicate_iou_threshold: float,
+        min_reward: float,
+        max_reward: float,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            extraction_profile=extraction_profile,
+            weight=weight,
+        )
+        self.category_token = category_token
+        self.format_reward = format_reward
+        self.schema_reward = schema_reward
+        self.page_reward = page_reward
+        self.iou_weight = iou_weight
+        self.iou_05_threshold = iou_05_threshold
+        self.iou_05_bonus = iou_05_bonus
+        self.iou_07_threshold = iou_07_threshold
+        self.iou_07_bonus = iou_07_bonus
+        self.center_in_gt_bonus = center_in_gt_bonus
+        self.large_box_area_threshold = large_box_area_threshold
+        self.large_box_penalty = large_box_penalty
+        self.hard_negative_iou_threshold = hard_negative_iou_threshold
+        self.hard_negative_overlap_penalty = hard_negative_overlap_penalty
+        self.positive_duplicate_iou_threshold = positive_duplicate_iou_threshold
+        self.min_reward = min_reward
+        self.max_reward = max_reward
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[Any],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if not self.has_category_token(
+                category=category,
+                token=self.category_token,
+            ):
+                rewards.append(None)
+                continue
+
+            label = self._parse_label(solution=sol)
+            if label is None:
+                rewards.append(None)
+                continue
+
+            if label.get("grounding_status") != "found":
+                rewards.append(
+                    self._compute_negative_grounding_reward(
+                        content=content,
+                        label=label,
+                    )
+                )
+                continue
+
+            positive_boxes = self._collect_target_boxes(label=label)
+            if not positive_boxes:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            prediction = self._try_parse_json(text=extracted_answer)
+            if prediction is None:
+                rewards.append(0.0)
+                continue
+
+            reward = self.format_reward
+            pred_boxes = self._collect_prediction_boxes(prediction=prediction)
+            if self._is_schema_valid(
+                prediction=prediction,
+                pred_boxes=pred_boxes,
+                label=label,
+            ):
+                reward += self.schema_reward
+
+            if pred_boxes and self._has_page_match(
+                pred_boxes=pred_boxes,
+                positive_boxes=positive_boxes,
+            ):
+                reward += self.page_reward
+
+            match = self._find_best_match(
+                pred_boxes=pred_boxes,
+                positive_boxes=positive_boxes,
+            )
+            if match is not None:
+                iou, pred_box, target_box = match
+                reward += self.iou_weight * iou
+                if iou >= self.iou_05_threshold:
+                    reward += self.iou_05_bonus
+                if iou >= self.iou_07_threshold:
+                    reward += self.iou_07_bonus
+                if self._center_inside(
+                    inner_box=pred_box["bbox"],
+                    outer_box=target_box["bbox"],
+                ):
+                    reward += self.center_in_gt_bonus
+
+            if self._has_large_box(pred_boxes=pred_boxes):
+                reward += self.large_box_penalty
+
+            if self._has_hard_negative_overlap(
+                pred_boxes=pred_boxes,
+                label=label,
+                positive_boxes=positive_boxes,
+            ):
+                reward += self.hard_negative_overlap_penalty
+
+            rewards.append(self._clip_reward(reward=reward))
+
+        return rewards
+
+    def _compute_negative_grounding_reward(
+        self,
+        content: str,
+        label: Dict[str, Any],
+    ) -> float:
+        extracted_answer = self.extract_answer_from_generation(generation=content)
+        prediction = self._try_parse_json(text=extracted_answer)
+        if prediction is None:
+            return 0.0
+
+        reward = self.format_reward
+        pred_boxes = self._collect_prediction_boxes(prediction=prediction)
+        is_schema_valid = self._is_negative_schema_valid(
+            prediction=prediction,
+            pred_boxes=pred_boxes,
+            label=label,
+        )
+        if is_schema_valid:
+            reward += self.schema_reward
+
+        if (
+            is_schema_valid
+            and prediction.get("grounding_status") != "found"
+            and not pred_boxes
+        ):
+            return self.max_reward
+
+        if self._has_large_box(pred_boxes=pred_boxes):
+            reward += self.large_box_penalty
+
+        if self._has_hard_negative_overlap(
+            pred_boxes=pred_boxes,
+            label=label,
+            positive_boxes=[],
+        ):
+            reward += self.hard_negative_overlap_penalty
+
+        return self._clip_reward(reward=reward)
+
+    @staticmethod
+    def _try_parse_json(text: str) -> Optional[Any]:
+        if not isinstance(text, str):
+            return None
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        fenced = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if fenced:
+            try:
+                return json.loads(fenced.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    def _parse_label(
+        self,
+        solution: Any,
+    ) -> Optional[Dict[str, Any]]:
+        if isinstance(solution, dict):
+            return solution
+        parsed = self._try_parse_json(text=solution)
+        if isinstance(parsed, dict):
+            return parsed
+        return None
+
+    def _is_schema_valid(
+        self,
+        prediction: Any,
+        pred_boxes: List[Dict[str, Any]],
+        label: Dict[str, Any],
+    ) -> bool:
+        if not isinstance(prediction, dict):
+            return False
+        if not isinstance(prediction.get("field_path"), str):
+            return False
+        if not isinstance(prediction.get("grounding_status"), str):
+            return False
+        if not isinstance(prediction.get("evidence_occurrences"), list):
+            return False
+        if not pred_boxes:
+            return False
+
+        coord_system = label.get("coord_system")
+        if not isinstance(coord_system, str):
+            return True
+
+        return all(box.get("coord_system") == coord_system for box in pred_boxes)
+
+    def _is_negative_schema_valid(
+        self,
+        prediction: Any,
+        pred_boxes: List[Dict[str, Any]],
+        label: Dict[str, Any],
+    ) -> bool:
+        if not isinstance(prediction, dict):
+            return False
+        if not isinstance(prediction.get("field_path"), str):
+            return False
+        if not isinstance(prediction.get("grounding_status"), str):
+            return False
+        if not isinstance(prediction.get("evidence_occurrences"), list):
+            return False
+
+        coord_system = label.get("coord_system")
+        if not isinstance(coord_system, str):
+            return True
+        return all(box.get("coord_system") == coord_system for box in pred_boxes)
+
+    def _collect_prediction_boxes(
+        self,
+        prediction: Any,
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(prediction, dict):
+            return []
+
+        occurrences = prediction.get("evidence_occurrences")
+        if not isinstance(occurrences, list):
+            return []
+
+        boxes: List[Dict[str, Any]] = []
+        for occurrence in occurrences:
+            boxes.extend(self._collect_occurrence_boxes(occurrence=occurrence))
+        return boxes
+
+    def _collect_target_boxes(
+        self,
+        label: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        occurrences = label.get("positive_occurrences")
+        if not isinstance(occurrences, list):
+            return []
+
+        boxes: List[Dict[str, Any]] = []
+        for occurrence in occurrences:
+            boxes.extend(self._collect_occurrence_boxes(occurrence=occurrence))
+        return boxes
+
+    def _collect_occurrence_boxes(
+        self,
+        occurrence: Any,
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(occurrence, dict):
+            return []
+
+        page = occurrence.get("page")
+        fragments = occurrence.get("fragments")
+        if isinstance(fragments, list):
+            fragment_boxes = []
+            for fragment in fragments:
+                if not isinstance(fragment, dict):
+                    continue
+                box = self._build_box_record(
+                    page=page,
+                    bbox=fragment.get("bbox"),
+                    coord_system=fragment.get("coord_system"),
+                )
+                if box is not None:
+                    fragment_boxes.append(box)
+            if fragment_boxes:
+                return fragment_boxes
+
+        box = self._build_box_record(
+            page=page,
+            bbox=occurrence.get("envelope_bbox"),
+            coord_system=occurrence.get("coord_system"),
+        )
+        if box is None:
+            return []
+        return [box]
+
+    def _build_box_record(
+        self,
+        page: Any,
+        bbox: Any,
+        coord_system: Any,
+    ) -> Optional[Dict[str, Any]]:
+        parsed_bbox = self._parse_bbox(bbox=bbox)
+        if parsed_bbox is None:
+            return None
+        if not isinstance(page, int):
+            return None
+        if not isinstance(coord_system, str):
+            coord_system = None
+        return {
+            "page": page,
+            "bbox": parsed_bbox,
+            "coord_system": coord_system,
+        }
+
+    @staticmethod
+    def _parse_bbox(bbox: Any) -> Optional[Tuple[float, float, float, float]]:
+        if not isinstance(bbox, list):
+            return None
+        if len(bbox) != 4:
+            return None
+
+        values = []
+        for value in bbox:
+            if not isinstance(value, (int, float)):
+                return None
+            values.append(float(value))
+
+        x1, y1, x2, y2 = values
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return x1, y1, x2, y2
+
+    def _find_best_match(
+        self,
+        pred_boxes: List[Dict[str, Any]],
+        positive_boxes: List[Dict[str, Any]],
+    ) -> Optional[Tuple[float, Dict[str, Any], Dict[str, Any]]]:
+        best_match: Optional[Tuple[float, Dict[str, Any], Dict[str, Any]]] = None
+
+        for pred_box in pred_boxes:
+            for positive_box in positive_boxes:
+                if pred_box["page"] != positive_box["page"]:
+                    continue
+                iou = self._bbox_iou(
+                    left=pred_box["bbox"],
+                    right=positive_box["bbox"],
+                )
+                if best_match is None or iou > best_match[0]:
+                    best_match = (
+                        iou,
+                        pred_box,
+                        positive_box,
+                    )
+
+        return best_match
+
+    @staticmethod
+    def _has_page_match(
+        pred_boxes: List[Dict[str, Any]],
+        positive_boxes: List[Dict[str, Any]],
+    ) -> bool:
+        positive_pages = {box["page"] for box in positive_boxes}
+        return any(box["page"] in positive_pages for box in pred_boxes)
+
+    def _has_large_box(
+        self,
+        pred_boxes: List[Dict[str, Any]],
+    ) -> bool:
+        return any(
+            self._bbox_area(bbox=box["bbox"]) > self.large_box_area_threshold
+            for box in pred_boxes
+        )
+
+    def _has_hard_negative_overlap(
+        self,
+        pred_boxes: List[Dict[str, Any]],
+        label: Dict[str, Any],
+        positive_boxes: List[Dict[str, Any]],
+    ) -> bool:
+        hard_negative_boxes = self._collect_hard_negative_boxes(label=label)
+        hard_negative_boxes = [
+            box
+            for box in hard_negative_boxes
+            if not self._is_positive_duplicate(
+                hard_negative_box=box,
+                positive_boxes=positive_boxes,
+            )
+        ]
+
+        for pred_box in pred_boxes:
+            for hard_negative_box in hard_negative_boxes:
+                if pred_box["page"] != hard_negative_box["page"]:
+                    continue
+                iou = self._bbox_iou(
+                    left=pred_box["bbox"],
+                    right=hard_negative_box["bbox"],
+                )
+                if iou >= self.hard_negative_iou_threshold:
+                    return True
+        return False
+
+    def _collect_hard_negative_boxes(
+        self,
+        label: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        hard_negatives = label.get("hard_negative_evidence")
+        if not isinstance(hard_negatives, list):
+            return []
+
+        boxes: List[Dict[str, Any]] = []
+        for hard_negative in hard_negatives:
+            if not isinstance(hard_negative, dict):
+                continue
+            box = self._build_box_record(
+                page=hard_negative.get("page"),
+                bbox=hard_negative.get("bbox"),
+                coord_system=label.get("coord_system"),
+            )
+            if box is not None:
+                boxes.append(box)
+        return boxes
+
+    def _is_positive_duplicate(
+        self,
+        hard_negative_box: Dict[str, Any],
+        positive_boxes: List[Dict[str, Any]],
+    ) -> bool:
+        for positive_box in positive_boxes:
+            if hard_negative_box["page"] != positive_box["page"]:
+                continue
+            iou = self._bbox_iou(
+                left=hard_negative_box["bbox"],
+                right=positive_box["bbox"],
+            )
+            if iou >= self.positive_duplicate_iou_threshold:
+                return True
+        return False
+
+    @staticmethod
+    def _bbox_iou(
+        left: Tuple[float, float, float, float],
+        right: Tuple[float, float, float, float],
+    ) -> float:
+        x1 = max(left[0], right[0])
+        y1 = max(left[1], right[1])
+        x2 = min(left[2], right[2])
+        y2 = min(left[3], right[3])
+
+        inter_width = max(0.0, x2 - x1)
+        inter_height = max(0.0, y2 - y1)
+        intersection = inter_width * inter_height / 1_000_000.0
+        if intersection <= 0:
+            return 0.0
+
+        left_area = GroundingBBoxReward._bbox_area(bbox=left)
+        right_area = GroundingBBoxReward._bbox_area(bbox=right)
+        union = left_area + right_area - intersection
+        if union <= 0:
+            return 0.0
+        return intersection / union
+
+    @staticmethod
+    def _bbox_area(
+        bbox: Tuple[float, float, float, float],
+    ) -> float:
+        return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) / 1_000_000.0
+
+    @staticmethod
+    def _center_inside(
+        inner_box: Tuple[float, float, float, float],
+        outer_box: Tuple[float, float, float, float],
+    ) -> bool:
+        center_x = (inner_box[0] + inner_box[2]) / 2.0
+        center_y = (inner_box[1] + inner_box[3]) / 2.0
+        return (
+            outer_box[0] <= center_x <= outer_box[2]
+            and outer_box[1] <= center_y <= outer_box[3]
+        )
+
+    def _clip_reward(
+        self,
+        reward: float,
+    ) -> float:
+        return min(
+            self.max_reward,
+            max(
+                self.min_reward,
+                reward,
+            ),
+        )
