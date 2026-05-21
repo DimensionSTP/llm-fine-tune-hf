@@ -36,6 +36,7 @@ from .vllm_runtime import (
     prepare_colocated_vllm_models,
     recapture_vllm_cuda_graphs,
 )
+from .grpo_completion_termination import patch_grpo_completion_termination
 from .async_grpo_runtime import (
     resolve_async_runtime_state,
     run_async_inference_server,
@@ -74,6 +75,7 @@ __all__ = [
     "patch_lora_streaming_vllm_sync",
     "prepare_colocated_vllm_models",
     "recapture_vllm_cuda_graphs",
+    "patch_grpo_completion_termination",
     "resolve_async_runtime_state",
     "run_async_inference_server",
     "start_async_training_runtime",
