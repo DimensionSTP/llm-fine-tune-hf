@@ -40,7 +40,11 @@ def train(
     )
     async_runtime_enabled = async_runtime_state["enabled"]
 
-    if (not is_distributed) and (config.devices is not None) and (not async_runtime_enabled):
+    if (
+        (not is_distributed)
+        and (config.devices is not None)
+        and (not async_runtime_enabled)
+    ):
         if isinstance(config.devices, int):
             num_gpus = min(config.devices, torch.cuda.device_count())
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(num_gpus)))
@@ -138,6 +142,11 @@ def train(
             config=config,
         ):
             print("[patch] Applied streaming LoRA vLLM sync for GRPO.")
+        if patch_grpo_completion_termination(
+            trainer=trainer,
+            config=config,
+        ):
+            print("[patch] Applied GRPO completion termination override.")
         if (
             config.fine_tune_method in {"grpo", "sdpo"}
             and reward_manager is not None
