@@ -123,3 +123,30 @@ rewards:
     extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.multi_kv}
     json_parse_weight: ${reward.multi_kv.json_parse_weight}
+
+  - _target_: src.utils.GroundingBBoxReward
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
+    eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
+    weight: ${reward.weight.grounding_bbox}
+    category_token: ${reward.grounding_bbox.category_token}
+    format_reward: ${reward.grounding_bbox.format_reward}
+    schema_reward: ${reward.grounding_bbox.schema_reward}
+    page_reward: ${reward.grounding_bbox.page_reward}
+    iou_weight: ${reward.grounding_bbox.iou_weight}
+    iou_05_threshold: ${reward.grounding_bbox.iou_05_threshold}
+    iou_05_bonus: ${reward.grounding_bbox.iou_05_bonus}
+    iou_07_threshold: ${reward.grounding_bbox.iou_07_threshold}
+    iou_07_bonus: ${reward.grounding_bbox.iou_07_bonus}
+    center_in_gt_bonus: ${reward.grounding_bbox.center_in_gt_bonus}
+    large_box_area_threshold: ${reward.grounding_bbox.large_box_area_threshold}
+    large_box_penalty: ${reward.grounding_bbox.large_box_penalty}
+    hard_negative_iou_threshold: ${reward.grounding_bbox.hard_negative_iou_threshold}
+    hard_negative_overlap_penalty: ${reward.grounding_bbox.hard_negative_overlap_penalty}
+    positive_duplicate_iou_threshold: ${reward.grounding_bbox.positive_duplicate_iou_threshold}
+    min_reward: ${reward.grounding_bbox.min_reward}
+    max_reward: ${reward.grounding_bbox.max_reward}
