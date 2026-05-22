@@ -2,6 +2,15 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.18.0] - 2026-05-22
+
+- Add disabled-by-default VLM training image augmentation configuration under `configs/image_augmentation/base.yaml`.
+- Support train-only image augmentation for SFT, DPO, GRPO, Async GRPO, and SDPO dataset pipelines while leaving validation, evaluation, and test image processing unaugmented.
+- Add configurable image transforms for rotation, JPEG compression, Gaussian blur, contrast, brightness, sharpness, grayscale conversion, noise, erasure, and ink-bleed simulation.
+- Preserve existing image resize behavior when augmentation is disabled and combine augmentation with resize processing when augmentation is enabled.
+- Document VLM image augmentation options, safety guidance for bbox/grounding labels, and common CLI override keys in README and the usage guide.
+- Declare `pillow==12.1.1` as a direct dependency in `requirements.txt` and `pyproject.toml`.
+
 ## [v1.17.0] - 2026-05-21
 
 - Add a GRPO completion termination patch that treats configured terminal token ids, terminal token texts, tokenizer EOS/PAD, and optionally model generation EOS as valid completion terminators.
