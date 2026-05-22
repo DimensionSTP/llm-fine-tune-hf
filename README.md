@@ -211,6 +211,18 @@ completion_termination.include_model_generation_eos={True or False}
 
 `completion_termination` is GRPO-only and disabled by default. It extends TRL's truncated-completion masking beyond tokenizer EOS/PAD by treating configured terminal token ids or token texts as valid completion terminators. `infer_finished_from_short_completion=True` also treats generations shorter than `max_completion_length` as terminated. SDPO and async GRPO do not use this option.
 
+* VLM training image augmentation
+
+```shell
+image_augmentation.enabled={True or False}
+image_augmentation.probability={0.0 to 1.0}
+image_augmentation.rotation_degrees={degrees}
+image_augmentation.jpeg_quality_min={1 to 100}
+image_augmentation.jpeg_quality_max={1 to 100}
+```
+
+`image_augmentation` is disabled by default and applies only to training images for SFT, DPO, GRPO, async GRPO, and SDPO datasets. Validation, evaluation, and test datasets are not augmented. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees` and `erase_probability` disabled unless labels are transformed consistently.
+
 * Reward embedding vLLM environment isolation
 
 ```shell
