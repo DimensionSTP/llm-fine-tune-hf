@@ -14,6 +14,8 @@ import urllib.request
 
 from PIL import Image
 
+from .image_augmentation import _build_image_augmenter
+
 
 class StructuralDataset:
     def __init__(
@@ -33,6 +35,7 @@ class StructuralDataset:
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        image_augmentation: Dict[str, Any],
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -50,6 +53,10 @@ class StructuralDataset:
             modality=modality,
             max_pixels=max_pixels,
             do_resize=do_resize,
+        )
+        self.image_augmenter = _build_image_augmenter(
+            config=image_augmentation,
+            seed=seed,
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
@@ -90,7 +97,7 @@ class StructuralDataset:
             remove_columns=remove_columns,
         )
 
-        if self._should_resize_images:
+        if self._should_resize_images and self.image_augmenter is None:
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -104,6 +111,12 @@ class StructuralDataset:
             train_dataset = dataset
 
         val_dataset = split_dataset["test"]
+
+        if self.image_augmenter is not None:
+            train_dataset = train_dataset.with_transform(
+                self._process_train_image_columns
+            )
+            val_dataset = val_dataset.with_transform(self._process_eval_image_columns)
 
         return {
             "train": train_dataset,
@@ -256,16 +269,23 @@ class StructuralDataset:
         except Exception:
             return None
 
-    def _resize_single_image(
+    def _process_single_image(
         self,
         image: Any,
+        apply_image_augmentation: bool,
     ) -> Any:
-        if not self._should_resize_images:
+        if not apply_image_augmentation and not self._should_resize_images:
             return image
 
         pil_image = self._load_image(image=image)
         if pil_image is None:
             return image
+
+        if apply_image_augmentation and self.image_augmenter is not None:
+            pil_image = self.image_augmenter(pil_image)
+
+        if not self._should_resize_images:
+            return pil_image
 
         target_size = self._compute_target_size(
             width=pil_image.width,
@@ -286,12 +306,44 @@ class StructuralDataset:
         self,
         example: Dict[str, Any],
     ) -> Dict[str, Any]:
+        return self._process_image_columns(
+            example=example,
+            apply_image_augmentation=False,
+        )
+
+    def _process_image_columns(
+        self,
+        example: Dict[str, Any],
+        apply_image_augmentation: bool,
+    ) -> Dict[str, Any]:
         if "images" in example and example["images"] is not None:
             if isinstance(example["images"], list):
                 example["images"] = [
-                    self._resize_single_image(image=img) for img in example["images"]
+                    self._process_single_image(
+                        image=img,
+                        apply_image_augmentation=apply_image_augmentation,
+                    )
+                    for img in example["images"]
                 ]
         return example
+
+    def _process_train_image_columns(
+        self,
+        example: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._process_image_columns(
+            example=example,
+            apply_image_augmentation=True,
+        )
+
+    def _process_eval_image_columns(
+        self,
+        example: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._process_image_columns(
+            example=example,
+            apply_image_augmentation=False,
+        )
 
 
 class ConversationalDataset(StructuralDataset):
@@ -309,6 +361,7 @@ class ConversationalDataset(StructuralDataset):
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        image_augmentation: Dict[str, Any],
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -323,6 +376,10 @@ class ConversationalDataset(StructuralDataset):
             modality=modality,
             max_pixels=max_pixels,
             do_resize=do_resize,
+        )
+        self.image_augmenter = _build_image_augmenter(
+            config=image_augmentation,
+            seed=seed,
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
@@ -374,7 +431,7 @@ class ConversationalDataset(StructuralDataset):
         if remove_columns:
             dataset = dataset.remove_columns(remove_columns)
 
-        if self._should_resize_images:
+        if self._should_resize_images and self.image_augmenter is None:
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -388,6 +445,12 @@ class ConversationalDataset(StructuralDataset):
             train_dataset = dataset
 
         val_dataset = split_dataset["test"]
+
+        if self.image_augmenter is not None:
+            train_dataset = train_dataset.with_transform(
+                self._process_train_image_columns
+            )
+            val_dataset = val_dataset.with_transform(self._process_eval_image_columns)
 
         return {
             "train": train_dataset,
