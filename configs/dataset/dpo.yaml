@@ -15,6 +15,7 @@ structural:
   modality: ${modality}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
 
 conversational:
   _target_: src.datasets.DPOConversationalDataset
@@ -30,3 +31,4 @@ conversational:
   modality: ${modality}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}

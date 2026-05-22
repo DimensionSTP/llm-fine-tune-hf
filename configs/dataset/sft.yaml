@@ -24,6 +24,7 @@ structural:
   max_length: ${max_length}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
   response_start_template: ${response_start_template}
   response_end_template: ${response_end_template}
 
@@ -51,5 +52,6 @@ conversational:
   max_length: ${max_length}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
   response_start_template: ${response_start_template}
   response_end_template: ${response_end_template}

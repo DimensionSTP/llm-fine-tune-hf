@@ -1,0 +1,22 @@
+# @package _global_
+image_augmentation:
+  enabled: false
+  seed_offset: 0
+  probability: 0.0
+  rotation_degrees: 0.0
+  jpeg_quality_min: 95
+  jpeg_quality_max: 95
+  gaussian_blur_max: 0.0
+  contrast_min: 1.0
+  contrast_max: 1.0
+  brightness_min: 1.0
+  brightness_max: 1.0
+  sharpness_min: 1.0
+  sharpness_max: 1.0
+  grayscale_probability: 0.0
+  noise_std_max: 0.0
+  erase_probability: 0.0
+  erase_area_min: 0.0
+  erase_area_max: 0.0
+  ink_bleed_probability: 0.0
+  ink_bleed_strength: 0.0

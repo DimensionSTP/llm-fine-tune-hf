@@ -14,6 +14,7 @@ structural:
   modality: ${modality}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
   decode_image_paths: ${decode_image_paths}
 
 conversational:
@@ -30,4 +31,5 @@ conversational:
   modality: ${modality}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
   decode_image_paths: ${decode_image_paths}

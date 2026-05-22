@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - dataset: sft
+  - image_augmentation: base
   - training_arguments: sft
   - trainer: sft
   - deepspeed: ds_config

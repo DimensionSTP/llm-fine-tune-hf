@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - dataset: grpo
+  - image_augmentation: base
   - training_arguments: grpo
   - trainer: grpo
   - reward@reward_manager: manager
