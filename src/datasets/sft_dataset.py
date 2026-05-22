@@ -1,6 +1,5 @@
 from typing import Dict, List, Optional, Any
 import os
-
 import base64
 import io
 import math
@@ -14,6 +13,8 @@ import torch
 from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
+
+from .image_augmentation import _build_image_augmenter
 
 
 class StructuralDataset(Dataset):
@@ -37,6 +38,7 @@ class StructuralDataset(Dataset):
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        image_augmentation: Dict[str, Any],
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -67,6 +69,12 @@ class StructuralDataset(Dataset):
             max_pixels=max_pixels,
             do_resize=do_resize,
         )
+        self.image_augmenter = None
+        if split == "train":
+            self.image_augmenter = _build_image_augmenter(
+                config=image_augmentation,
+                seed=seed,
+            )
 
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
@@ -165,8 +173,8 @@ class StructuralDataset(Dataset):
 
             if not image:
                 image = None
-            elif self._should_resize_images:
-                image = [self._resize_single_image(img) for img in image]
+            elif self.image_augmenter is not None or self._should_resize_images:
+                image = [self._process_single_image(img) for img in image]
 
         encoded = self.encode_data(
             data=prompt,
@@ -440,16 +448,22 @@ class StructuralDataset(Dataset):
         except Exception:
             return None
 
-    def _resize_single_image(
+    def _process_single_image(
         self,
         image: Any,
     ) -> Any:
-        if not self._should_resize_images:
+        if self.image_augmenter is None and not self._should_resize_images:
             return image
 
         pil_image = self._load_image(image=image)
         if pil_image is None:
             return image
+
+        if self.image_augmenter is not None:
+            pil_image = self.image_augmenter(pil_image)
+
+        if not self._should_resize_images:
+            return pil_image
 
         target_size = self._compute_target_size(
             width=pil_image.width,
@@ -486,6 +500,7 @@ class ConversationalDataset(StructuralDataset):
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        image_augmentation: Dict[str, Any],
         custom_data_encoder_path: str,
         revision: str,
         reference_data_encoder_name: str,
@@ -514,6 +529,12 @@ class ConversationalDataset(StructuralDataset):
             max_pixels=max_pixels,
             do_resize=do_resize,
         )
+        self.image_augmenter = None
+        if split == "train":
+            self.image_augmenter = _build_image_augmenter(
+                config=image_augmentation,
+                seed=seed,
+            )
 
         if is_preprocessed:
             data_encoder_path = custom_data_encoder_path
@@ -613,8 +634,8 @@ class ConversationalDataset(StructuralDataset):
 
             if not image:
                 image = None
-            elif self._should_resize_images:
-                image = [self._resize_single_image(img) for img in image]
+            elif self.image_augmenter is not None or self._should_resize_images:
+                image = [self._process_single_image(img) for img in image]
 
         encoded = self.encode_data(
             data=prompt,

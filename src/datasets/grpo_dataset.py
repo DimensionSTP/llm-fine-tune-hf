@@ -14,6 +14,8 @@ import urllib.request
 
 from PIL import Image
 
+from .image_augmentation import _build_image_augmenter
+
 
 class StructuralDataset:
     def __init__(
@@ -32,6 +34,7 @@ class StructuralDataset:
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        image_augmentation: Dict[str, Any],
         decode_image_paths: bool = False,
     ) -> None:
         self.data_path = data_path
@@ -50,6 +53,10 @@ class StructuralDataset:
             modality=modality,
             max_pixels=max_pixels,
             do_resize=do_resize,
+        )
+        self.image_augmenter = _build_image_augmenter(
+            config=image_augmentation,
+            seed=seed,
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
@@ -90,7 +97,7 @@ class StructuralDataset:
             remove_columns=remove_columns,
         )
 
-        if self._should_resize_images:
+        if self._should_resize_images and self.image_augmenter is None:
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -105,9 +112,15 @@ class StructuralDataset:
 
         val_dataset = split_dataset["test"]
 
-        if self.decode_image_paths:
-            train_dataset = self._decode_image_paths(train_dataset)
-            val_dataset = self._decode_image_paths(val_dataset)
+        if self.decode_image_paths or self.image_augmenter is not None:
+            train_dataset = self._decode_image_paths(
+                dataset=train_dataset,
+                apply_image_augmentation=self.image_augmenter is not None,
+            )
+            val_dataset = self._decode_image_paths(
+                dataset=val_dataset,
+                apply_image_augmentation=False,
+            )
 
         return {
             "train": train_dataset,
@@ -260,6 +273,40 @@ class StructuralDataset:
         except Exception:
             return image
 
+    def _process_single_image(
+        self,
+        image: Any,
+        apply_image_augmentation: bool,
+    ) -> Any:
+        pil_image = self._load_image(image=image)
+        if pil_image is None:
+            if self.decode_image_paths or apply_image_augmentation:
+                raise ValueError(
+                    f"Failed to decode image source for GRPO image processing: {repr(image)[:200]}"
+                )
+            return image
+
+        if apply_image_augmentation and self.image_augmenter is not None:
+            pil_image = self.image_augmenter(pil_image)
+
+        if not self._should_resize_images:
+            return pil_image
+
+        target_size = self._compute_target_size(
+            width=pil_image.width,
+            height=pil_image.height,
+        )
+        if target_size is None:
+            return pil_image
+
+        try:
+            return pil_image.resize(
+                target_size,
+                self.resample_filter,
+            )
+        except Exception:
+            return image
+
     def _resize_image_columns(
         self,
         example: Dict[str, Any],
@@ -276,33 +323,65 @@ class StructuralDataset:
     def _decode_image_value(
         self,
         image: Any,
+        apply_image_augmentation: bool,
     ) -> Any:
         if isinstance(image, list):
-            return [self._decode_image_value(image=item) for item in image]
+            return [
+                self._decode_image_value(
+                    image=item,
+                    apply_image_augmentation=apply_image_augmentation,
+                )
+                for item in image
+            ]
 
-        pil_image = self._load_image(image=image)
-        if pil_image is None:
-            raise ValueError(
-                f"Failed to decode image source with decode_image_paths=True: {repr(image)[:200]}"
-            )
-
-        return pil_image
+        return self._process_single_image(
+            image=image,
+            apply_image_augmentation=apply_image_augmentation,
+        )
 
     def _decode_image_columns(
         self,
         example: Dict[str, Any],
+        apply_image_augmentation: bool,
     ) -> Dict[str, Any]:
         if "images" in example and example["images"] is not None:
-            example["images"] = self._decode_image_value(image=example["images"])
+            example["images"] = self._decode_image_value(
+                image=example["images"],
+                apply_image_augmentation=apply_image_augmentation,
+            )
         if "image" in example and example["image"] is not None:
-            example["image"] = self._decode_image_value(image=example["image"])
+            example["image"] = self._decode_image_value(
+                image=example["image"],
+                apply_image_augmentation=apply_image_augmentation,
+            )
         return example
+
+    def _decode_train_image_columns(
+        self,
+        example: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._decode_image_columns(
+            example=example,
+            apply_image_augmentation=True,
+        )
+
+    def _decode_eval_image_columns(
+        self,
+        example: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._decode_image_columns(
+            example=example,
+            apply_image_augmentation=False,
+        )
 
     def _decode_image_paths(
         self,
         dataset: HFDataset,
+        apply_image_augmentation: bool,
     ) -> HFDataset:
-        return dataset.with_transform(self._decode_image_columns)
+        if apply_image_augmentation:
+            return dataset.with_transform(self._decode_train_image_columns)
+        return dataset.with_transform(self._decode_eval_image_columns)
 
 
 class ConversationalDataset(StructuralDataset):
@@ -320,6 +399,7 @@ class ConversationalDataset(StructuralDataset):
         modality: str,
         max_pixels: Optional[int],
         do_resize: bool,
+        image_augmentation: Dict[str, Any],
         decode_image_paths: bool = False,
     ) -> None:
         self.data_path = data_path
@@ -336,6 +416,10 @@ class ConversationalDataset(StructuralDataset):
             modality=modality,
             max_pixels=max_pixels,
             do_resize=do_resize,
+        )
+        self.image_augmenter = _build_image_augmenter(
+            config=image_augmentation,
+            seed=seed,
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
@@ -378,7 +462,7 @@ class ConversationalDataset(StructuralDataset):
         if remove_columns:
             dataset = dataset.remove_columns(remove_columns)
 
-        if self._should_resize_images:
+        if self._should_resize_images and self.image_augmenter is None:
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -393,9 +477,15 @@ class ConversationalDataset(StructuralDataset):
 
         val_dataset = split_dataset["test"]
 
-        if self.decode_image_paths:
-            train_dataset = self._decode_image_paths(train_dataset)
-            val_dataset = self._decode_image_paths(val_dataset)
+        if self.decode_image_paths or self.image_augmenter is not None:
+            train_dataset = self._decode_image_paths(
+                dataset=train_dataset,
+                apply_image_augmentation=self.image_augmenter is not None,
+            )
+            val_dataset = self._decode_image_paths(
+                dataset=val_dataset,
+                apply_image_augmentation=False,
+            )
 
         return {
             "train": train_dataset,
