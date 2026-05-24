@@ -163,6 +163,14 @@ bash scripts/test/test_vllm_multi_turn.sh
 is_sft={True or False}
 ```
 
+* SFT loss type
+
+```shell
+sft_loss_type={nll or chunked_nll}
+```
+
+`chunked_nll` is SFT-only and reduces peak VRAM for long-context SFT while keeping the NLL objective. It is not compatible with `training_arguments.use_liger_kernel=True`.
+
 * Use preprocessed tokenizer option
 
 ```shell

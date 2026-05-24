@@ -86,6 +86,7 @@ if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm
 ## Common Runtime Options
 
 - Data/tokenization: `is_sft`, `is_preprocessed`, `left_padding`, `max_length`, `response_end_template`
+- SFT loss: `sft_loss_type`
 - Training strategy: `strategy=deepspeed`
 - PEFT/quantization: `is_quantized`, `is_peft`
 - LoRA merge: `merge_max_shard_size`, `merge_pack_qwen_moe_experts`
