@@ -4,6 +4,7 @@ dataset_kwargs:
   skip_prepare_dataset: true
 chat_template_path: ${chat_template_path}
 use_liger_kernel: false
+loss_type: ${sft_loss_type}
 packing: false
 truncation_mode: ${truncation_mode}
 pad_to_multiple_of: ${pad_to_multiple_of}
