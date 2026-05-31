@@ -16,7 +16,6 @@ import re
 import json
 import shutil
 from collections import defaultdict
-from pathlib import Path
 
 import torch
 
@@ -120,27 +119,37 @@ def parse_size_to_bytes(
 
 
 def load_safetensors_index(
-    checkpoint_dir: Path,
+    checkpoint_dir: str,
 ) -> dict:
-    index_path = checkpoint_dir / "model.safetensors.index.json"
-    if not index_path.is_file():
+    index_path = os.path.join(
+        checkpoint_dir,
+        "model.safetensors.index.json",
+    )
+    if not os.path.isfile(index_path):
         raise FileNotFoundError(f"Missing safetensors index: {index_path}")
-    with index_path.open() as f:
+    with open(index_path) as f:
         return json.load(f)
 
 
 def copy_non_weight_files(
-    input_dir: Path,
-    output_dir: Path,
+    input_dir: str,
+    output_dir: str,
 ) -> None:
-    for source in input_dir.iterdir():
-        if source.name == "model.safetensors.index.json":
+    for source_name in os.listdir(input_dir):
+        if source_name == "model.safetensors.index.json":
             continue
-        if source.suffix == ".safetensors":
+        if source_name.endswith(".safetensors"):
             continue
 
-        target = output_dir / source.name
-        if source.is_dir():
+        source = os.path.join(
+            input_dir,
+            source_name,
+        )
+        target = os.path.join(
+            output_dir,
+            source_name,
+        )
+        if os.path.isdir(source):
             shutil.copytree(
                 source,
                 target,
@@ -185,13 +194,16 @@ def group_qwen_moe_expert_keys(
 
 
 def _load_safetensor_tensor(
-    source_dir: Path,
+    source_dir: str,
     weight_map: dict[str, str],
     name: str,
 ) -> torch.Tensor:
     shard_name = weight_map[name]
     with safe_open(
-        source_dir / shard_name,
+        os.path.join(
+            source_dir,
+            shard_name,
+        ),
         framework="pt",
         device="cpu",
     ) as shard:
@@ -201,13 +213,13 @@ def _load_safetensor_tensor(
 class _SafetensorsShardWriter:
     def __init__(
         self,
-        temp_dir: Path,
+        temp_dir: str,
         max_shard_size_bytes: int,
     ) -> None:
         self.temp_dir = temp_dir
         self.max_shard_size_bytes = max_shard_size_bytes
         self.weight_map: dict[str, str] = {}
-        self.temp_shards: list[Path] = []
+        self.temp_shards: list[str] = []
         self.current_tensors: dict[str, torch.Tensor] = {}
         self.current_names: list[str] = []
         self.current_bytes = 0
@@ -240,7 +252,10 @@ class _SafetensorsShardWriter:
             return
 
         temp_name = f"model-{len(self.temp_shards) + 1:05d}.safetensors"
-        temp_path = self.temp_dir / temp_name
+        temp_path = os.path.join(
+            self.temp_dir,
+            temp_name,
+        )
         save_file(
             self.current_tensors,
             temp_path,
@@ -274,9 +289,15 @@ class _SafetensorsShardWriter:
             start=1,
         ):
             final_name = f"model-{idx:05d}-of-{shard_count:05d}.safetensors"
-            final_path = self.temp_dir / final_name
-            temp_path.rename(final_path)
-            final_name_map[temp_path.name] = final_name
+            final_path = os.path.join(
+                self.temp_dir,
+                final_name,
+            )
+            os.rename(
+                temp_path,
+                final_path,
+            )
+            final_name_map[os.path.basename(temp_path)] = final_name
 
         return {
             tensor_name: final_name_map[temp_name]
@@ -315,7 +336,7 @@ def _validate_qwen_moe_expert_group(
 def _pack_qwen_moe_expert_group(
     prefix: str,
     expert_keys: dict[int, dict[str, str]],
-    source_dir: Path,
+    source_dir: str,
     weight_map: dict[str, str],
     shard_writer: _SafetensorsShardWriter,
 ) -> None:
@@ -416,7 +437,7 @@ def pack_qwen_moe_experts_checkpoint(
     max_shard_size: object,
 ) -> int:
     """Rewrite a saved Qwen MoE checkpoint with fused expert tensors."""
-    source_dir = Path(checkpoint_dir)
+    source_dir = os.path.normpath(checkpoint_dir)
     index = load_safetensors_index(
         checkpoint_dir=source_dir,
     )
@@ -430,14 +451,20 @@ def pack_qwen_moe_experts_checkpoint(
     max_shard_size_bytes = parse_size_to_bytes(
         max_shard_size,
     )
-    temp_dir = source_dir.with_name(f".{source_dir.name}.packed-{os.getpid()}")
-    backup_dir = source_dir.with_name(f".{source_dir.name}.unpacked-{os.getpid()}")
-    if temp_dir.exists():
+    temp_dir = os.path.join(
+        os.path.dirname(source_dir),
+        f".{os.path.basename(source_dir)}.packed-{os.getpid()}",
+    )
+    backup_dir = os.path.join(
+        os.path.dirname(source_dir),
+        f".{os.path.basename(source_dir)}.unpacked-{os.getpid()}",
+    )
+    if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    if backup_dir.exists():
+    if os.path.exists(backup_dir):
         shutil.rmtree(backup_dir)
-    temp_dir.mkdir(
-        parents=True,
+    os.makedirs(
+        temp_dir,
         exist_ok=False,
     )
     copy_non_weight_files(
@@ -462,7 +489,10 @@ def pack_qwen_moe_experts_checkpoint(
 
     for shard_name in sorted(shard_to_names):
         with safe_open(
-            source_dir / shard_name,
+            os.path.join(
+                source_dir,
+                shard_name,
+            ),
             framework="pt",
             device="cpu",
         ) as shard:
@@ -499,7 +529,13 @@ def pack_qwen_moe_experts_checkpoint(
 
     metadata = dict(index.get("metadata") or {})
     metadata["total_size"] = shard_writer.total_size
-    with (temp_dir / "model.safetensors.index.json").open("w") as f:
+    with open(
+        os.path.join(
+            temp_dir,
+            "model.safetensors.index.json",
+        ),
+        "w",
+    ) as f:
         json.dump(
             {
                 "metadata": metadata,
@@ -511,11 +547,20 @@ def pack_qwen_moe_experts_checkpoint(
         )
         f.write("\n")
 
-    source_dir.rename(backup_dir)
+    os.rename(
+        source_dir,
+        backup_dir,
+    )
     try:
-        temp_dir.rename(source_dir)
+        os.rename(
+            temp_dir,
+            source_dir,
+        )
     except Exception:
-        backup_dir.rename(source_dir)
+        os.rename(
+            backup_dir,
+            source_dir,
+        )
         raise
     shutil.rmtree(backup_dir)
 
