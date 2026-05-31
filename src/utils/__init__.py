@@ -17,6 +17,8 @@ from .rewards import (
 from .reward_vector_store import FaissIndex
 from .reward_embedding import VllmEmbedding
 from .hydra_resolvers import register_hydra_resolvers
+from .config_validation import validate_train_artifact_config
+from .run_metadata import prepare_train_artifact_config, write_run_metadata
 from .test_utils import (
     build_test_dataloader,
     generate_test_results,
@@ -62,6 +64,9 @@ __all__ = [
     "FaissIndex",
     "VllmEmbedding",
     "register_hydra_resolvers",
+    "validate_train_artifact_config",
+    "prepare_train_artifact_config",
+    "write_run_metadata",
     "build_test_dataloader",
     "generate_test_results",
     "save_test_results_json",
