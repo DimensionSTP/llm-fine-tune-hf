@@ -2,6 +2,19 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.19.0] - 2026-06-01
+
+- Add SFT `sft_loss_type` configuration with `nll` and `chunked_nll` options, wire it into SFT training arguments, and validate that `chunked_nll` is not combined with Liger kernel execution.
+- Add automatic train `run_id` allocation so training outputs are written under `${output_base_dir}/${run_id}` and resume flows recover `run_id`, `output_base_dir`, and `output_dir` from the resumed checkpoint path.
+- Add training run metadata artifacts, including `run_manifest.json`, `resolved_config.yaml`, and `training_args.json`, before model construction for reproducibility and downstream auditability.
+- Move runtime batch-size fields out of checkpoint path names and into run metadata while preserving method, model, dataset, strategy, PEFT, length, and active reward information in `save_detail`.
+- Add `output_base_dir`, runtime-populated `output_dir`, and nullable `run_id` defaults across SFT, DPO, KTO, GKD, GRPO, SDPO, and Async GRPO configs.
+- Update postprocessing merge and Hugging Face Hub upload entrypoints to resolve existing artifacts from `output_base_dir` plus `run_id`, and update scripts to call module entrypoints instead of reconstructing checkpoint paths from batch fields.
+- Update Hugging Face Hub token access to the current `get_token()` API across upload and scaling utilities.
+- Simplify reward save suffix generation to derive path suffixes from active reward keys.
+- Declare Qwen3.5 runtime dependencies `causal-conv1d==1.6.2.post1` and `flash-linear-attention==0.5.0` in both direct dependency files.
+- Document `--no-build-isolation` install commands, SFT loss-type selection, run artifact workflow, and the updated training/postprocessing artifact contract.
+
 ## [v1.18.0] - 2026-05-22
 
 - Add disabled-by-default VLM training image augmentation configuration under `configs/image_augmentation/base.yaml`.
