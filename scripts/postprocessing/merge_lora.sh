@@ -1,6 +1,5 @@
 #!/bin/bash
 
-path="src/postprocessing"
 connected_dir="/data/llm-fine-tune-hf"
 upload_user="Qwen"
 model_type="Qwen3-8B"
@@ -11,13 +10,11 @@ is_peft=False
 r=128
 lora_alpha=512
 max_length=4096
-batch_size=16
-devices=8
-gradient_accumulation_steps=1
 dataset_name="tulu"
 strategy="deepspeed"
+run_id="run-0001"
 
-python $path/merge_lora.py \
+python -m src.postprocessing.merge_lora \
     connected_dir=$connected_dir \
     upload_user=$upload_user \
     model_type=$model_type \
@@ -28,8 +25,6 @@ python $path/merge_lora.py \
     peft_config.r=$r \
     peft_config.lora_alpha=$lora_alpha \
     max_length=$max_length \
-    batch_size=$batch_size \
-    devices=$devices \
-    gradient_accumulation_steps=$gradient_accumulation_steps \
     dataset_name=$dataset_name \
-    strategy=$strategy
+    strategy=$strategy \
+    run_id=$run_id

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-path="src/postprocessing"
 dataset_name="tulu"
 strategy="deepspeed"
 model_detail="Qwen3-8B"
@@ -9,11 +8,10 @@ is_sft=True
 is_quantized=False
 is_peft=False
 max_length=4096
-batch_size=16
-gradient_accumulation_steps=1
 step=1000
+run_id="run-0001"
 
-python $path/upload_to_hf_hub.py \
+python -m src.postprocessing.upload_to_hf_hub \
     dataset_name=$dataset_name \
     strategy=$strategy \
     model_detail=$model_detail \
@@ -22,6 +20,5 @@ python $path/upload_to_hf_hub.py \
     is_quantized=$is_quantized \
     is_peft=$is_peft \
     max_length=$max_length \
-    batch_size=$batch_size \
-    gradient_accumulation_steps=$gradient_accumulation_steps \
+    run_id=$run_id \
     step=$step
