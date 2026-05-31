@@ -22,7 +22,7 @@ from safetensors.torch import save_file
 
 from tqdm import tqdm
 
-from huggingface_hub import HfApi, HfFolder
+from huggingface_hub import HfApi, get_token
 
 import hydra
 from omegaconf import DictConfig
@@ -252,7 +252,7 @@ def width_upscale(
         )
 
     api = HfApi()
-    token = HfFolder.get_token()
+    token = get_token()
 
     api.create_repo(
         repo_id=repo_id,

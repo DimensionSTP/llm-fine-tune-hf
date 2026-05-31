@@ -12,7 +12,7 @@ os.environ["HF_HOME"] = os.environ.get("HF_HOME")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore")
 
-from huggingface_hub import HfApi, HfFolder
+from huggingface_hub import HfApi, get_token
 
 import hydra
 from omegaconf import DictConfig
@@ -27,7 +27,7 @@ def upload_to_hf_hub(
 ) -> None:
     save_dir = f"{config.output_dir}/checkpoint-{config.step}"
     api = HfApi()
-    token = HfFolder.get_token()
+    token = get_token()
 
     repo_id = f"{config.user_name}/{config.model_detail}-{config.upload_tag}"
     api.create_repo(
