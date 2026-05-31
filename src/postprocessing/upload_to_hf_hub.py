@@ -17,6 +17,8 @@ from huggingface_hub import HfApi, get_token
 import hydra
 from omegaconf import DictConfig
 
+from .artifacts import resolve_existing_artifact_output_dir
+
 
 @hydra.main(
     config_path="../../configs/",
@@ -25,6 +27,10 @@ from omegaconf import DictConfig
 def upload_to_hf_hub(
     config: DictConfig,
 ) -> None:
+    resolve_existing_artifact_output_dir(
+        config=config,
+    )
+
     save_dir = f"{config.output_dir}/checkpoint-{config.step}"
     api = HfApi()
     token = get_token()

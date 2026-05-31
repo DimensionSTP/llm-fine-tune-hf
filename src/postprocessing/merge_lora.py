@@ -33,6 +33,8 @@ from safetensors.torch import safe_open, save_file
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
+from .artifacts import resolve_existing_artifact_output_dir
+
 
 def torch_dtype_from_precision(
     precision: object,
@@ -527,6 +529,10 @@ def pack_qwen_moe_experts_checkpoint(
 def merge_lora(
     config: DictConfig,
 ) -> None:
+    resolve_existing_artifact_output_dir(
+        config=config,
+    )
+
     base_model_name_or_path = config.pretrained_model_name
     adapter_path = config.peft_test.adapter_path
     merged_output_path = os.path.join(

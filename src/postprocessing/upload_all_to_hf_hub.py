@@ -19,6 +19,8 @@ from tqdm import tqdm
 import hydra
 from omegaconf import DictConfig
 
+from .artifacts import resolve_existing_artifact_output_dir
+
 
 @hydra.main(
     config_path="../../configs/",
@@ -27,6 +29,10 @@ from omegaconf import DictConfig
 def upload_to_hf_hub(
     config: DictConfig,
 ) -> None:
+    resolve_existing_artifact_output_dir(
+        config=config,
+    )
+
     base_dir = config.output_dir
     api = HfApi()
     token = get_token()
