@@ -18,17 +18,17 @@ conda create -n myenv python=3.12 -y
 conda activate myenv
 
 # install requirements
-pip install -r requirements.txt
+pip install --no-build-isolation -r requirements.txt
 ```
 
 ### Quick setup (pyproject.toml)
 
 ```bash
 # install project dependencies from pyproject.toml
-pip install .
+pip install --no-build-isolation .
 
 # [OPTIONAL] editable install for development
-pip install -e .
+pip install --no-build-isolation -e .
 ```
 
 ### Optional GPU dependency (flash-attn)
@@ -62,6 +62,8 @@ USER_NAME={USER_NAME}
 ```shell
 python main.py mode=train
 ```
+
+Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path.
 
 ### Test
 
@@ -267,6 +269,16 @@ The label in `solution` should be a JSON object with `grounding_status`, optiona
 
 For labels whose `grounding_status` is not `found`, the reward treats an answer with non-`found` status and empty `evidence_occurrences` as the correct negative grounding result.
 
+* Postprocessing artifact paths
+
+```shell
+bash scripts/postprocessing/merge_lora.sh
+bash scripts/postprocessing/upload_to_hf_hub.sh
+bash scripts/postprocessing/upload_all_to_hf_hub.sh
+```
+
+Postprocessing scripts keep `run_id` as a script-local variable. The Python entrypoint resolves `output_dir` from config-composed `output_base_dir` and `run_id`; scripts do not reconstruct checkpoint paths from batch size, devices, gradient accumulation, or timestamps.
+
 * LoRA merge shard size
 
 ```shell
@@ -280,7 +292,7 @@ merge_pack_qwen_moe_experts={True or False}
 ```
 
 ```shell
-python src/postprocessing/merge_lora.py merge_max_shard_size=6GB merge_pack_qwen_moe_experts=True
+python -m src.postprocessing.merge_lora merge_max_shard_size=6GB merge_pack_qwen_moe_experts=True
 ```
 
 Use `merge_pack_qwen_moe_experts=True` only for Qwen MoE checkpoints saved with unpacked per-expert tensors. Non-Qwen or already-packed checkpoints should keep the default `false`.

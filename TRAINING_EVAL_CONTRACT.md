@@ -39,9 +39,13 @@ Dependency notes:
 
 ## Output Contract
 
-- `train`: checkpoint/model artifacts must be written to config-defined output directory.
+- `train`: checkpoint/model artifacts must be written to config-defined output directory:
+  `${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}/${run_id}`.
+- `train`: `run_id` must be allocated automatically by Python as an ordered `run-000N` leaf.
+- `train`: runtime batch-size fields must be logged as metadata, not embedded in `save_detail`.
 - `test*`: evaluation/generation artifacts must be written to mode-specific test output paths.
 - Runs must log enough metadata (model, dataset, key runtime options) for reproducibility.
+- Postprocessing scripts must keep `run_id` as a script-local variable, let the Python entrypoint resolve artifact paths from config-composed `output_base_dir`, and must not require command-line or environment overrides at execution time.
 
 ## Compatibility Rules
 

@@ -7,14 +7,14 @@ Practical runbook for training and inference flows in `llm-fine-tune-hf`.
 ## Install
 
 ```bash
-pip install -r requirements.txt
+pip install --no-build-isolation -r requirements.txt
 ```
 
 or
 
 ```bash
-pip install .
-pip install -e .
+pip install --no-build-isolation .
+pip install --no-build-isolation -e .
 ```
 
 Optional GPU dependency (`flash-attn`):
@@ -51,6 +51,8 @@ python main.py mode=test_vllm
 python main.py mode=test_vllm_multi_turn
 ```
 
+Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path.
+
 ## Script-based Execution
 
 - `bash scripts/preprocessing/preprocess.sh`
@@ -82,6 +84,16 @@ python main.py --config-name=async_grpo.yaml mode=train
 # fallback cleanup for script-managed server
 if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm_server.pid)"; fi
 ```
+
+Postprocessing artifact paths:
+
+```bash
+bash scripts/postprocessing/merge_lora.sh
+bash scripts/postprocessing/upload_to_hf_hub.sh
+bash scripts/postprocessing/upload_all_to_hf_hub.sh
+```
+
+Postprocessing scripts keep `run_id` as a script-local variable. The Python entrypoint resolves the artifact path from config-composed `output_base_dir` and `run_id`.
 
 ## Common Runtime Options
 
