@@ -24,7 +24,14 @@ def train(
     config: DictConfig,
 ) -> None:
     rank = int(os.environ.get("RANK", 0))
+    prepare_train_artifact_config(
+        config=config,
+        rank=rank,
+    )
     if rank == 0:
+        validate_train_artifact_config(
+            config=config,
+        )
         wandb.init(
             project=config.project_name,
             name=config.logging_name,
@@ -75,6 +82,11 @@ def train(
     ds_config = setup.get_ds_config()
     training_arguments = setup.get_training_arguments(
         ds_config=ds_config,
+    )
+    write_run_metadata(
+        config=config,
+        training_arguments=training_arguments,
+        rank=rank,
     )
 
     if config.fine_tune_method == "async_grpo":
