@@ -1,6 +1,9 @@
+from typing import Dict, List, Optional, Any
 import os
 
 from omegaconf import DictConfig
+
+from .distributed_runtime import build_distributed_runtime_snapshot
 
 
 def validate_training_arguments_config(
@@ -47,3 +50,75 @@ def validate_train_artifact_config(
         raise ValueError(
             f"resume_from_checkpoint does not exist: {resume_from_checkpoint}"
         )
+
+
+def validate_distributed_runtime_config(
+    config: DictConfig,
+    runtime_snapshot: Optional[Dict[str, Any]] = None,
+) -> None:
+    if config.mode != "train":
+        return
+
+    snapshot = runtime_snapshot
+    if snapshot is None:
+        snapshot = build_distributed_runtime_snapshot(config=config)
+
+    planned_distributed = snapshot["distributed"]["planned"]
+    if not planned_distributed["enabled"]:
+        return
+
+    validation_mode = str(planned_distributed["validation_mode"])
+    if validation_mode not in {"warn", "error"}:
+        raise ValueError(
+            "distributed.validation_mode must be either 'warn' or 'error'."
+        )
+
+    messages = _build_distributed_validation_messages(runtime_snapshot=snapshot)
+    if len(messages) == 0:
+        return
+
+    if validation_mode == "error":
+        raise ValueError("\n".join(messages))
+
+    for message in messages:
+        print(f"[distributed][warn] {message}")
+
+
+def _build_distributed_validation_messages(
+    runtime_snapshot: Dict[str, Any],
+) -> List[str]:
+    planned_distributed = runtime_snapshot["distributed"]["planned"]
+    observed_distributed = runtime_snapshot["distributed"]["observed"]
+    device_runtime = runtime_snapshot["device"]
+    messages = []
+
+    if planned_distributed["world_size"] != observed_distributed["world_size"]:
+        messages.append(
+            "planned world_size="
+            f"{planned_distributed['world_size']} but observed WORLD_SIZE="
+            f"{observed_distributed['world_size']}."
+        )
+
+    if (
+        observed_distributed["local_world_size"] > 1
+        and planned_distributed["num_processes_per_machine"]
+        != observed_distributed["local_world_size"]
+    ):
+        messages.append(
+            "planned num_processes_per_machine="
+            f"{planned_distributed['num_processes_per_machine']} but observed "
+            f"LOCAL_WORLD_SIZE={observed_distributed['local_world_size']}."
+        )
+
+    if (
+        device_runtime["selected_device_count"] > 0
+        and planned_distributed["num_processes_per_machine"]
+        != device_runtime["selected_device_count"]
+    ):
+        messages.append(
+            "planned num_processes_per_machine="
+            f"{planned_distributed['num_processes_per_machine']} but selected "
+            f"device count={device_runtime['selected_device_count']}."
+        )
+
+    return messages

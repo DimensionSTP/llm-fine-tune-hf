@@ -2,7 +2,6 @@ from typing import Dict, List, Optional, Any
 import os
 import re
 import json
-import socket
 import subprocess
 import sys
 import time
@@ -10,6 +9,8 @@ import time
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from transformers import TrainingArguments
+
+from .distributed_runtime import build_distributed_runtime_snapshot
 
 
 def prepare_train_artifact_config(
@@ -285,13 +286,7 @@ def build_source_section() -> Dict[str, Any]:
 def build_runtime_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    return {
-        "devices": _to_jsonable(config.devices),
-        "effective_batch_size": get_effective_batch_size(config=config),
-        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-        "world_size": int(os.environ.get("WORLD_SIZE", "1")),
-        "rank_zero_host": socket.gethostname(),
-    }
+    return build_distributed_runtime_snapshot(config=config)
 
 
 def build_summary_section(
@@ -322,6 +317,7 @@ def build_summary_section(
             "eval_batch_size",
             "gradient_accumulation_steps",
             "devices",
+            "distributed",
             "workers_ratio",
             "use_all_workers",
             "lr",
@@ -483,11 +479,8 @@ def select_config_values(
 def get_effective_batch_size(
     config: DictConfig,
 ) -> int:
-    return (
-        int(config.batch_size)
-        * get_device_count(config=config)
-        * int(config.gradient_accumulation_steps)
-    )
+    runtime_snapshot = build_distributed_runtime_snapshot(config=config)
+    return int(runtime_snapshot["effective_batch_size"])
 
 
 def get_device_count(
