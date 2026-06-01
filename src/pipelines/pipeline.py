@@ -60,6 +60,11 @@ def train(
         elif isinstance(config.devices, list):
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, config.devices))
 
+    if rank == 0:
+        validate_distributed_runtime_config(
+            config=config,
+        )
+
     setup = SetUp(config)
     if run_async_inference_server(
         config=config,
