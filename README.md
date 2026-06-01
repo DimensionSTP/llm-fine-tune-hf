@@ -63,7 +63,7 @@ USER_NAME={USER_NAME}
 python main.py mode=train
 ```
 
-Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path.
+Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, set `distributed.enabled=true` and configure `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, and `distributed.main_process_port`; `run_manifest.json` records planned and observed distributed, device, and batch runtime metadata.
 
 ### Test
 
