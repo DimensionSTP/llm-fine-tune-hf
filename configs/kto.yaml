@@ -96,6 +96,15 @@ warmup_ratio: 5e-2
 
 beta: 0.1
 
+distributed:
+  enabled: false
+  num_machines: 1
+  num_processes_per_machine: null
+  machine_rank: ${oc.decode:${oc.env:MACHINE_RANK,0}}
+  main_process_ip: ${oc.env:MAIN_PROCESS_IP,127.0.0.1}
+  main_process_port: ${oc.decode:${oc.env:MAIN_PROCESS_PORT,29500}}
+  validation_mode: warn
+
 devices: ${oc.decode:${oc.env:DEVICES,null}}
 strategy: deepspeed
 logging_steps: 10
