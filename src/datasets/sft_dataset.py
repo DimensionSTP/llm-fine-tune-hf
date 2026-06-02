@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any
 import os
 import base64
 import io
@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
 
+from ..helpers import build_enable_thinking_kwargs
 from .image_augmentation import _build_image_augmenter
 
 
@@ -267,11 +268,15 @@ class StructuralDataset(Dataset):
                 },
             ]
 
+        chat_template_kwargs = build_enable_thinking_kwargs(
+            data_encoder=self.data_encoder,
+            is_enable_thinking=self.is_enable_thinking,
+        )
         prompt = self.data_encoder.apply_chat_template(
             conversation=conversation,
             tokenize=False,
             add_generation_prompt=False,
-            enable_thinking=self.is_enable_thinking,
+            **chat_template_kwargs,
         )
         return prompt
 
@@ -381,7 +386,7 @@ class StructuralDataset(Dataset):
         self,
         width: int,
         height: int,
-    ) -> Optional[tuple[int, int]]:
+    ) -> Optional[Tuple[int, int]]:
         if self.max_pixels is None:
             return None
 
@@ -704,10 +709,14 @@ class ConversationalDataset(StructuralDataset):
             }
             preprocessed_conversation.append(preprocessed_turn)
 
+        chat_template_kwargs = build_enable_thinking_kwargs(
+            data_encoder=self.data_encoder,
+            is_enable_thinking=self.is_enable_thinking,
+        )
         prompt = self.data_encoder.apply_chat_template(
             conversation=preprocessed_conversation,
             tokenize=False,
             add_generation_prompt=False,
-            enable_thinking=self.is_enable_thinking,
+            **chat_template_kwargs,
         )
         return prompt

@@ -17,6 +17,7 @@ import wandb
 
 from tqdm import tqdm
 
+from ..helpers import build_enable_thinking_kwargs
 from ..utils import *
 
 
@@ -410,12 +411,16 @@ def test_vllm(
                 for turn in conversation
             ]
             label = preprocessed_conversation.pop()[config.content_column_name]
+            chat_template_kwargs = build_enable_thinking_kwargs(
+                data_encoder=data_encoder,
+                is_enable_thinking=config.is_enable_thinking,
+            )
 
             prompt = data_encoder.apply_chat_template(
                 conversation=preprocessed_conversation,
                 tokenize=False,
                 add_generation_prompt=True,
-                enable_thinking=config.is_enable_thinking,
+                **chat_template_kwargs,
             )
             prompts.append(prompt)
             labels.append(label)
@@ -431,12 +436,16 @@ def test_vllm(
                     config.content_column_name: data,
                 },
             ]
+            chat_template_kwargs = build_enable_thinking_kwargs(
+                data_encoder=data_encoder,
+                is_enable_thinking=config.is_enable_thinking,
+            )
 
             prompt = data_encoder.apply_chat_template(
                 conversation=conversation,
                 tokenize=False,
                 add_generation_prompt=True,
-                enable_thinking=config.is_enable_thinking,
+                **chat_template_kwargs,
             )
             prompts.append(prompt)
             labels.append(label)
@@ -549,11 +558,15 @@ def test_vllm_multi_turn(
                             config.content_column_name: content,
                         }
                     )
+                    chat_template_kwargs = build_enable_thinking_kwargs(
+                        data_encoder=data_encoder,
+                        is_enable_thinking=config.is_enable_thinking,
+                    )
                     prompt = data_encoder.apply_chat_template(
                         conversation=conversation,
                         tokenize=False,
                         add_generation_prompt=True,
-                        enable_thinking=config.is_enable_thinking,
+                        **chat_template_kwargs,
                     )
 
                     prompt_token_ids = data_encoder.encode(prompt)
@@ -592,11 +605,15 @@ def test_vllm_multi_turn(
                         config.content_column_name: contents,
                     }
                 ]
+                chat_template_kwargs = build_enable_thinking_kwargs(
+                    data_encoder=data_encoder,
+                    is_enable_thinking=config.is_enable_thinking,
+                )
                 prompt = data_encoder.apply_chat_template(
                     conversation=conversation,
                     tokenize=False,
                     add_generation_prompt=True,
-                    enable_thinking=config.is_enable_thinking,
+                    **chat_template_kwargs,
                 )
 
                 output = llm.generate(
