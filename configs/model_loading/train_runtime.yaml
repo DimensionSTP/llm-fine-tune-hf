@@ -1,0 +1,15 @@
+# @package _global_
+model_loading:
+  train:
+    device_map: null
+    quantized_local_rank_device_map: true
+  inference:
+    device_map: null
+    test_large_device_map: auto
+  deepspeed:
+    zero3_init: auto
+  qlora:
+    deepspeed_zero3_enabled: false
+    quant_storage_dtype: bfloat16
+  fsdp:
+    require_training_arguments: true

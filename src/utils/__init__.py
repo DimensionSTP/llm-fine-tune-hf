@@ -1,4 +1,5 @@
 from .setup import SetUp
+from .model_loading import ModelLoadPlan, ModelLoadPlanner
 from .collate_fns import collate_fn_vlm
 from .rewards import (
     RewardManager,
@@ -52,6 +53,8 @@ from .async_grpo_runtime import (
 
 __all__ = [
     "SetUp",
+    "ModelLoadPlan",
+    "ModelLoadPlanner",
     "collate_fn_vlm",
     "RewardManager",
     "ThinkFormatReward",

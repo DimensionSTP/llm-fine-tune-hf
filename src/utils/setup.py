@@ -14,7 +14,6 @@ import torch
 from torch.utils.data import Dataset
 
 from transformers import (
-    AutoConfig,
     AutoTokenizer,
     AutoProcessor,
     PreTrainedTokenizer,
@@ -22,7 +21,6 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForImageTextToText,
     PreTrainedModel,
-    BitsAndBytesConfig,
     TrainingArguments,
 )
 
@@ -30,6 +28,7 @@ from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_pef
 
 from ..datasets import *
 from .config_validation import validate_training_arguments_config
+from .model_loading import ModelLoadPlanner
 from src.utils.rewards import RewardManager
 
 
@@ -63,6 +62,12 @@ class SetUp:
         else:
             self.torch_dtype = "auto"
 
+        self.model_load_planner = ModelLoadPlanner(
+            config=self.config,
+            torch_dtype=self.torch_dtype,
+        )
+        self.hf_deepspeed_config = None
+
     def get_train_dataset(self) -> Dataset:
         train_dataset: Dataset = instantiate(
             self.config.dataset[self.data_type],
@@ -90,66 +95,28 @@ class SetUp:
         return test_dataset
 
     def get_model(self) -> PreTrainedModel:
-        is_inference = getattr(self.config, "mode", "train") in ["test", "test_large"]
-        pretrained_model_name = self.config.pretrained_model_name
-        if not is_inference and self.config.is_preprocessed:
-            merged_model_path = os.path.join(
-                self.config.merged_model_path,
-                self.config.pretrained_model_name,
-            )
-            if os.path.exists(merged_model_path):
-                pretrained_model_name = merged_model_path
-
-        quantization_config = None
-        device_map = None
-        pretrained_config = None
-        if not is_inference and self.config.is_quantized:
-            quantization_config_dict = OmegaConf.to_container(
-                self.config.quantization_config,
-                resolve=True,
-            )
-            quantization_config = BitsAndBytesConfig(**quantization_config_dict)
-            if device_map is None:
-                device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
-
-        if getattr(self.config, "mode", "train") == "test_large":
-            device_map = "auto"
-
-        if not self.config.is_quantized:
-            pretrained_config = AutoConfig.from_pretrained(
-                pretrained_model_name,
-                revision=self.revision,
-                trust_remote_code=True,
-            )
-            if getattr(pretrained_config, "quantization_config", None) is None:
-                pretrained_config_dict = pretrained_config.to_dict()
-                pretrained_config_dict.pop(
-                    "quantization_config",
-                    None,
-                )
-                pretrained_config = pretrained_config.__class__.from_dict(
-                    pretrained_config_dict,
-                )
-            pretrained_config.output_hidden_states = False
+        is_inference = self.config.mode in ["test", "test_large"]
+        model_load_plan = self.model_load_planner.build()
+        self.hf_deepspeed_config = model_load_plan.hf_deepspeed_config
 
         if self.config.modality == "text":
             model = AutoModelForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=pretrained_model_name,
-                config=pretrained_config,
+                pretrained_model_name_or_path=model_load_plan.pretrained_model_name,
+                config=model_load_plan.pretrained_config,
                 torch_dtype=self.torch_dtype,
                 attn_implementation=self.config.attn_implementation,
-                quantization_config=quantization_config,
-                device_map=device_map,
+                quantization_config=model_load_plan.quantization_config,
+                device_map=model_load_plan.device_map,
                 revision=self.revision,
             )
         else:
             model = AutoModelForImageTextToText.from_pretrained(
-                pretrained_model_name_or_path=pretrained_model_name,
-                config=pretrained_config,
+                pretrained_model_name_or_path=model_load_plan.pretrained_model_name,
+                config=model_load_plan.pretrained_config,
                 torch_dtype=self.torch_dtype,
                 attn_implementation=self.config.attn_implementation,
-                quantization_config=quantization_config,
-                device_map=device_map,
+                quantization_config=model_load_plan.quantization_config,
+                device_map=model_load_plan.device_map,
                 revision=self.revision,
             )
 
@@ -201,9 +168,10 @@ class SetUp:
 
             print(f"[router-only] Unfroze {unfrozen} / {total} parameters (tensors).")
 
-        if self.config.is_quantized and self.config.quantization_config.get(
-            "load_in_4bit",
-            False,
+        if self.config.is_quantized and OmegaConf.select(
+            self.config,
+            "quantization_config.load_in_4bit",
+            default=False,
         ):
             model = prepare_model_for_kbit_training(model)
 

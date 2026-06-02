@@ -8,6 +8,7 @@ defaults:
   - reward@reward_database: database
   - reward@reward_embedding: embedding
   - deepspeed: ds_config
+  - model_loading: train_runtime
   - dataset@test_dataset: test
   - dense_to_moe: dense_to_moe
   - hydra: hydra
