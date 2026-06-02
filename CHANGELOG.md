@@ -2,6 +2,20 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.20.0] - 2026-06-03
+
+- Add distributed runtime planning, validation, and manifest metadata for single-node and multi-node training, including planned/observed world size, local process count, device selection, and effective batch-size reporting.
+- Add distributed config defaults across SFT, DPO, KTO, GKD, GRPO, SDPO, and Async GRPO with `distributed.enabled`, `num_machines`, `num_processes_per_machine`, `machine_rank`, `main_process_ip`, `main_process_port`, and `validation_mode`.
+- Add a shared model-loading policy planner and `configs/model_loading/train_runtime.yaml` to centralize DeepSpeed ZeRO-3 initialization, QLoRA device-map handling, inference device maps, and FSDP validation rules.
+- Add managed Async GRPO split-runtime support for trainer/vLLM separation, including rank-specific runtime handling, stop-signal coordination, isolated vLLM server environment setup, readiness checks, and configurable vLLM server flags.
+- Add multi-node launch scripts for SFT, DPO, KTO, GKD, GRPO colocate, GRPO external-server, Async GRPO, and SDPO training.
+- Add a local SDPO trainer wrapper that supports PEFT EMA teacher updates under ZeRO-3 while preserving TRL SDPO trainer behavior for non-PEFT paths.
+- Add conditional chat-template thinking kwargs so `enable_thinking` is passed only when the active tokenizer or processor chat template supports it.
+- Add DPO preference dataset image-path decoding support and extend existing GRPO image payload decoding to handle dictionary payloads with image bytes or paths.
+- Fix LoRA streaming vLLM weight synchronization for Qwen3.5/Qwen3.6-style language-model prefixes and quantized base weights.
+- Expose vector reward weights in GRPO and SDPO launcher scripts and update default training/script values for Qwen3.5/Qwen3.6 model families.
+- Document multi-node launchers, distributed runtime manifest metadata, Async GRPO split-runtime expectations, and GRPO vLLM/QLoRA compatibility limits.
+
 ## [v1.19.0] - 2026-06-01
 
 - Add SFT `sft_loss_type` configuration with `nll` and `chunked_nll` options, wire it into SFT training arguments, and validate that `chunked_nll` is not combined with Liger kernel execution.
