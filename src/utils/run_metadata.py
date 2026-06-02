@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any
 import os
 import re
 import json
@@ -58,7 +58,7 @@ def prepare_resume_artifact_config(
 def allocate_or_read_run_directory(
     output_base_dir: str,
     rank: int,
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     if get_world_size() <= 1:
         return allocate_next_run_directory(output_base_dir=output_base_dir)
 
@@ -82,7 +82,7 @@ def allocate_or_read_run_directory(
 
 def allocate_next_run_directory(
     output_base_dir: str,
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     os.makedirs(
         output_base_dir,
         exist_ok=True,
@@ -104,7 +104,7 @@ def allocate_next_run_directory(
 
 def read_run_directory_allocation(
     allocation_path: str,
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     deadline = time.time() + 300
     while time.time() < deadline:
         if os.path.isfile(allocation_path):
@@ -331,6 +331,8 @@ def build_summary_section(
             "precision",
             "is_bf16",
             "is_quantized",
+            "quantization_config",
+            "model_loading",
             "is_peft",
             "peft_config",
             "gradient_checkpointing",

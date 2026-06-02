@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Dict, List, Union, Optional, Any
 import os
 
 from omegaconf import DictConfig
@@ -9,8 +9,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from transformers import PreTrainedTokenizer, ProcessorMixin, PreTrainedModel
+
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
+
 from huggingface_hub import snapshot_download
 
 from tqdm import tqdm
@@ -43,8 +45,8 @@ def generate_test_results(
     device: Union[int, torch.device],
     tqdm_desc: str,
     tqdm_disable: bool,
-) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
     with torch.inference_mode():
         for batch in tqdm(
             test_loader,
@@ -74,7 +76,9 @@ def generate_test_results(
 
             labels = batch["labels"]
 
-            for instruction, generation, label in zip(instructions, generations, labels):
+            for instruction, generation, label in zip(
+                instructions, generations, labels
+            ):
                 results.append(
                     {
                         "instruction": instruction,
@@ -87,7 +91,7 @@ def generate_test_results(
 
 
 def save_test_results_json(
-    results: list[dict[str, Any]],
+    results: List[Dict[str, Any]],
     output_dir: str,
     output_name: str,
 ) -> pd.DataFrame:
@@ -182,7 +186,7 @@ def build_vllm(
 
 def build_sampling_params(
     config: DictConfig,
-    stop_token_ids: list[int],
+    stop_token_ids: List[int],
 ) -> SamplingParams:
     if config.do_sample:
         generation_config = config.generation_config

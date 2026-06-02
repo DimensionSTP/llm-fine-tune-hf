@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union, Optional, Callable, Any
+from typing import Dict, List, Tuple, Set, Union, Optional, Callable, Any
 from abc import ABC, abstractmethod
 import re
 import json
@@ -9,11 +9,11 @@ import io
 import queue
 import math
 
+from omegaconf import DictConfig, ListConfig
+
 import numpy as np
 from rouge_score import rouge_scorer
 from ast import literal_eval
-
-from omegaconf import DictConfig, ListConfig
 
 from src.utils.reward_vector_store import FaissIndex
 from src.utils.reward_embedding import VllmEmbedding
@@ -1058,12 +1058,12 @@ class RetrievalBaseReward(BaseReward):
     @staticmethod
     def _build_ground_truth_lookup(
         flat_gt: List[Any],
-    ) -> Tuple[Union[set[Any], List[Any]], int]:
+    ) -> Tuple[Union[Set[Any], List[Any]], int]:
         if not flat_gt:
             return set(), 0
 
         try:
-            gt_lookup: Union[set[Any], List[Any]] = set(flat_gt)
+            gt_lookup: Union[Set[Any], List[Any]] = set(flat_gt)
             return gt_lookup, len(gt_lookup)
         except TypeError:
             unique_gt: List[Any] = []
@@ -1568,7 +1568,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
     @staticmethod
     def _compute_ndcg(
         ranked_candidates: List[Any],
-        gt_lookup: Union[set[Any], List[Any]],
+        gt_lookup: Union[Set[Any], List[Any]],
         num_relevant: int,
         top_k: int,
     ) -> float:
@@ -1933,7 +1933,7 @@ class MultiKVReward(SingleKVReward):
         self,
         pred_json: Any,
         gt_json: Any,
-    ) -> tuple[int, int]:
+    ) -> Tuple[int, int]:
         pred_leaves = self._extract_leaf_values_excluding_tables(node=pred_json)
         gt_leaves = self._extract_leaf_values_excluding_tables(node=gt_json)
 
@@ -1999,7 +1999,7 @@ class MultiKVReward(SingleKVReward):
         self,
         pred_json: Any,
         gt_json: Any,
-    ) -> tuple[int, int]:
+    ) -> Tuple[int, int]:
         pred_tables = pred_json.get("tables") if isinstance(pred_json, dict) else None
         gt_tables = gt_json.get("tables") if isinstance(gt_json, dict) else None
         pred_tables = pred_tables if isinstance(pred_tables, dict) else {}

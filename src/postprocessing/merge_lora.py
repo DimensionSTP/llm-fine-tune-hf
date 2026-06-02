@@ -12,6 +12,7 @@ os.environ["HF_HOME"] = os.environ.get("HF_HOME")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore")
 
+from typing import Dict, List, Optional, Any
 import re
 import json
 import shutil
@@ -120,7 +121,7 @@ def parse_size_to_bytes(
 
 def load_safetensors_index(
     checkpoint_dir: str,
-) -> dict:
+) -> Dict[str, Any]:
     index_path = os.path.join(
         checkpoint_dir,
         "model.safetensors.index.json",
@@ -164,7 +165,7 @@ def copy_non_weight_files(
 
 def _match_qwen_moe_expert_key(
     key: str,
-) -> re.Match[str] | None:
+) -> Optional[re.Match[str]]:
     return re.match(
         r"^(?P<prefix>.+\.mlp\.experts)\."
         r"(?P<expert_idx>\d+)\."
@@ -174,9 +175,9 @@ def _match_qwen_moe_expert_key(
 
 
 def group_qwen_moe_expert_keys(
-    weight_map: dict[str, str],
-) -> dict[str, dict[int, dict[str, str]]]:
-    grouped_keys: dict[str, dict[int, dict[str, str]]] = defaultdict(
+    weight_map: Dict[str, str],
+) -> Dict[str, Dict[int, Dict[str, str]]]:
+    grouped_keys: Dict[str, Dict[int, Dict[str, str]]] = defaultdict(
         lambda: defaultdict(dict)
     )
     for key in weight_map:
@@ -195,7 +196,7 @@ def group_qwen_moe_expert_keys(
 
 def _load_safetensor_tensor(
     source_dir: str,
-    weight_map: dict[str, str],
+    weight_map: Dict[str, str],
     name: str,
 ) -> torch.Tensor:
     shard_name = weight_map[name]
@@ -218,10 +219,10 @@ class _SafetensorsShardWriter:
     ) -> None:
         self.temp_dir = temp_dir
         self.max_shard_size_bytes = max_shard_size_bytes
-        self.weight_map: dict[str, str] = {}
-        self.temp_shards: list[str] = []
-        self.current_tensors: dict[str, torch.Tensor] = {}
-        self.current_names: list[str] = []
+        self.weight_map: Dict[str, str] = {}
+        self.temp_shards: List[str] = []
+        self.current_tensors: Dict[str, torch.Tensor] = {}
+        self.current_names: List[str] = []
         self.current_bytes = 0
         self.total_size = 0
 
@@ -279,11 +280,11 @@ class _SafetensorsShardWriter:
 
     def finalize_shards(
         self,
-    ) -> dict[str, str]:
+    ) -> Dict[str, str]:
         self.flush()
 
         shard_count = len(self.temp_shards)
-        final_name_map: dict[str, str] = {}
+        final_name_map: Dict[str, str] = {}
         for idx, temp_path in enumerate(
             self.temp_shards,
             start=1,
@@ -307,8 +308,8 @@ class _SafetensorsShardWriter:
 
 def _validate_qwen_moe_expert_group(
     prefix: str,
-    expert_keys: dict[int, dict[str, str]],
-) -> list[int]:
+    expert_keys: Dict[int, Dict[str, str]],
+) -> List[int]:
     expert_indices = sorted(expert_keys)
     if expert_indices != list(
         range(len(expert_indices)),
@@ -335,9 +336,9 @@ def _validate_qwen_moe_expert_group(
 
 def _pack_qwen_moe_expert_group(
     prefix: str,
-    expert_keys: dict[int, dict[str, str]],
+    expert_keys: Dict[int, Dict[str, str]],
     source_dir: str,
-    weight_map: dict[str, str],
+    weight_map: Dict[str, str],
     shard_writer: _SafetensorsShardWriter,
 ) -> None:
     expert_indices = _validate_qwen_moe_expert_group(
@@ -441,7 +442,7 @@ def pack_qwen_moe_experts_checkpoint(
     index = load_safetensors_index(
         checkpoint_dir=source_dir,
     )
-    old_weight_map: dict[str, str] = index["weight_map"]
+    old_weight_map: Dict[str, str] = index["weight_map"]
     expert_groups = group_qwen_moe_expert_keys(
         weight_map=old_weight_map,
     )
@@ -472,7 +473,7 @@ def pack_qwen_moe_experts_checkpoint(
         output_dir=temp_dir,
     )
 
-    shard_to_names: dict[str, list[str]] = defaultdict(list)
+    shard_to_names: Dict[str, List[str]] = defaultdict(list)
     for tensor_name, shard_name in old_weight_map.items():
         shard_to_names[shard_name].append(tensor_name)
 

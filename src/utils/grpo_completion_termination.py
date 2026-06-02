@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Dict, List, Tuple, Set, Optional, Any
 from types import MethodType
 
 from omegaconf import DictConfig, ListConfig
@@ -60,7 +60,7 @@ def patch_grpo_completion_termination(
 def _resolve_terminal_tokens(
     trainer: Any,
     termination_config: DictConfig,
-) -> tuple[set[int], list[tuple[int, ...]]]:
+) -> Tuple[Set[int], List[Tuple[int, ...]]]:
     terminal_token_ids = set()
     tokenizer = trainer._tokenizer
 
@@ -101,7 +101,7 @@ def _resolve_terminal_tokens(
 
 def _to_list(
     value: Any,
-) -> list[Any]:
+) -> List[Any]:
     if value is None:
         return []
     if isinstance(value, (list, tuple, ListConfig)):
@@ -111,7 +111,7 @@ def _to_list(
 
 def _generate_with_completion_termination(
     trainer: Any,
-    prompts: list,
+    prompts: List[Any],
 ):
     output = trainer._original_generate_for_completion_termination(prompts)
     completion_ids = output[1]
@@ -126,8 +126,8 @@ def _generate_with_completion_termination(
 
 def _generate_and_score_with_completion_termination(
     trainer: Any,
-    inputs: list[dict[str, torch.Tensor | Any]],
-) -> dict[str, torch.Tensor | Any]:
+    inputs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
     if not trainer.mask_truncated_completions:
         return trainer._original_generate_and_score_for_completion_termination(inputs)
 
@@ -161,8 +161,8 @@ def _generate_and_score_with_completion_termination(
 
 def _log_completion_termination_metrics(
     trainer: Any,
-    completion_ids: list[list[int]],
-    tool_mask: list[list[int]] | None,
+    completion_ids: List[List[int]],
+    tool_mask: Optional[List[List[int]]],
 ) -> None:
     mode = "train" if trainer.model.training else "eval"
     device = trainer.accelerator.device
@@ -202,7 +202,7 @@ def _log_completion_termination_metrics(
 
 def _build_completion_termination_tensor(
     trainer: Any,
-    completion_ids: list[list[int]],
+    completion_ids: List[List[int]],
     device: torch.device,
 ) -> torch.Tensor:
     return _build_truncation_tensor(
@@ -216,10 +216,10 @@ def _build_completion_termination_tensor(
 
 
 def _build_truncation_tensor(
-    completion_ids: list[list[int]],
+    completion_ids: List[List[int]],
     device: torch.device,
-    terminal_token_ids: set[int],
-    terminal_token_sequences: list[tuple[int, ...]],
+    terminal_token_ids: Set[int],
+    terminal_token_sequences: List[Tuple[int, ...]],
     infer_short_completion: bool,
     max_completion_length: int,
 ) -> torch.Tensor:
@@ -239,9 +239,9 @@ def _build_truncation_tensor(
 
 
 def _is_terminated(
-    token_ids: list[int],
-    terminal_token_ids: set[int],
-    terminal_token_sequences: list[tuple[int, ...]],
+    token_ids: List[int],
+    terminal_token_ids: Set[int],
+    terminal_token_sequences: List[Tuple[int, ...]],
     infer_short_completion: bool,
     max_completion_length: int,
 ) -> bool:
@@ -267,7 +267,7 @@ def _is_terminated(
 def _unpadded_completion_ids(
     completion_ids: torch.Tensor,
     completion_mask: torch.Tensor,
-) -> list[list[int]]:
+) -> List[List[int]]:
     result = []
     for token_ids, mask in zip(completion_ids, completion_mask, strict=True):
         length = int(mask.sum().item())
