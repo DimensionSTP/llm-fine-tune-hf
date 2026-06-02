@@ -9,16 +9,16 @@ is_strict_split=False
 dataset_name="tulu"
 dataset_format="parquet"
 is_preprocessed=False
-strategy="deepspeed"
+strategy="none"
 upload_user="Qwen"
-model_type="Qwen3-8B"
+model_type="Qwen3.5-9B"
 revision="main"
 left_padding=False
 is_enable_thinking=False
 is_quantized=False
 is_peft=False
 r=128
-lora_alpha=256
+lora_alpha=512
 target_modules="all-linear"
 lora_dropout=0.0
 max_length=2048
@@ -42,11 +42,10 @@ max_inflight_tasks=-1
 max_staleness=4
 queue_maxsize=1024
 weight_sync_steps=1
-vllm_server_model="${VLLM_SERVER_MODEL:-Qwen/Qwen3-8B}"
 vllm_server_tensor_parallel_size=1
-vllm_server_gpu_memory_utilization="${VLLM_SERVER_GPU_MEMORY_UTILIZATION:-0.85}"
+vllm_server_gpu_memory_utilization=0.95
 vllm_server_log_path="${VLLM_SERVER_LOG_PATH:-/tmp/async_grpo_vllm_server.log}"
-vllm_server_pid_path="${VLLM_SERVER_PID_PATH:-/tmp/async_grpo_vllm_server.pid}"
+vllm_server_ready_timeout=120
 is_answer_tag=True
 lr=5e-7
 weight_decay=1e-1
@@ -55,8 +54,6 @@ epoch=2
 step=250
 workers_ratio=8
 use_all_workers=False
-vllm_gpu_ids=""
-trainer_gpu_ids=""
 
 declare -A reward_weights=(
     ["think_format"]=0.0
@@ -67,6 +64,9 @@ declare -A reward_weights=(
     ["equation"]=0.0
     ["retrieval_hit"]=0.0
     ["retrieval_ndcg"]=0.0
+    ["single_kv"]=0.0
+    ["multi_kv"]=0.0
+    ["grounding_bbox"]=0.0
 )
 
 reward_weight_keys=(
@@ -78,6 +78,9 @@ reward_weight_keys=(
     "equation"
     "retrieval_hit"
     "retrieval_ndcg"
+    "single_kv"
+    "multi_kv"
+    "grounding_bbox"
 )
 
 reward_weight_args=()
@@ -85,110 +88,7 @@ for key in "${reward_weight_keys[@]}"; do
     reward_weight_args+=("reward.weight.${key}=${reward_weights[$key]}")
 done
 
-resolve_half_gpu_partition() {
-    if ! command -v nvidia-smi >/dev/null 2>&1; then
-        echo "[error] async_grpo requires nvidia-smi for half-half GPU partition."
-        exit 1
-    fi
-
-    local physical_count
-    physical_count="$(nvidia-smi -L 2>/dev/null | grep -Ec '^GPU [0-9]+:' || true)"
-    if [ -z "${physical_count}" ] || [ "${physical_count}" -lt 2 ]; then
-        echo "[error] async_grpo requires >=2 GPUs. detected=${physical_count:-0}"
-        exit 1
-    fi
-
-    if [ $((physical_count % 2)) -ne 0 ]; then
-        echo "[error] async_grpo half-half partition requires even GPU count. detected=${physical_count}"
-        exit 1
-    fi
-
-    local split_idx
-    split_idx=$((physical_count / 2))
-
-    vllm_gpu_ids="$(seq -s, 0 $((split_idx - 1)))"
-    trainer_gpu_ids="$(seq -s, "${split_idx}" $((physical_count - 1)))"
-
-    echo "[async_grpo] GPU partition (half-half): vllm=${vllm_gpu_ids}, trainer=${trainer_gpu_ids}, physical=${physical_count}"
-}
-
-wait_vllm_server_ready() {
-    local base_url="$1"
-    local max_wait_sec="${2:-120}"
-
-    for _ in $(seq 1 "$max_wait_sec"); do
-        if python - "$base_url" <<'PY'
-import json
-import sys
-import urllib.request
-
-base_url = sys.argv[1]
-url = base_url + "/v1/models"
-try:
-    with urllib.request.urlopen(url, timeout=1.0) as response:
-        if response.status == 200:
-            payload = json.loads(response.read().decode("utf-8"))
-            if "data" in payload:
-                raise SystemExit(0)
-except Exception:
-    pass
-raise SystemExit(1)
-PY
-        then
-            return 0
-        fi
-        sleep 1
-    done
-    return 1
-}
-
-start_vllm_server() {
-    echo "[async_grpo] Starting vLLM server at ${vllm_server_base_url}"
-    CUDA_VISIBLE_DEVICES="${vllm_gpu_ids}" VLLM_SERVER_DEV_MODE="${VLLM_SERVER_DEV_MODE:-1}" python -m vllm.entrypoints.openai.api_server \
-        --model "${vllm_server_model}" \
-        --host "${vllm_server_host}" \
-        --port "${vllm_server_port}" \
-        --tensor-parallel-size "${vllm_server_tensor_parallel_size}" \
-        --gpu-memory-utilization "${vllm_server_gpu_memory_utilization}" \
-        --weight-transfer-config '{"backend":"nccl"}' \
-        > "${vllm_server_log_path}" 2>&1 &
-    local pid=$!
-    echo "${pid}" > "${vllm_server_pid_path}"
-}
-
-cleanup_vllm_server() {
-    if [ ! -f "${vllm_server_pid_path}" ]; then
-        return
-    fi
-
-    local pid
-    pid="$(cat "${vllm_server_pid_path}")"
-    if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
-        echo "[async_grpo] Stopping vLLM server pid=${pid}"
-        kill "${pid}" 2>/dev/null || true
-        wait "${pid}" 2>/dev/null || true
-    fi
-    rm -f "${vllm_server_pid_path}"
-}
-
-if wait_vllm_server_ready "${vllm_server_base_url}" 1; then
-    echo "[error] Existing vLLM server already running at ${vllm_server_base_url}"
-    echo "[hint] Stop existing server or change port, then rerun."
-    exit 1
-fi
-
-resolve_half_gpu_partition
-start_vllm_server
-trap cleanup_vllm_server EXIT
-
-if ! wait_vllm_server_ready "${vllm_server_base_url}" 120; then
-    echo "[error] vLLM server did not become ready: ${vllm_server_base_url}"
-    echo "[hint] See log: ${vllm_server_log_path}"
-    cleanup_vllm_server
-    exit 1
-fi
-
-CUDA_VISIBLE_DEVICES="${trainer_gpu_ids}" accelerate launch main.py --config-name=async_grpo.yaml mode=train \
+accelerate launch --num_processes=1 main.py --config-name=async_grpo.yaml mode=train \
     modality=$modality \
     data_type=$data_type \
     split_ratio=$split_ratio \
@@ -227,7 +127,15 @@ CUDA_VISIBLE_DEVICES="${trainer_gpu_ids}" accelerate launch main.py --config-nam
     max_staleness=$max_staleness \
     queue_maxsize=$queue_maxsize \
     weight_sync_steps=$weight_sync_steps \
-    async_runtime.enable=false \
+    async_runtime.enable=true \
+    async_runtime.vllm_server.auto_start=true \
+    async_runtime.vllm_server.auto_stop=true \
+    async_runtime.vllm_server.host=$vllm_server_host \
+    async_runtime.vllm_server.port=$vllm_server_port \
+    async_runtime.vllm_server.ready_timeout=$vllm_server_ready_timeout \
+    async_runtime.vllm_server.tensor_parallel_size=$vllm_server_tensor_parallel_size \
+    async_runtime.vllm_server.gpu_memory_utilization=$vllm_server_gpu_memory_utilization \
+    async_runtime.vllm_server.log_path=$vllm_server_log_path \
     reward.is_answer_tag=$is_answer_tag \
     "${reward_weight_args[@]}" \
     lr=$lr \

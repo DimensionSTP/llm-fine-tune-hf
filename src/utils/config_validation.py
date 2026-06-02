@@ -10,6 +10,12 @@ from .model_loading import ModelLoadPlanner
 def validate_training_arguments_config(
     config: DictConfig,
 ) -> None:
+    if config.fine_tune_method == "async_grpo" and config.strategy == "deepspeed":
+        raise ValueError(
+            "async_grpo does not support strategy=deepspeed yet. "
+            "Use strategy=none for the validated trainer/vLLM split path."
+        )
+
     ModelLoadPlanner(
         config=config,
         torch_dtype="auto",

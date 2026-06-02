@@ -1,7 +1,6 @@
 from typing import Dict, List, Tuple, Union, Optional, Any
-
-import json
 import os
+import json
 import shutil
 import subprocess
 import time
@@ -10,19 +9,17 @@ import urllib.request
 from omegaconf import DictConfig
 
 
-def resolve_async_half_gpu_partition(
-) -> Dict[str, Union[str, int]]:
+def _resolve_visible_gpu_list() -> List[str]:
     visible_devices = os.environ.get(
         "CUDA_VISIBLE_DEVICES",
         "",
     ).strip()
     if visible_devices:
-        visible_gpu_list = [
-            gpu_id.strip()
-            for gpu_id in visible_devices.split(",")
-            if gpu_id.strip()
+        return [
+            gpu_id.strip() for gpu_id in visible_devices.split(",") if gpu_id.strip()
         ]
-    elif shutil.which("nvidia-smi") is not None:
+
+    if shutil.which("nvidia-smi") is not None:
         result = subprocess.run(
             ["nvidia-smi", "-L"],
             check=False,
@@ -30,15 +27,19 @@ def resolve_async_half_gpu_partition(
             text=True,
         )
         gpu_lines = result.stdout.splitlines()
-        visible_gpu_list = [
+        return [
             str(gpu_idx)
             for gpu_idx, gpu_line in enumerate(gpu_lines)
             if gpu_line.startswith("GPU ")
         ]
-    else:
-        raise ValueError(
-            "async_grpo requires CUDA_VISIBLE_DEVICES or nvidia-smi to detect GPUs."
-        )
+
+    raise ValueError(
+        "async_grpo requires CUDA_VISIBLE_DEVICES or nvidia-smi to detect GPUs."
+    )
+
+
+def resolve_async_half_gpu_partition() -> Dict[str, Union[str, int]]:
+    visible_gpu_list = _resolve_visible_gpu_list()
 
     visible_gpu_count = len(visible_gpu_list)
     if visible_gpu_count < 2:
@@ -65,9 +66,16 @@ def resolve_async_half_gpu_partition(
 def wait_vllm_server_ready(
     base_url: str,
     max_wait_sec: int,
+    process: Optional[subprocess.Popen] = None,
+    log_path: Optional[str] = None,
 ) -> bool:
     target_url = f"{base_url.rstrip('/')}/v1/models"
     for _ in range(int(max_wait_sec)):
+        if process is not None and process.poll() is not None:
+            message = f"vLLM server exited before ready: {base_url}"
+            if log_path is not None:
+                message = f"{message} (log_path={log_path})"
+            raise RuntimeError(message)
         try:
             with urllib.request.urlopen(
                 target_url,
@@ -84,6 +92,47 @@ def wait_vllm_server_ready(
     return False
 
 
+def _build_async_vllm_server_env(
+    *,
+    vllm_gpu_ids: str,
+    dev_mode: bool,
+) -> Dict[str, str]:
+    env = os.environ.copy()
+    distributed_env_names = (
+        "RANK",
+        "WORLD_SIZE",
+        "LOCAL_RANK",
+        "LOCAL_WORLD_SIZE",
+        "GROUP_RANK",
+        "GROUP_WORLD_SIZE",
+        "ROLE_RANK",
+        "ROLE_WORLD_SIZE",
+        "MASTER_ADDR",
+        "MASTER_PORT",
+    )
+    distributed_env_prefixes = (
+        "ACCELERATE_",
+        "TORCHELASTIC_",
+    )
+
+    for name in distributed_env_names:
+        env.pop(
+            name,
+            None,
+        )
+    for name in list(env):
+        if any(name.startswith(prefix) for prefix in distributed_env_prefixes):
+            env.pop(name)
+
+    env["CUDA_VISIBLE_DEVICES"] = vllm_gpu_ids
+    env["VLLM_SERVER_DEV_MODE"] = "1" if dev_mode else "0"
+    env.setdefault(
+        "PYTHONUNBUFFERED",
+        "1",
+    )
+    return env
+
+
 def start_async_vllm_server(
     config: DictConfig,
     *,
@@ -91,11 +140,9 @@ def start_async_vllm_server(
 ) -> Tuple[subprocess.Popen, Any]:
     vllm_server_cfg = config.async_runtime.vllm_server
 
-    env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = vllm_gpu_ids
-    env.setdefault(
-        "VLLM_SERVER_DEV_MODE",
-        "1" if vllm_server_cfg.dev_mode else "0",
+    env = _build_async_vllm_server_env(
+        vllm_gpu_ids=vllm_gpu_ids,
+        dev_mode=vllm_server_cfg.dev_mode,
     )
 
     log_path = vllm_server_cfg.log_path
@@ -127,6 +174,10 @@ def start_async_vllm_server(
         "--weight-transfer-config",
         '{"backend":"nccl"}',
     ]
+    if vllm_server_cfg.language_model_only:
+        command.append("--language-model-only")
+    if vllm_server_cfg.enforce_eager:
+        command.append("--enforce-eager")
     process = subprocess.Popen(
         command,
         env=env,
@@ -155,6 +206,18 @@ def stop_async_vllm_server(
 
     if log_handle is not None and not log_handle.closed:
         log_handle.close()
+
+
+def _ensure_async_stop_signal_dir(stop_signal_path: Optional[str]) -> None:
+    if stop_signal_path is None:
+        return
+
+    stop_signal_dir = os.path.dirname(stop_signal_path)
+    if stop_signal_dir:
+        os.makedirs(
+            stop_signal_dir,
+            exist_ok=True,
+        )
 
 
 def resolve_async_runtime_state(
@@ -193,20 +256,14 @@ def resolve_async_runtime_state(
             f"http://{config.async_runtime.vllm_server.host}:"
             f"{config.async_runtime.vllm_server.port}"
         )
-        state["stop_signal_path"] = (
-            f"/tmp/async_grpo_vllm_stop_{os.environ.get('MASTER_PORT', '29500')}.signal"
-        )
+        state["stop_signal_path"] = str(config.async_runtime.stop_signal_path)
 
-        local_rank = int(
-            os.environ.get(
-                "LOCAL_RANK",
-                str(rank),
-            )
-        )
+        visible_gpu_list = _resolve_visible_gpu_list()
+        visible_gpu_ids = ",".join(visible_gpu_list)
         if rank == 1:
             state["rank_is_inference"] = True
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
-            config.devices = 1
+            os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
+            config.devices = len(visible_gpu_list)
             return state
 
         if rank != 0:
@@ -215,11 +272,11 @@ def resolve_async_runtime_state(
             )
 
         state["server_managed_by_rank1"] = True
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+        os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
         os.environ["RANK"] = "0"
         os.environ["WORLD_SIZE"] = "1"
         os.environ["LOCAL_RANK"] = "0"
-        config.devices = 1
+        config.devices = len(visible_gpu_list)
         config.async_runtime.vllm_server.auto_start = False
         return state
 
@@ -242,6 +299,7 @@ def run_async_inference_server(
         return False
 
     stop_signal_path = runtime_state["stop_signal_path"]
+    _ensure_async_stop_signal_dir(stop_signal_path)
     if stop_signal_path is not None and os.path.exists(stop_signal_path):
         os.remove(stop_signal_path)
 
@@ -253,6 +311,8 @@ def run_async_inference_server(
         if not wait_vllm_server_ready(
             config.vllm_server_base_url,
             config.async_runtime.vllm_server.ready_timeout,
+            process=process,
+            log_path=config.async_runtime.vllm_server.log_path,
         ):
             raise RuntimeError(
                 f"vLLM server did not become ready: {config.vllm_server_base_url}"
@@ -306,12 +366,16 @@ def start_async_training_runtime(
     if not wait_vllm_server_ready(
         config.vllm_server_base_url,
         config.async_runtime.vllm_server.ready_timeout,
+        process=process,
+        log_path=config.async_runtime.vllm_server.log_path,
     ):
         stop_async_vllm_server(
             process=process,
             log_handle=log_handle,
         )
-        raise RuntimeError(f"vLLM server did not become ready: {config.vllm_server_base_url}")
+        raise RuntimeError(
+            f"vLLM server did not become ready: {config.vllm_server_base_url}"
+        )
     return process, log_handle
 
 
@@ -321,7 +385,11 @@ def stop_async_training_runtime(
     process: Optional[Any],
     log_handle: Optional[Any],
 ) -> None:
-    if runtime_state["server_managed_by_rank1"] and runtime_state["stop_signal_path"] is not None:
+    if (
+        runtime_state["server_managed_by_rank1"]
+        and runtime_state["stop_signal_path"] is not None
+    ):
+        _ensure_async_stop_signal_dir(runtime_state["stop_signal_path"])
         with open(
             runtime_state["stop_signal_path"],
             "w",
