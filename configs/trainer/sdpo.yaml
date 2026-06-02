@@ -1,1 +1,1 @@
-_target_: trl.experimental.sdpo.SDPOTrainer
+_target_: src.trainers.SDPOTrainer
