@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any
 import os
 
 import importlib
@@ -36,6 +36,7 @@ class StructuralDataset:
         max_pixels: Optional[int],
         do_resize: bool,
         image_augmentation: Dict[str, Any],
+        decode_image_paths: bool = False,
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -49,6 +50,7 @@ class StructuralDataset:
         self.role_column_name = role_column_name
         self.content_column_name = content_column_name
         self.assistant_column_name = assistant_column_name
+        self.decode_image_paths = decode_image_paths
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -97,7 +99,11 @@ class StructuralDataset:
             remove_columns=remove_columns,
         )
 
-        if self._should_resize_images and self.image_augmenter is None:
+        if (
+            self._should_resize_images
+            and self.image_augmenter is None
+            and not self.decode_image_paths
+        ):
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -112,11 +118,15 @@ class StructuralDataset:
 
         val_dataset = split_dataset["test"]
 
-        if self.image_augmenter is not None:
-            train_dataset = train_dataset.with_transform(
-                self._process_train_image_columns
+        if self.decode_image_paths or self.image_augmenter is not None:
+            train_dataset = self._decode_image_paths(
+                dataset=train_dataset,
+                apply_image_augmentation=self.image_augmenter is not None,
             )
-            val_dataset = val_dataset.with_transform(self._process_eval_image_columns)
+            val_dataset = self._decode_image_paths(
+                dataset=val_dataset,
+                apply_image_augmentation=False,
+            )
 
         return {
             "train": train_dataset,
@@ -202,7 +212,7 @@ class StructuralDataset:
         self,
         width: int,
         height: int,
-    ) -> Optional[tuple[int, int]]:
+    ) -> Optional[Tuple[int, int]]:
         if self.max_pixels is None:
             return None
 
@@ -233,6 +243,17 @@ class StructuralDataset:
 
         if isinstance(image, (bytes, bytearray)):
             return self._load_image_from_bytes(data=bytes(image))
+
+        if isinstance(image, dict):
+            data = image.get("bytes")
+            if data is not None:
+                return self._load_image_from_bytes(data=data)
+
+            path = image.get("path")
+            if path is not None:
+                return self._load_image(image=path)
+
+            return None
 
         if not isinstance(image, str):
             return None
@@ -269,16 +290,43 @@ class StructuralDataset:
         except Exception:
             return None
 
+    def _resize_single_image(
+        self,
+        image: Any,
+    ) -> Any:
+        if not self._should_resize_images:
+            return image
+
+        pil_image = self._load_image(image=image)
+        if pil_image is None:
+            return image
+
+        target_size = self._compute_target_size(
+            width=pil_image.width,
+            height=pil_image.height,
+        )
+        if target_size is None:
+            return pil_image
+
+        try:
+            return pil_image.resize(
+                target_size,
+                self.resample_filter,
+            )
+        except Exception:
+            return image
+
     def _process_single_image(
         self,
         image: Any,
         apply_image_augmentation: bool,
     ) -> Any:
-        if not apply_image_augmentation and not self._should_resize_images:
-            return image
-
         pil_image = self._load_image(image=image)
         if pil_image is None:
+            if self.decode_image_paths or apply_image_augmentation:
+                raise ValueError(
+                    f"Failed to decode image source for DPO image processing: {repr(image)[:200]}"
+                )
             return image
 
         if apply_image_augmentation and self.image_augmenter is not None:
@@ -306,44 +354,77 @@ class StructuralDataset:
         self,
         example: Dict[str, Any],
     ) -> Dict[str, Any]:
-        return self._process_image_columns(
-            example=example,
-            apply_image_augmentation=False,
+        if "images" in example and example["images"] is not None:
+            if isinstance(example["images"], list):
+                example["images"] = [
+                    self._resize_single_image(image=img) for img in example["images"]
+                ]
+        if "image" in example and example["image"] is not None:
+            example["image"] = self._resize_single_image(image=example["image"])
+        return example
+
+    def _decode_image_value(
+        self,
+        image: Any,
+        apply_image_augmentation: bool,
+    ) -> Any:
+        if isinstance(image, list):
+            return [
+                self._decode_image_value(
+                    image=item,
+                    apply_image_augmentation=apply_image_augmentation,
+                )
+                for item in image
+            ]
+
+        return self._process_single_image(
+            image=image,
+            apply_image_augmentation=apply_image_augmentation,
         )
 
-    def _process_image_columns(
+    def _decode_image_columns(
         self,
         example: Dict[str, Any],
         apply_image_augmentation: bool,
     ) -> Dict[str, Any]:
         if "images" in example and example["images"] is not None:
-            if isinstance(example["images"], list):
-                example["images"] = [
-                    self._process_single_image(
-                        image=img,
-                        apply_image_augmentation=apply_image_augmentation,
-                    )
-                    for img in example["images"]
-                ]
+            example["images"] = self._decode_image_value(
+                image=example["images"],
+                apply_image_augmentation=apply_image_augmentation,
+            )
+        if "image" in example and example["image"] is not None:
+            example["image"] = self._decode_image_value(
+                image=example["image"],
+                apply_image_augmentation=apply_image_augmentation,
+            )
         return example
 
-    def _process_train_image_columns(
+    def _decode_train_image_columns(
         self,
         example: Dict[str, Any],
     ) -> Dict[str, Any]:
-        return self._process_image_columns(
+        return self._decode_image_columns(
             example=example,
             apply_image_augmentation=True,
         )
 
-    def _process_eval_image_columns(
+    def _decode_eval_image_columns(
         self,
         example: Dict[str, Any],
     ) -> Dict[str, Any]:
-        return self._process_image_columns(
+        return self._decode_image_columns(
             example=example,
             apply_image_augmentation=False,
         )
+
+    def _decode_image_paths(
+        self,
+        dataset: HFDataset,
+        apply_image_augmentation: bool,
+    ) -> HFDataset:
+        if apply_image_augmentation:
+            return dataset.with_transform(self._decode_train_image_columns)
+        return dataset.with_transform(self._decode_eval_image_columns)
 
 
 class ConversationalDataset(StructuralDataset):
@@ -362,6 +443,7 @@ class ConversationalDataset(StructuralDataset):
         max_pixels: Optional[int],
         do_resize: bool,
         image_augmentation: Dict[str, Any],
+        decode_image_paths: bool = False,
     ) -> None:
         self.data_path = data_path
         self.split_ratio = split_ratio
@@ -372,6 +454,7 @@ class ConversationalDataset(StructuralDataset):
         self.prompt_column_name = prompt_column_name
         self.chosen_column_name = chosen_column_name
         self.rejected_column_name = rejected_column_name
+        self.decode_image_paths = decode_image_paths
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -420,6 +503,7 @@ class ConversationalDataset(StructuralDataset):
             "prompt",
             "chosen",
             "rejected",
+            "image",
             "images",
         ]
         remove_columns = [
@@ -431,7 +515,11 @@ class ConversationalDataset(StructuralDataset):
         if remove_columns:
             dataset = dataset.remove_columns(remove_columns)
 
-        if self._should_resize_images and self.image_augmenter is None:
+        if (
+            self._should_resize_images
+            and self.image_augmenter is None
+            and not self.decode_image_paths
+        ):
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -446,11 +534,15 @@ class ConversationalDataset(StructuralDataset):
 
         val_dataset = split_dataset["test"]
 
-        if self.image_augmenter is not None:
-            train_dataset = train_dataset.with_transform(
-                self._process_train_image_columns
+        if self.decode_image_paths or self.image_augmenter is not None:
+            train_dataset = self._decode_image_paths(
+                dataset=train_dataset,
+                apply_image_augmentation=self.image_augmenter is not None,
             )
-            val_dataset = val_dataset.with_transform(self._process_eval_image_columns)
+            val_dataset = self._decode_image_paths(
+                dataset=val_dataset,
+                apply_image_augmentation=False,
+            )
 
         return {
             "train": train_dataset,

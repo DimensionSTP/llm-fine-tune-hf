@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any
 import os
 
 import importlib
@@ -97,7 +97,11 @@ class StructuralDataset:
             remove_columns=remove_columns,
         )
 
-        if self._should_resize_images and self.image_augmenter is None:
+        if (
+            self._should_resize_images
+            and self.image_augmenter is None
+            and not self.decode_image_paths
+        ):
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(
@@ -180,7 +184,7 @@ class StructuralDataset:
         self,
         width: int,
         height: int,
-    ) -> Optional[tuple[int, int]]:
+    ) -> Optional[Tuple[int, int]]:
         if self.max_pixels is None:
             return None
 
@@ -211,6 +215,17 @@ class StructuralDataset:
 
         if isinstance(image, (bytes, bytearray)):
             return self._load_image_from_bytes(data=bytes(image))
+
+        if isinstance(image, dict):
+            data = image.get("bytes")
+            if data is not None:
+                return self._load_image_from_bytes(data=data)
+
+            path = image.get("path")
+            if path is not None:
+                return self._load_image(image=path)
+
+            return None
 
         if not isinstance(image, str):
             return None
@@ -462,7 +477,11 @@ class ConversationalDataset(StructuralDataset):
         if remove_columns:
             dataset = dataset.remove_columns(remove_columns)
 
-        if self._should_resize_images and self.image_augmenter is None:
+        if (
+            self._should_resize_images
+            and self.image_augmenter is None
+            and not self.decode_image_paths
+        ):
             dataset = dataset.map(self._resize_image_columns)
 
         split_dataset = dataset.train_test_split(

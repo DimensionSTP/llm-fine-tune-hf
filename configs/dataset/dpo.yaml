@@ -16,6 +16,7 @@ structural:
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
+  decode_image_paths: ${decode_image_paths}
 
 conversational:
   _target_: src.datasets.DPOConversationalDataset
@@ -32,3 +33,4 @@ conversational:
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
+  decode_image_paths: ${decode_image_paths}
