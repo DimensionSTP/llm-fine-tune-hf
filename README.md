@@ -111,10 +111,38 @@ bash scripts/preprocessing/preprocess_dataset.sh
 bash scripts/train/train.sh
 ```
 
+* multi-node train
+
+```shell
+# Edit the variables at the top of both rank scripts before running:
+# - main_process_ip: replace RANK0_NODE_IP with the rank 0 node address
+# - machine_rank: 0 on rank 0, 1 on rank 1
+# - gpu_ids: visible GPU ids on each node
+# - model_type defaults to Qwen3.5-9B
+#
+# Run the matching rank scripts on separate nodes.
+# On rank 1 node:
+bash scripts/train/multinode/sft_train_rank1.sh
+
+# On rank 0 node:
+bash scripts/train/multinode/sft_train_rank0.sh
+```
+
+```shell
+# GRPO external server mode uses one trainer node and one vLLM server node.
+# Edit VLLM_SERVER_NODE_IP in the trainer script and vllm_model/server settings
+# in the vLLM script before running.
+# On vLLM server node:
+bash scripts/train/multinode/grpo_server_vllm_rank1.sh
+
+# On trainer node:
+bash scripts/train/multinode/grpo_server_train_rank0.sh
+```
+
 * async GRPO train
 
 ```shell
-# script starts/stops vLLM server automatically
+# repo async runtime starts/stops vLLM server automatically
 # requirement: even number of GPUs and >=2 GPUs
 bash scripts/train/async_grpo_train.sh
 ```
@@ -128,9 +156,7 @@ python main.py --config-name=async_grpo.yaml mode=train
 
 ```shell
 # safe stop
-# 1) script/main runtime stops managed server automatically on exit
-# 2) fallback manual cleanup for script-managed server
-if [ -f /tmp/async_grpo_vllm_server.pid ]; then kill "$(cat /tmp/async_grpo_vllm_server.pid)"; fi
+# script/main runtime stops managed server automatically on exit
 ```
 
 * test
@@ -203,11 +229,15 @@ is_peft={True or False}
 strategy=deepspeed
 ```
 
+`async_grpo` uses `strategy=none` for the trainer/vLLM split path.
+
 * GRPO vLLM weight sync strategy
 
 ```shell
 vllm_sync_strategy={default or lora_streaming}
 ```
+
+`QLoRA + GRPO vLLM colocate` is not a supported release target. In colocate mode, TRL initializes vLLM from the quantized trainer model and vLLM stores bitsandbytes-packed weights, while the current LoRA streaming path sends dense LoRA-merged weights. Use non-quantized LoRA for colocate GRPO, or validate a separate external-server path before using QLoRA with vLLM.
 
 * GRPO completion termination override
 
