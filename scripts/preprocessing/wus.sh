@@ -2,7 +2,7 @@
 
 path="src/scaling"
 upload_user="Qwen"
-model_type="Qwen3-8B"
+model_type="Qwen3.5-9B"
 precision="bf16"
 wus_hidden_scale=2
 wus_scaling_method="concat"

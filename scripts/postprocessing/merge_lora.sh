@@ -2,7 +2,7 @@
 
 connected_dir="/data/llm-fine-tune-hf"
 upload_user="Qwen"
-model_type="Qwen3-8B"
+model_type="Qwen3.5-9B"
 model_detail=${model_type}
 is_sft=True
 is_quantized=False

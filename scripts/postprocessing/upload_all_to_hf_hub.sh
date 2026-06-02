@@ -2,7 +2,7 @@
 
 dataset_name="tulu"
 strategy="deepspeed"
-model_detail="Qwen3-8B"
+model_detail="Qwen3.5-9B"
 upload_tag="sft"
 is_sft=True
 is_quantized=False

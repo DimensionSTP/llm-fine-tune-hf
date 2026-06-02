@@ -31,8 +31,8 @@ is_preprocessed=False
 upload_user="Qwen"
 
 model_types=(
-    "Qwen3-8B"
-    "Qwen3-32B"
+    "Qwen3.5-9B"
+    "Qwen3.6-35B-A3B"
 )
 
 revision="main"
@@ -113,8 +113,8 @@ upload_user="/data/llm-fine-tune-hf"
 train_dataset="tulu"
 
 model_types=(
-    "${train_dataset}/Qwen3-8B"
-    "${train_dataset}/Qwen3-32B"
+    "${train_dataset}/Qwen3.5-9B"
+    "${train_dataset}/Qwen3.6-35B-A3B"
 )
 
 revision="main"
@@ -196,8 +196,8 @@ base_path="/data/llm-fine-tune-hf"
 train_dataset="tulu"
 
 model_types=(
-    "Qwen3-8B"
-    "Qwen3-32B"
+    "Qwen3.5-9B"
+    "Qwen3.6-35B-A3B"
 )
 
 revision="main"

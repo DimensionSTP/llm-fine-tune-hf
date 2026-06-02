@@ -52,14 +52,14 @@ max_pixels: null
 do_resize: false
 decode_image_paths: false
 upload_user: Qwen
-model_type: Qwen3-8B
+model_type: Qwen3.5-9B
 pretrained_model_name: ${upload_user}/${model_type}
 merge_path: ${connected_dir}/merged
 merge_max_shard_size: null
 merge_pack_qwen_moe_experts: false
 custom_data_encoder_path: ${merge_path}/${pretrained_model_name}
 revision: main
-reference_data_encoder_name: Qwen/Qwen3-8B
+reference_data_encoder_name: Qwen/Qwen3.5-9B
 left_padding: false
 is_enable_thinking: false
 merged_model_path: ${merge_path}/${pretrained_model_name}
@@ -83,7 +83,7 @@ quantization_config:
 is_peft: false
 peft_config:
   r: 128
-  lora_alpha: 256
+  lora_alpha: 512
   target_modules: all-linear
   lora_dropout: 0.0
   bias: none
@@ -123,7 +123,7 @@ loss_type: sapo
 use_vllm: true
 vllm_mode: colocate
 vllm_sync_strategy: default
-vllm_tensor_parallel_size: ${devices}
+vllm_tensor_parallel_size: 1
 sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05
 scale_rewards: group
@@ -265,7 +265,7 @@ test_data_dir: benchmarks/test
 test_output_dir: ${connected_dir}/tests/${model_type}
 test_output_name: ${dataset_name}
 
-dus_hidden_layers: 54
+dus_hidden_layers: 42
 wus_hidden_scale: 2
 wus_scaling_method: concat
 wus_attention_scaling: heads
