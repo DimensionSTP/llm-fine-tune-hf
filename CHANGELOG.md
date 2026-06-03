@@ -2,6 +2,14 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.20.1] - 2026-06-04
+
+- Add Async GRPO vLLM tensor-parallel-size resolution so `async_runtime.vllm_server.tensor_parallel_size=auto` maps to the GPU count assigned to the vLLM server side.
+- Change the Async GRPO vLLM server tensor-parallel default from `1` to `auto` in the main config and Async GRPO launcher scripts.
+- Validate explicit Async GRPO vLLM tensor-parallel sizes so they cannot exceed the number of assigned vLLM GPUs.
+- Derive external GRPO vLLM server tensor-parallel size from `gpu_ids` while keeping dense-model `data_parallel_size=1`.
+- Document Async GRPO and external GRPO vLLM tensor-parallel policy, including dense-model external-server constraints and colocate-mode expectations.
+
 ## [v1.20.0] - 2026-06-03
 
 - Add distributed runtime planning, validation, and manifest metadata for single-node and multi-node training, including planned/observed world size, local process count, device selection, and effective batch-size reporting.
