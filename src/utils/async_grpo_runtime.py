@@ -63,6 +63,26 @@ def resolve_async_half_gpu_partition() -> Dict[str, Union[str, int]]:
     }
 
 
+def _resolve_vllm_tensor_parallel_size(
+    tensor_parallel_size: Union[str, int],
+    vllm_gpu_ids: str,
+) -> int:
+    vllm_gpu_count = len(
+        [gpu_id.strip() for gpu_id in vllm_gpu_ids.split(",") if gpu_id.strip()]
+    )
+    if str(tensor_parallel_size).lower() == "auto":
+        return vllm_gpu_count
+
+    resolved_tensor_parallel_size = int(tensor_parallel_size)
+    if resolved_tensor_parallel_size > vllm_gpu_count:
+        raise ValueError(
+            "async_grpo vLLM tensor_parallel_size cannot exceed assigned GPU count: "
+            f"tensor_parallel_size={resolved_tensor_parallel_size}, "
+            f"assigned_gpu_count={vllm_gpu_count}"
+        )
+    return resolved_tensor_parallel_size
+
+
 def wait_vllm_server_ready(
     base_url: str,
     max_wait_sec: int,
@@ -168,7 +188,12 @@ def start_async_vllm_server(
         "--port",
         str(vllm_server_cfg.port),
         "--tensor-parallel-size",
-        str(vllm_server_cfg.tensor_parallel_size),
+        str(
+            _resolve_vllm_tensor_parallel_size(
+                tensor_parallel_size=vllm_server_cfg.tensor_parallel_size,
+                vllm_gpu_ids=vllm_gpu_ids,
+            )
+        ),
         "--gpu-memory-utilization",
         str(vllm_server_cfg.gpu_memory_utilization),
         "--weight-transfer-config",
