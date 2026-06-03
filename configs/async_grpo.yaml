@@ -135,7 +135,7 @@ async_runtime:
     port: 8000
     ready_timeout: 120
     model: ${pretrained_model_name}
-    tensor_parallel_size: 1
+    tensor_parallel_size: auto
     gpu_memory_utilization: 0.95
     log_path: /tmp/async_grpo_vllm_server.log
     dev_mode: true
