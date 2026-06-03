@@ -132,6 +132,9 @@ bash scripts/train/multinode/sft_train_rank0.sh
 # GRPO external server mode uses one trainer node and one vLLM server node.
 # Edit VLLM_SERVER_NODE_IP in the trainer script and vllm_model/server settings
 # in the vLLM script before running.
+# Dense-model vLLM server mode keeps data_parallel_size=1. The server script
+# derives tensor_parallel_size from gpu_ids so all visible server GPUs are used
+# through tensor parallelism.
 # On vLLM server node:
 bash scripts/train/multinode/grpo_server_vllm_rank1.sh
 
@@ -144,6 +147,8 @@ bash scripts/train/multinode/grpo_server_train_rank0.sh
 ```shell
 # repo async runtime starts/stops vLLM server automatically
 # requirement: even number of GPUs and >=2 GPUs
+# async_runtime.vllm_server.tensor_parallel_size=auto maps to the GPU count
+# assigned to the vLLM server side.
 bash scripts/train/async_grpo_train.sh
 ```
 
@@ -236,6 +241,13 @@ strategy=deepspeed
 ```shell
 vllm_sync_strategy={default or lora_streaming}
 ```
+
+For dense-model external vLLM server mode, keep `data_parallel_size=1`.
+Current vLLM offline server initialization rejects dense-model `data_parallel_size>1`,
+so multi-GPU server utilization should be expressed with tensor parallelism.
+This does not change colocate GRPO/SDPO defaults; colocate scripts keep
+`vllm_tensor_parallel_size=1` unless the model itself requires tensor-parallel
+loading inside the trainer-side vLLM instance.
 
 `QLoRA + GRPO vLLM colocate` is not a supported release target. In colocate mode, TRL initializes vLLM from the quantized trainer model and vLLM stores bitsandbytes-packed weights, while the current LoRA streaming path sends dense LoRA-merged weights. Use non-quantized LoRA for colocate GRPO, or validate a separate external-server path before using QLoRA with vLLM.
 
