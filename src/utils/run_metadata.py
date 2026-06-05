@@ -28,6 +28,15 @@ def prepare_train_artifact_config(
     run_id, output_dir = allocate_or_read_run_directory(
         output_base_dir=output_base_dir,
         rank=rank,
+        allocation_timeout_seconds=float(
+            config.run_metadata.allocation_timeout_seconds
+        ),
+        allocation_poll_interval_seconds=float(
+            config.run_metadata.allocation_poll_interval_seconds
+        ),
+        allocation_freshness_grace_seconds=float(
+            config.run_metadata.allocation_freshness_grace_seconds
+        ),
     )
     config.run_id = run_id
     config.output_dir = str(output_dir)
@@ -58,11 +67,19 @@ def prepare_resume_artifact_config(
 def allocate_or_read_run_directory(
     output_base_dir: str,
     rank: int,
+    allocation_timeout_seconds: float,
+    allocation_poll_interval_seconds: float,
+    allocation_freshness_grace_seconds: float,
 ) -> Tuple[str, str]:
+    allocation_read_started_at = time.time()
     if get_world_size() <= 1:
         return allocate_next_run_directory(output_base_dir=output_base_dir)
 
-    allocation_path = get_allocation_path(output_base_dir=output_base_dir)
+    allocation_key = get_allocation_key()
+    allocation_path = get_allocation_path(
+        output_base_dir=output_base_dir,
+        allocation_key=allocation_key,
+    )
     if rank == 0:
         run_id, output_dir = allocate_next_run_directory(
             output_base_dir=output_base_dir,
@@ -70,6 +87,8 @@ def allocate_or_read_run_directory(
         write_json(
             path=allocation_path,
             payload={
+                "allocation_key": allocation_key,
+                "output_base_dir": output_base_dir,
                 "run_id": run_id,
                 "output_dir": str(output_dir),
                 "created_at": time.time(),
@@ -77,7 +96,15 @@ def allocate_or_read_run_directory(
         )
         return run_id, output_dir
 
-    return read_run_directory_allocation(allocation_path=allocation_path)
+    return read_run_directory_allocation(
+        allocation_path=allocation_path,
+        allocation_key=allocation_key,
+        output_base_dir=output_base_dir,
+        allocation_read_started_at=allocation_read_started_at,
+        allocation_timeout_seconds=allocation_timeout_seconds,
+        allocation_poll_interval_seconds=allocation_poll_interval_seconds,
+        allocation_freshness_grace_seconds=allocation_freshness_grace_seconds,
+    )
 
 
 def allocate_next_run_directory(
@@ -104,16 +131,75 @@ def allocate_next_run_directory(
 
 def read_run_directory_allocation(
     allocation_path: str,
+    allocation_key: str,
+    output_base_dir: str,
+    allocation_read_started_at: float,
+    allocation_timeout_seconds: float,
+    allocation_poll_interval_seconds: float,
+    allocation_freshness_grace_seconds: float,
 ) -> Tuple[str, str]:
-    deadline = time.time() + 300
-    while time.time() < deadline:
+    if allocation_timeout_seconds <= 0:
+        raise ValueError("allocation_timeout_seconds must be greater than 0.")
+    if allocation_poll_interval_seconds <= 0:
+        raise ValueError("allocation_poll_interval_seconds must be greater than 0.")
+    if allocation_freshness_grace_seconds < 0:
+        raise ValueError(
+            "allocation_freshness_grace_seconds must be greater than or equal to 0."
+        )
+
+    allocation_deadline_at = time.monotonic() + allocation_timeout_seconds
+    while time.monotonic() < allocation_deadline_at:
         if os.path.isfile(allocation_path):
-            with open(allocation_path, encoding="utf-8") as file:
-                payload = json.load(file)
-            return str(payload["run_id"]), str(payload["output_dir"])
-        time.sleep(1)
+            try:
+                with open(allocation_path, encoding="utf-8") as file:
+                    payload = json.load(file)
+            except json.JSONDecodeError:
+                time.sleep(allocation_poll_interval_seconds)
+                continue
+            if is_current_run_directory_allocation(
+                payload=payload,
+                allocation_key=allocation_key,
+                output_base_dir=output_base_dir,
+                allocation_read_started_at=allocation_read_started_at,
+                allocation_freshness_grace_seconds=allocation_freshness_grace_seconds,
+            ):
+                return str(payload["run_id"]), str(payload["output_dir"])
+        time.sleep(allocation_poll_interval_seconds)
 
     raise TimeoutError(f"Timed out waiting for run allocation: {allocation_path}")
+
+
+def is_current_run_directory_allocation(
+    payload: Any,
+    allocation_key: str,
+    output_base_dir: str,
+    allocation_read_started_at: float,
+    allocation_freshness_grace_seconds: float,
+) -> bool:
+    if not isinstance(payload, dict):
+        return False
+
+    run_id = payload.get("run_id")
+    output_dir = payload.get("output_dir")
+    payload_output_base_dir = payload.get("output_base_dir")
+    created_at = payload.get("created_at")
+    if not isinstance(run_id, str):
+        return False
+    if not isinstance(output_dir, str):
+        return False
+    if not isinstance(payload_output_base_dir, str):
+        return False
+    if not isinstance(created_at, (int, float)):
+        return False
+    if payload.get("allocation_key") != allocation_key:
+        return False
+    if os.path.normpath(payload_output_base_dir) != os.path.normpath(output_base_dir):
+        return False
+    if created_at < allocation_read_started_at - allocation_freshness_grace_seconds:
+        return False
+    if not os.path.isdir(output_dir):
+        return False
+    return os.path.basename(output_dir) == run_id
 
 
 def get_next_run_index(
@@ -147,6 +233,7 @@ def get_resume_output_dir(
 
 def get_allocation_path(
     output_base_dir: str,
+    allocation_key: str,
 ) -> str:
     allocation_dir = os.path.join(
         os.path.dirname(output_base_dir),
@@ -159,7 +246,7 @@ def get_allocation_path(
     )
     return os.path.join(
         allocation_dir,
-        f"{get_allocation_key()}.json",
+        f"{allocation_key}.json",
     )
 
 
@@ -537,7 +624,8 @@ def write_json(
         os.path.dirname(path),
         exist_ok=True,
     )
-    with open(path, "w", encoding="utf-8") as file:
+    temp_path = f"{path}.tmp.{os.getpid()}"
+    with open(temp_path, "w", encoding="utf-8") as file:
         json.dump(
             _to_jsonable(payload),
             file,
@@ -545,6 +633,10 @@ def write_json(
             sort_keys=True,
         )
         file.write("\n")
+    os.replace(
+        temp_path,
+        path,
+    )
 
 
 def _to_jsonable(value: Any) -> Any:
