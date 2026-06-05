@@ -1,0 +1,5 @@
+# @package _global_
+run_metadata:
+  allocation_timeout_seconds: 300
+  allocation_poll_interval_seconds: 1
+  allocation_freshness_grace_seconds: 10

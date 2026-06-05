@@ -6,6 +6,7 @@ defaults:
   - trainer: dpo
   - deepspeed: ds_config
   - model_loading: train_runtime
+  - run_metadata: allocation
   - dataset@test_dataset: test
   - dense_to_moe: dense_to_moe
   - hydra: hydra
