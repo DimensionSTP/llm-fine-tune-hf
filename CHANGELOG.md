@@ -2,6 +2,15 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.20.2] - 2026-06-05
+
+- Add `configs/run_metadata/allocation.yaml` with configurable distributed run allocation timeout, poll interval, and freshness grace settings.
+- Compose the run metadata allocation config into SFT, DPO, KTO, GKD, GRPO, SDPO, and Async GRPO training configs.
+- Validate distributed run allocation payload freshness so non-rank0 processes ignore stale allocation files from previous runs.
+- Include allocation key and output base directory metadata in shared run allocation payloads to prevent cross-run allocation reuse.
+- Write JSON metadata through a temporary file and atomic replace so readers do not consume partially written allocation or run metadata files.
+- Document run metadata allocation settings for distributed and multi-node training.
+
 ## [v1.20.1] - 2026-06-04
 
 - Add Async GRPO vLLM tensor-parallel-size resolution so `async_runtime.vllm_server.tensor_parallel_size=auto` maps to the GPU count assigned to the vLLM server side.
