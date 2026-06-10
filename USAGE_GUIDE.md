@@ -98,6 +98,8 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 ## Common Runtime Options
 
 - Data/tokenization: `is_sft`, `is_preprocessed`, `left_padding`, `max_length`, `response_end_template`
+- Dataset paths: `data_path`, `dataset_subdir`, `dataset_file_path`, `test_dataset_subdir`, `test_dataset_file_path`
+- SFT label mask validation: `sft_label_mask.validation_enabled`, `sft_label_mask.validation_mode`
 - SFT loss: `sft_loss_type`
 - Training strategy: `strategy=deepspeed`
 - Distributed launch: `distributed.enabled`, `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, `distributed.main_process_port`
@@ -105,6 +107,7 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - LoRA merge: `merge_max_shard_size`, `merge_pack_qwen_moe_experts`
 - GRPO/vLLM: `use_vllm`, `vllm_mode`, `vllm_sync_strategy`
 - VLM image augmentation: `image_augmentation.enabled`, `image_augmentation.probability`
+- VLM image paths: `dataset_image.image_root_dir`, `dataset_image.convert_unsupported_extensions`
 - Reward extraction: `reward.extraction_profile`
 - Retrieval rewards: `reward_embedding.preserved_env_keys`, `reward_embedding.isolated_env_keys`
 - Model card/upload metadata: `upload_user`, `model_type`

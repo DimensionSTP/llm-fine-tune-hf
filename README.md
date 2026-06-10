@@ -210,6 +210,17 @@ sft_loss_type={nll or chunked_nll}
 is_preprocessed={True or False}
 ```
 
+* Dataset file path override
+
+```shell
+data_path=${connected_dir}/data
+dataset_subdir={null or relative directory under data_path}
+dataset_file_path={null or full dataset file path}
+allow_dataset_file_name_mismatch={False or True}
+```
+
+`dataset_name` remains the logical logging/project/checkpoint identifier. By default the dataset file resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, and `dataset_file_path` is an escape hatch; its basename must match `${dataset_name}.${dataset_format}` unless mismatch is explicitly allowed. Test data uses `test_dataset_subdir` and `test_dataset_file_path` with the same policy.
+
 * Left padding option
 
 ```shell
@@ -275,6 +286,8 @@ image_augmentation.jpeg_quality_max={1 to 100}
 
 `image_augmentation` is disabled by default and applies only to training images for SFT, DPO, GRPO, async GRPO, and SDPO datasets. Validation, evaluation, and test datasets are not augmented. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees` and `erase_probability` disabled unless labels are transformed consistently.
 
+VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
+
 * Reward embedding vLLM environment isolation
 
 ```shell
@@ -290,6 +303,8 @@ response_end_template={null or template such as <|im_end|>}
 
 `null` uses the tokenizer EOS token when masking SFT assistant labels.
 
+SFT keeps the repo-owned torch Dataset masking path. `sft_label_mask.validation_mode=strict` fails fast when the response start template is missing, assistant labels are all `-100`, or prompt/padding tokens leak into labels; `report` keeps training unblocked for data inspection.
+
 * Reward extraction profile
 
 ```shell
@@ -298,18 +313,24 @@ reward.extraction_profile={default or gemma4}
 
 `default` keeps existing extraction behavior. `gemma4` strips Gemma channel/turn/tool stop markers before answer extraction. This affects rewards that call `extract_answer_from_generation()`; raw format rewards still check the original completion format.
 
+Reward default hyperparameters and weights are centralized in `configs/reward/base.yaml`; reward class wiring stays in `configs/reward/manager.yaml`.
+
 * Grounding bbox reward
 
 ```shell
 reward.weight.grounding_bbox={0.0 or positive float}
+reward.weight.grounding_selection={0.0 or positive float}
 reward.grounding_bbox.category_token=ground
+reward.grounding_selection.category_token=grounding
 ```
 
 `grounding_bbox` is disabled by default. It is evaluated only when the sample reward category contains `reward.grounding_bbox.category_token`.
 
-The label in `solution` should be a JSON object with `grounding_status`, optional `coord_system`, `positive_occurrences` for found targets, and optional `hard_negative_evidence`. Model answers should return JSON with `field_path`, `grounding_status`, and `evidence_occurrences`. Bounding boxes use `[x1, y1, x2, y2]` with page numbers in each occurrence or fragment.
+The label in `solution` should be a JSON object with `grounding_status`, optional `coord_system`, `positive_occurrences` for found targets, and optional `hard_negative_evidence`. Model answers should return JSON with `field_path`, `grounding_status`, and `evidence_occurrences`. Bounding boxes use `[x1, y1, x2, y2]` with page numbers in each occurrence or fragment. Schema aliases are controlled by `reward.grounding_bbox.schema_keys`.
 
 For labels whose `grounding_status` is not `found`, the reward treats an answer with non-`found` status and empty `evidence_occurrences` as the correct negative grounding result.
+
+`grounding_selection` is a separate candidate-selection reward for labels that expect top-level `grounding` lists rather than generated boxes. Each solution and prediction item is matched by `target_id`; item `selected_ids` are compared against the gold item, with the `selected_candidate_ids` alias supported for predictions. It does not use `grounding_status`; value targets are expected to provide evidence candidate ids through `selected_ids`. Missing gold targets, extra predicted targets, duplicate selected ids, wrong candidates, and over-selection are penalized without crashing malformed generations.
 
 * Postprocessing artifact paths
 

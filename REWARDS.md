@@ -130,7 +130,8 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 
 - Purpose: Single key-value extraction reward for JSON outputs.
 - Logic: Parses JSON from prediction and solution. If JSON contains a `tables`
-  section, scores per-cell matches. Otherwise compares the last leaf value with
+  section, normalizes table `rows` from either list or dict containers and
+  scores per-cell matches. Otherwise compares the last leaf value with
   normalized matching. Returns `1.0` on match, else `json_parse_weight`. Returns
   `0.0` on parse failure.
 - reward_categories: any category containing the `kv` token
@@ -142,7 +143,7 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 
 - Purpose: Multi key-value extraction reward for JSON outputs.
 - Logic: Parses JSON, compares all leaf values (excluding `tables`) and table
-  cells. Computes accuracy over total items and returns
+  cells after list/dict `rows` normalization. Computes accuracy over total items and returns
   `json_parse_weight + (1 - json_parse_weight) * accuracy`. Returns `0.0` on
   parse failure.
 - reward_categories: any category containing the `kv` token
@@ -177,6 +178,10 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
     the same `page`, `fragments[].bbox`, or `envelope_bbox` shape as labels.
 - Extra options:
   - `category_token`: category token that activates this reward.
+  - `schema_keys`, `status_values`: narrow aliases for semantically equivalent
+    schema/status keys. Defaults preserve the existing `field_path`,
+    `grounding_status`, `evidence_occurrences`, and `positive_occurrences`
+    schema.
   - `format_reward`, `schema_reward`, `page_reward`: base shaping components.
   - `iou_weight`, `iou_05_threshold`, `iou_05_bonus`, `iou_07_threshold`,
     `iou_07_bonus`, `center_in_gt_bonus`: positive grounding match shaping.
@@ -185,6 +190,37 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
     negative overlap penalty.
   - `positive_duplicate_iou_threshold`: filters hard negatives that duplicate a
     positive target.
+  - `min_reward`, `max_reward`: final clipping bounds.
+
+### GroundingSelectionReward
+
+- Purpose: Select the correct grounding candidate ids when the task provides a
+  candidate list instead of requiring generated boxes.
+- Logic: Parses JSON from the extracted answer. The prediction and solution are
+  top-level objects with a `grounding` list. Items are matched by `target_id`,
+  and each gold target must have a prediction item. The reward compares each
+  item's `selected_ids` with the gold `selected_ids`, supports empty selections,
+  penalizes wrong, over-selected, duplicate, missing, and extra target ids, and
+  does not crash on malformed JSON. It does not use `grounding_status`; value
+  targets are expected to provide evidence candidate ids through `selected_ids`.
+- reward_categories: any category containing
+  `reward.grounding_selection.category_token` (default: `grounding`).
+- Expected label schema in `solution`:
+  - top-level `grounding`: list of target selection items.
+  - item `target_id`: unique target id.
+  - item `selected_ids`: correct candidate ids for that target.
+- Expected prediction schema:
+  - top-level `grounding`: list of predicted selection items.
+  - item `target_id`: target id to match against the solution.
+  - item `selected_ids`: predicted candidate ids. The
+    `selected_candidate_ids` alias is also supported by default.
+- Extra options:
+  - `category_token`: category token that activates this reward.
+  - `schema_keys`: narrow aliases for `items`, `target_id`, and
+    `selected_ids`.
+  - `format_reward`, `schema_reward`, `exact_match_reward`,
+    `partial_match_weight`: positive shaping components.
+  - `over_selection_penalty`, `wrong_selection_penalty`: selection penalties.
   - `min_reward`, `max_reward`: final clipping bounds.
 
 ## reward_categories Quick Reference
@@ -202,5 +238,7 @@ Current matching rules in `src/utils/rewards.py`:
 - KV-family rewards (`SingleKVReward`, `MultiKVReward`) run when category
   contains token `kv`.
   Examples: `single_kv`, `multi_kv`, `vlm_single_kv`, `vlm_multi_kv`.
-- `GroundingBBoxReward` runs when category contains the configured
-  `reward.grounding_bbox.category_token` (default: `ground`).
+- Grounding rewards run when category contains their configured category token:
+  `reward.grounding_bbox.category_token` or
+  `reward.grounding_selection.category_token` (default: `grounding` for
+  selection).
