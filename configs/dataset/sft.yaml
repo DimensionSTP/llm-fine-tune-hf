@@ -1,12 +1,15 @@
 structural:
   _target_: src.datasets.SFTStructuralDataset
-  data_path: ${connected_dir}/data
+  data_path: ${data_path}
   split: ${split.train}
   split_ratio: ${split_ratio}
   is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${dataset_subdir}
+  dataset_file_path: ${dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   is_sft: ${is_sft}
   is_preprocessed: ${is_preprocessed}
   data_column_name: ${data_column_name}
@@ -25,18 +28,23 @@ structural:
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
+  dataset_image: ${dataset_image}
   response_start_template: ${response_start_template}
   response_end_template: ${response_end_template}
+  sft_label_mask: ${sft_label_mask}
 
 conversational:
   _target_: src.datasets.SFTConversationalDataset
-  data_path: ${connected_dir}/data
+  data_path: ${data_path}
   split: ${split.train}
   split_ratio: ${split_ratio}
   is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${dataset_subdir}
+  dataset_file_path: ${dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   is_sft: ${is_sft}
   is_preprocessed: ${is_preprocessed}
   conversation_column_name: ${conversation_column_name}
@@ -53,5 +61,7 @@ conversational:
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
+  dataset_image: ${dataset_image}
   response_start_template: ${response_start_template}
   response_end_template: ${response_end_template}
+  sft_label_mask: ${sft_label_mask}

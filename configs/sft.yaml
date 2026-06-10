@@ -36,6 +36,13 @@ is_strict_split: false
 
 dataset_name: tulu
 dataset_format: parquet
+data_path: ${connected_dir}/data
+dataset_subdir: null
+dataset_file_path: null
+allow_dataset_file_name_mismatch: false
+test_dataset_subdir: ${test_data_dir}
+test_dataset_file_path: null
+allow_test_dataset_file_name_mismatch: false
 is_sft: true
 is_preprocessed: false
 data_column_name: input
@@ -46,6 +53,11 @@ content_column_name: content
 assistant_column_name: assistant
 max_pixels: null
 do_resize: false
+dataset_image:
+  image_root_dir: ${data_path}
+  convert_unsupported_extensions: true
+  unsupported_path_extensions: [tif, tiff]
+  converted_image_mode: RGB
 upload_user: Qwen
 model_type: Qwen3.5-9B
 pretrained_model_name: ${upload_user}/${model_type}
@@ -65,6 +77,11 @@ pad_to_multiple_of: null
 chat_template_path: null
 response_start_template: <|im_start|>${assistant_column_name}
 response_end_template: null
+sft_label_mask:
+  validation_enabled: true
+  validation_mode: strict
+  min_assistant_label_tokens: 1
+  report_truncated_assistant: true
 
 user_name: ${oc.env:USER_NAME}
 model_detail: ${model_type}

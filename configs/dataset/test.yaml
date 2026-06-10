@@ -1,8 +1,11 @@
 structural:
   _target_: src.datasets.TestStructuralDataset
-  data_path: ${connected_dir}/data/${test_data_dir}
+  data_path: ${data_path}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${test_dataset_subdir}
+  dataset_file_path: ${test_dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_test_dataset_file_name_mismatch}
   is_preprocessed: ${is_preprocessed}
   data_column_name: ${data_column_name}
   target_column_name: ${target_column_name}
@@ -18,12 +21,17 @@ structural:
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
+  dataset_image: ${dataset_image}
 
 conversational:
   _target_: src.datasets.TestConversationalDataset
-  data_path: ${connected_dir}/data/${test_data_dir}
+  data_path: ${data_path}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${test_dataset_subdir}
+  dataset_file_path: ${test_dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_test_dataset_file_name_mismatch}
   is_preprocessed: ${is_preprocessed}
   conversation_column_name: ${conversation_column_name}
   role_column_name: ${role_column_name}
@@ -38,3 +46,5 @@ conversational:
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
   max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
+  dataset_image: ${dataset_image}

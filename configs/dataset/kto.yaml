@@ -1,11 +1,14 @@
 structural:
   _target_: src.datasets.KTOStructuralDataset
-  data_path: ${connected_dir}/data
+  data_path: ${data_path}
   split_ratio: ${split_ratio}
   is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${dataset_subdir}
+  dataset_file_path: ${dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   data_column_name: ${data_column_name}
   target_column_name: ${target_column_name}
   label_column_name: ${label_column_name}
@@ -15,12 +18,15 @@ structural:
 
 conversational:
   _target_: src.datasets.KTOConversationalDataset
-  data_path: ${connected_dir}/data
+  data_path: ${data_path}
   split_ratio: ${split_ratio}
   is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${dataset_subdir}
+  dataset_file_path: ${dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   prompt_column_name: ${prompt_column_name}
   completion_column_name: ${completion_column_name}
   label_column_name: ${label_column_name}

@@ -1,11 +1,14 @@
 structural:
   _target_: src.datasets.DPOStructuralDataset
-  data_path: ${connected_dir}/data
+  data_path: ${data_path}
   split_ratio: ${split_ratio}
   is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${dataset_subdir}
+  dataset_file_path: ${dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   data_column_name: ${data_column_name}
   chosen_column_name: ${chosen_column_name}
   rejected_column_name: ${rejected_column_name}
@@ -17,15 +20,19 @@ structural:
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
   decode_image_paths: ${decode_image_paths}
+  dataset_image: ${dataset_image}
 
 conversational:
   _target_: src.datasets.DPOConversationalDataset
-  data_path: ${connected_dir}/data
+  data_path: ${data_path}
   split_ratio: ${split_ratio}
   is_strict_split: ${is_strict_split}
   seed: ${seed}
   dataset_name: ${dataset_name}
   dataset_format: ${dataset_format}
+  dataset_subdir: ${dataset_subdir}
+  dataset_file_path: ${dataset_file_path}
+  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   prompt_column_name: ${prompt_column_name}
   chosen_column_name: ${chosen_column_name}
   rejected_column_name: ${rejected_column_name}
@@ -34,3 +41,4 @@ conversational:
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
   decode_image_paths: ${decode_image_paths}
+  dataset_image: ${dataset_image}
