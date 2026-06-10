@@ -2130,6 +2130,8 @@ class GroundingBBoxReward(BaseReward):
         positive_duplicate_iou_threshold: float,
         min_reward: float,
         max_reward: float,
+        schema_keys: Optional[Dict[str, List[str]]] = None,
+        status_values: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -2158,6 +2160,10 @@ class GroundingBBoxReward(BaseReward):
         self.positive_duplicate_iou_threshold = positive_duplicate_iou_threshold
         self.min_reward = min_reward
         self.max_reward = max_reward
+        self.schema_keys = self._normalize_schema_keys(schema_keys=schema_keys)
+        self.status_values = self._normalize_status_values(
+            status_values=status_values,
+        )
 
     def compute(
         self,
@@ -2181,7 +2187,13 @@ class GroundingBBoxReward(BaseReward):
                 rewards.append(None)
                 continue
 
-            if label.get("grounding_status") != "found":
+            label_status = self._normalize_grounding_status(
+                status=self._get_schema_value(
+                    payload=label,
+                    logical_key="grounding_status",
+                )
+            )
+            if label_status != "found":
                 rewards.append(
                     self._compute_negative_grounding_reward(
                         content=content,
@@ -2269,7 +2281,13 @@ class GroundingBBoxReward(BaseReward):
 
         if (
             is_schema_valid
-            and prediction.get("grounding_status") != "found"
+            and self._normalize_grounding_status(
+                status=self._get_schema_value(
+                    payload=prediction,
+                    logical_key="grounding_status",
+                )
+            )
+            != "found"
             and not pred_boxes
         ):
             return self.max_reward
@@ -2327,6 +2345,124 @@ class GroundingBBoxReward(BaseReward):
             return parsed
         return None
 
+    def _get_schema_value(
+        self,
+        payload: Dict[str, Any],
+        logical_key: str,
+    ) -> Any:
+        if not isinstance(payload, dict):
+            return None
+        aliases = self.schema_keys[logical_key]
+        for alias in aliases:
+            if alias in payload:
+                return payload[alias]
+        return None
+
+    def _normalize_grounding_status(
+        self,
+        status: Any,
+    ) -> Optional[str]:
+        if not isinstance(status, str):
+            return None
+        normalized = status.strip().lower()
+        for logical_status, aliases in self.status_values.items():
+            if normalized in aliases:
+                return logical_status
+        return None
+
+    def _normalize_schema_keys(
+        self,
+        schema_keys: Optional[Dict[str, List[str]]],
+    ) -> Dict[str, List[str]]:
+        config = schema_keys or self._default_schema_keys()
+        required_keys = self._default_schema_keys().keys()
+        normalized: Dict[str, List[str]] = {}
+        for logical_key in required_keys:
+            if logical_key not in config:
+                raise ValueError(
+                    f"grounding_bbox.schema_keys missing key: {logical_key}"
+                )
+            aliases = config[logical_key]
+            normalized[logical_key] = self._normalize_aliases(
+                aliases=aliases,
+                config_name=f"grounding_bbox.schema_keys.{logical_key}",
+            )
+        return normalized
+
+    def _normalize_status_values(
+        self,
+        status_values: Optional[Dict[str, List[str]]],
+    ) -> Dict[str, List[str]]:
+        config = status_values or self._default_status_values()
+        normalized: Dict[str, List[str]] = {}
+        for logical_status in ["found", "not_found"]:
+            if logical_status not in config:
+                raise ValueError(
+                    f"grounding_bbox.status_values missing key: {logical_status}"
+                )
+            normalized[logical_status] = [
+                alias.lower()
+                for alias in self._normalize_aliases(
+                    aliases=config[logical_status],
+                    config_name=f"grounding_bbox.status_values.{logical_status}",
+                )
+            ]
+        return normalized
+
+    @staticmethod
+    def _normalize_aliases(
+        aliases: Any,
+        config_name: str,
+    ) -> List[str]:
+        if not isinstance(aliases, (list, ListConfig)):
+            raise ValueError(f"{config_name} must be a non-empty list of strings.")
+        normalized = []
+        for alias in aliases:
+            if not isinstance(alias, str) or alias.strip() == "":
+                raise ValueError(f"{config_name} must contain only non-empty strings.")
+            normalized.append(alias.strip())
+        if not normalized:
+            raise ValueError(f"{config_name} must be a non-empty list of strings.")
+        return normalized
+
+    @staticmethod
+    def _default_schema_keys() -> Dict[str, List[str]]:
+        return {
+            "field_path": ["field_path"],
+            "value_index": ["value_index"],
+            "grounding_status": ["grounding_status"],
+            "prediction_occurrences": [
+                "evidence_occurrences",
+                "positive_occurrences",
+                "occurrences",
+            ],
+            "label_occurrences": [
+                "positive_occurrences",
+                "evidence_occurrences",
+                "occurrences",
+            ],
+            "hard_negative_evidence": ["hard_negative_evidence"],
+            "fragments": ["fragments"],
+            "page": ["page"],
+            "bbox": ["bbox"],
+            "envelope_bbox": [
+                "envelope_bbox",
+                "bbox",
+            ],
+            "coord_system": ["coord_system"],
+        }
+
+    @staticmethod
+    def _default_status_values() -> Dict[str, List[str]]:
+        return {
+            "found": ["found"],
+            "not_found": [
+                "not_found",
+                "missing",
+                "absent",
+            ],
+        }
+
     def _is_schema_valid(
         self,
         prediction: Any,
@@ -2335,16 +2471,39 @@ class GroundingBBoxReward(BaseReward):
     ) -> bool:
         if not isinstance(prediction, dict):
             return False
-        if not isinstance(prediction.get("field_path"), str):
+        if not isinstance(
+            self._get_schema_value(
+                payload=prediction,
+                logical_key="field_path",
+            ),
+            str,
+        ):
             return False
-        if not isinstance(prediction.get("grounding_status"), str):
+        if (
+            self._normalize_grounding_status(
+                status=self._get_schema_value(
+                    payload=prediction,
+                    logical_key="grounding_status",
+                )
+            )
+            is None
+        ):
             return False
-        if not isinstance(prediction.get("evidence_occurrences"), list):
+        if not isinstance(
+            self._get_schema_value(
+                payload=prediction,
+                logical_key="prediction_occurrences",
+            ),
+            list,
+        ):
             return False
         if not pred_boxes:
             return False
 
-        coord_system = label.get("coord_system")
+        coord_system = self._get_schema_value(
+            payload=label,
+            logical_key="coord_system",
+        )
         if not isinstance(coord_system, str):
             return True
 
@@ -2358,14 +2517,37 @@ class GroundingBBoxReward(BaseReward):
     ) -> bool:
         if not isinstance(prediction, dict):
             return False
-        if not isinstance(prediction.get("field_path"), str):
+        if not isinstance(
+            self._get_schema_value(
+                payload=prediction,
+                logical_key="field_path",
+            ),
+            str,
+        ):
             return False
-        if not isinstance(prediction.get("grounding_status"), str):
+        if (
+            self._normalize_grounding_status(
+                status=self._get_schema_value(
+                    payload=prediction,
+                    logical_key="grounding_status",
+                )
+            )
+            is None
+        ):
             return False
-        if not isinstance(prediction.get("evidence_occurrences"), list):
+        if not isinstance(
+            self._get_schema_value(
+                payload=prediction,
+                logical_key="prediction_occurrences",
+            ),
+            list,
+        ):
             return False
 
-        coord_system = label.get("coord_system")
+        coord_system = self._get_schema_value(
+            payload=label,
+            logical_key="coord_system",
+        )
         if not isinstance(coord_system, str):
             return True
         return all(box.get("coord_system") == coord_system for box in pred_boxes)
@@ -2377,7 +2559,10 @@ class GroundingBBoxReward(BaseReward):
         if not isinstance(prediction, dict):
             return []
 
-        occurrences = prediction.get("evidence_occurrences")
+        occurrences = self._get_schema_value(
+            payload=prediction,
+            logical_key="prediction_occurrences",
+        )
         if not isinstance(occurrences, list):
             return []
 
@@ -2390,7 +2575,10 @@ class GroundingBBoxReward(BaseReward):
         self,
         label: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        occurrences = label.get("positive_occurrences")
+        occurrences = self._get_schema_value(
+            payload=label,
+            logical_key="label_occurrences",
+        )
         if not isinstance(occurrences, list):
             return []
 
@@ -2406,8 +2594,14 @@ class GroundingBBoxReward(BaseReward):
         if not isinstance(occurrence, dict):
             return []
 
-        page = occurrence.get("page")
-        fragments = occurrence.get("fragments")
+        page = self._get_schema_value(
+            payload=occurrence,
+            logical_key="page",
+        )
+        fragments = self._get_schema_value(
+            payload=occurrence,
+            logical_key="fragments",
+        )
         if isinstance(fragments, list):
             fragment_boxes = []
             for fragment in fragments:
@@ -2415,8 +2609,14 @@ class GroundingBBoxReward(BaseReward):
                     continue
                 box = self._build_box_record(
                     page=page,
-                    bbox=fragment.get("bbox"),
-                    coord_system=fragment.get("coord_system"),
+                    bbox=self._get_schema_value(
+                        payload=fragment,
+                        logical_key="bbox",
+                    ),
+                    coord_system=self._get_schema_value(
+                        payload=fragment,
+                        logical_key="coord_system",
+                    ),
                 )
                 if box is not None:
                     fragment_boxes.append(box)
@@ -2425,8 +2625,14 @@ class GroundingBBoxReward(BaseReward):
 
         box = self._build_box_record(
             page=page,
-            bbox=occurrence.get("envelope_bbox"),
-            coord_system=occurrence.get("coord_system"),
+            bbox=self._get_schema_value(
+                payload=occurrence,
+                logical_key="envelope_bbox",
+            ),
+            coord_system=self._get_schema_value(
+                payload=occurrence,
+                logical_key="coord_system",
+            ),
         )
         if box is None:
             return []
@@ -2542,7 +2748,10 @@ class GroundingBBoxReward(BaseReward):
         self,
         label: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        hard_negatives = label.get("hard_negative_evidence")
+        hard_negatives = self._get_schema_value(
+            payload=label,
+            logical_key="hard_negative_evidence",
+        )
         if not isinstance(hard_negatives, list):
             return []
 
@@ -2551,9 +2760,18 @@ class GroundingBBoxReward(BaseReward):
             if not isinstance(hard_negative, dict):
                 continue
             box = self._build_box_record(
-                page=hard_negative.get("page"),
-                bbox=hard_negative.get("bbox"),
-                coord_system=label.get("coord_system"),
+                page=self._get_schema_value(
+                    payload=hard_negative,
+                    logical_key="page",
+                ),
+                bbox=self._get_schema_value(
+                    payload=hard_negative,
+                    logical_key="bbox",
+                ),
+                coord_system=self._get_schema_value(
+                    payload=label,
+                    logical_key="coord_system",
+                ),
             )
             if box is not None:
                 boxes.append(box)
@@ -2615,6 +2833,387 @@ class GroundingBBoxReward(BaseReward):
             outer_box[0] <= center_x <= outer_box[2]
             and outer_box[1] <= center_y <= outer_box[3]
         )
+
+    def _clip_reward(
+        self,
+        reward: float,
+    ) -> float:
+        return min(
+            self.max_reward,
+            max(
+                self.min_reward,
+                reward,
+            ),
+        )
+
+
+class GroundingSelectionReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        extraction_profile: str,
+        weight: float,
+        category_token: str,
+        format_reward: float,
+        schema_reward: float,
+        exact_match_reward: float,
+        partial_match_weight: float,
+        over_selection_penalty: float,
+        wrong_selection_penalty: float,
+        min_reward: float,
+        max_reward: float,
+        schema_keys: Optional[Dict[str, List[str]]] = None,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            extraction_profile=extraction_profile,
+            weight=weight,
+        )
+        self.category_token = category_token
+        self.format_reward = format_reward
+        self.schema_reward = schema_reward
+        self.exact_match_reward = exact_match_reward
+        self.partial_match_weight = partial_match_weight
+        self.over_selection_penalty = over_selection_penalty
+        self.wrong_selection_penalty = wrong_selection_penalty
+        self.min_reward = min_reward
+        self.max_reward = max_reward
+        self.schema_keys = self._normalize_schema_keys(schema_keys=schema_keys)
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if not self.has_category_token(
+                category=category,
+                token=self.category_token,
+            ):
+                rewards.append(None)
+                continue
+
+            label = self._parse_label(solution=sol)
+            if label is None:
+                rewards.append(None)
+                continue
+
+            gold_items = self._get_grounding_items(payload=label)
+            if gold_items is None:
+                rewards.append(None)
+                continue
+
+            gold_item_map, gold_invalid_count = self._build_item_map(
+                items=gold_items,
+            )
+            if gold_invalid_count > 0:
+                rewards.append(None)
+                continue
+            if not self._has_valid_gold_selections(item_map=gold_item_map):
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            prediction = GroundingBBoxReward._try_parse_json(text=extracted_answer)
+            if prediction is None:
+                rewards.append(0.0)
+                continue
+
+            rewards.append(
+                self._compute_selection_reward(
+                    prediction=prediction,
+                    gold_item_map=gold_item_map,
+                )
+            )
+
+        return rewards
+
+    def _compute_selection_reward(
+        self,
+        prediction: Any,
+        gold_item_map: Dict[str, Dict[str, Any]],
+    ) -> float:
+        if not isinstance(prediction, dict):
+            return 0.0
+
+        prediction_items = self._get_grounding_items(payload=prediction)
+        if prediction_items is None:
+            return self._clip_reward(reward=self.format_reward)
+
+        prediction_item_map, prediction_invalid_count = self._build_item_map(
+            items=prediction_items,
+        )
+        prediction_schema_valid = self._is_prediction_schema_valid(
+            item_map=prediction_item_map,
+            invalid_count=prediction_invalid_count,
+        )
+
+        base_reward = self.format_reward
+        if prediction_schema_valid:
+            base_reward += self.schema_reward
+
+        quality = self._compute_target_quality(
+            prediction_item_map=prediction_item_map,
+            gold_item_map=gold_item_map,
+        )
+        reward = base_reward + max(0.0, self.max_reward - base_reward) * quality
+        reward += self._compute_extra_target_penalty(
+            prediction_item_map=prediction_item_map,
+            gold_item_map=gold_item_map,
+        )
+        reward += self.wrong_selection_penalty * prediction_invalid_count
+        return self._clip_reward(reward=reward)
+
+    def _compute_target_quality(
+        self,
+        prediction_item_map: Dict[str, Dict[str, Any]],
+        gold_item_map: Dict[str, Dict[str, Any]],
+    ) -> float:
+        if not gold_item_map:
+            return 1.0 if not prediction_item_map else 0.0
+
+        total_quality = 0.0
+        for target_id, gold_item in gold_item_map.items():
+            prediction_item = prediction_item_map.get(target_id)
+            if prediction_item is None:
+                continue
+            total_quality += self._compute_item_quality(
+                prediction_item=prediction_item,
+                gold_item=gold_item,
+            )
+
+        return total_quality / len(gold_item_map)
+
+    def _compute_item_quality(
+        self,
+        prediction_item: Dict[str, Any],
+        gold_item: Dict[str, Any],
+    ) -> float:
+        prediction_selection = self._normalize_selected_ids(item=prediction_item)
+        gold_selection = self._normalize_selected_ids(item=gold_item)
+        if prediction_selection is None or gold_selection is None:
+            return 0.0
+
+        prediction_ids, has_duplicate_ids = prediction_selection
+        gold_ids, _ = gold_selection
+        if has_duplicate_ids:
+            return 0.0
+
+        max_item_score = self.exact_match_reward + self.partial_match_weight
+        if max_item_score <= 0:
+            return 1.0 if prediction_ids == gold_ids else 0.0
+
+        if prediction_ids == gold_ids:
+            return 1.0
+
+        item_score = self.partial_match_weight * self._selection_f1(
+            pred_selected_ids=prediction_ids,
+            gold_selected_ids=gold_ids,
+        )
+        if prediction_ids - gold_ids:
+            item_score += self.wrong_selection_penalty
+        if len(prediction_ids) > len(gold_ids):
+            item_score += self.over_selection_penalty
+
+        return min(
+            1.0,
+            max(
+                0.0,
+                item_score / max_item_score,
+            ),
+        )
+
+    def _compute_extra_target_penalty(
+        self,
+        prediction_item_map: Dict[str, Dict[str, Any]],
+        gold_item_map: Dict[str, Dict[str, Any]],
+    ) -> float:
+        extra_target_count = len(
+            set(prediction_item_map.keys()) - set(gold_item_map.keys())
+        )
+        return self.wrong_selection_penalty * extra_target_count
+
+    def _parse_label(
+        self,
+        solution: Any,
+    ) -> Optional[Dict[str, Any]]:
+        if isinstance(solution, dict):
+            return solution
+        parsed = GroundingBBoxReward._try_parse_json(text=solution)
+        if isinstance(parsed, dict):
+            return parsed
+        return None
+
+    def _get_grounding_items(
+        self,
+        payload: Dict[str, Any],
+    ) -> Optional[List[Dict[str, Any]]]:
+        items = self._get_schema_value(
+            payload=payload,
+            logical_key="items",
+        )
+        if not isinstance(items, list):
+            return None
+        if not all(isinstance(item, dict) for item in items):
+            return None
+        return items
+
+    def _build_item_map(
+        self,
+        items: List[Dict[str, Any]],
+    ) -> Tuple[Dict[str, Dict[str, Any]], int]:
+        item_map: Dict[str, Dict[str, Any]] = {}
+        invalid_count = 0
+        for item in items:
+            target_id = self._normalize_target_id(item=item)
+            if target_id is None:
+                invalid_count += 1
+                continue
+            if target_id in item_map:
+                invalid_count += 1
+                continue
+            item_map[target_id] = item
+        return item_map, invalid_count
+
+    def _has_valid_gold_selections(
+        self,
+        item_map: Dict[str, Dict[str, Any]],
+    ) -> bool:
+        for item in item_map.values():
+            selected_ids = self._normalize_selected_ids(item=item)
+            if selected_ids is None:
+                return False
+            _, has_duplicate_ids = selected_ids
+            if has_duplicate_ids:
+                return False
+        return True
+
+    def _is_prediction_schema_valid(
+        self,
+        item_map: Dict[str, Dict[str, Any]],
+        invalid_count: int,
+    ) -> bool:
+        if invalid_count > 0:
+            return False
+        return all(
+            self._is_prediction_item_schema_valid(item=item)
+            for item in item_map.values()
+        )
+
+    def _is_prediction_item_schema_valid(
+        self,
+        item: Dict[str, Any],
+    ) -> bool:
+        selected_ids = self._normalize_selected_ids(item=item)
+        if selected_ids is None:
+            return False
+        _, has_duplicate_ids = selected_ids
+        return not has_duplicate_ids
+
+    def _normalize_target_id(
+        self,
+        item: Dict[str, Any],
+    ) -> Optional[str]:
+        value = self._get_schema_value(
+            payload=item,
+            logical_key="target_id",
+        )
+        if not isinstance(value, (str, int)):
+            return None
+        normalized = str(value).strip()
+        return normalized if normalized else None
+
+    def _get_schema_value(
+        self,
+        payload: Dict[str, Any],
+        logical_key: str,
+    ) -> Any:
+        if not isinstance(payload, dict):
+            return None
+        aliases = self.schema_keys[logical_key]
+        for alias in aliases:
+            if alias in payload:
+                return payload[alias]
+        return None
+
+    def _normalize_selected_ids(
+        self,
+        item: Dict[str, Any],
+    ) -> Optional[Tuple[Set[str], bool]]:
+        value = self._get_schema_value(
+            payload=item,
+            logical_key="selected_ids",
+        )
+        if not isinstance(value, list):
+            return None
+        normalized_ids: List[str] = []
+        for selected_id in value:
+            if isinstance(selected_id, (str, int)):
+                normalized_id = str(selected_id).strip()
+                if normalized_id:
+                    normalized_ids.append(normalized_id)
+                    continue
+            return None
+        selected_id_set = set(normalized_ids)
+        return selected_id_set, len(selected_id_set) != len(normalized_ids)
+
+    def _normalize_schema_keys(
+        self,
+        schema_keys: Optional[Dict[str, List[str]]],
+    ) -> Dict[str, List[str]]:
+        config = schema_keys or self._default_schema_keys()
+        required_keys = self._default_schema_keys().keys()
+        normalized: Dict[str, List[str]] = {}
+        for logical_key in required_keys:
+            if logical_key not in config:
+                raise ValueError(
+                    f"grounding_selection.schema_keys missing key: {logical_key}"
+                )
+            aliases = config[logical_key]
+            normalized[logical_key] = GroundingBBoxReward._normalize_aliases(
+                aliases=aliases,
+                config_name=f"grounding_selection.schema_keys.{logical_key}",
+            )
+        return normalized
+
+    @staticmethod
+    def _selection_f1(
+        pred_selected_ids: Set[str],
+        gold_selected_ids: Set[str],
+    ) -> float:
+        if not pred_selected_ids or not gold_selected_ids:
+            return 0.0
+        true_positive = len(pred_selected_ids & gold_selected_ids)
+        precision = true_positive / len(pred_selected_ids)
+        recall = true_positive / len(gold_selected_ids)
+        if precision + recall == 0:
+            return 0.0
+        return 2 * precision * recall / (precision + recall)
+
+    @staticmethod
+    def _default_schema_keys() -> Dict[str, List[str]]:
+        return {
+            "items": ["grounding"],
+            "target_id": ["target_id"],
+            "selected_ids": [
+                "selected_ids",
+                "selected_candidate_ids",
+            ],
+        }
 
     def _clip_reward(
         self,
