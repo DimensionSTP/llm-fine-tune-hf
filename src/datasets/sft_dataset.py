@@ -51,6 +51,7 @@ class StructuralDataset(Dataset):
         dataset_file_path: Optional[str] = None,
         allow_dataset_file_name_mismatch: bool = False,
         dataset_image: Optional[Dict[str, Any]] = None,
+        sft_label_mask: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -72,6 +73,7 @@ class StructuralDataset(Dataset):
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
         self._init_image_io(dataset_image=dataset_image)
+        self._init_sft_label_mask_validation(sft_label_mask=sft_label_mask)
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -356,7 +358,182 @@ class StructuralDataset(Dataset):
             )
 
         encoded["labels"] = labels
+        self._validate_sft_label_mask(
+            input_ids=input_ids,
+            labels=labels,
+            attention_mask=attention_mask,
+            start_indices=start_indices,
+            end_indices=end_indices,
+        )
         return encoded
+
+    def validate_sft_label_batch(
+        self,
+        batch: Dict[str, torch.Tensor],
+    ) -> Dict[str, Any]:
+        if "input_ids" not in batch or "labels" not in batch:
+            raise ValueError("batch must contain input_ids and labels.")
+
+        input_ids = batch["input_ids"]
+        labels = batch["labels"]
+        attention_mask = batch.get("attention_mask")
+        reports = []
+        for sample_idx in range(input_ids.size(0)):
+            sample_attention_mask = None
+            if attention_mask is not None:
+                sample_attention_mask = attention_mask[sample_idx]
+            reports.append(
+                self._build_sft_label_mask_report(
+                    input_ids=input_ids[sample_idx],
+                    labels=labels[sample_idx],
+                    attention_mask=sample_attention_mask,
+                    start_indices=self.find_pattern_indices(
+                        input_ids=input_ids[sample_idx],
+                        pattern=self.response_start_tokens,
+                    ),
+                    end_indices=self.find_pattern_indices(
+                        input_ids=input_ids[sample_idx],
+                        pattern=self.response_end_tokens,
+                    ),
+                )
+            )
+
+        errors = [error for report in reports for error in report["errors"]]
+        if errors and self.sft_label_mask_validation_mode == "strict":
+            raise ValueError(
+                "SFT batch label mask validation failed: " + "; ".join(errors)
+            )
+        return {
+            "num_samples": len(reports),
+            "reports": reports,
+            "errors": errors,
+        }
+
+    def _validate_sft_label_mask(
+        self,
+        input_ids: torch.Tensor,
+        labels: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        start_indices: List[int],
+        end_indices: List[int],
+    ) -> None:
+        if not self.sft_label_mask_validation_enabled:
+            return
+
+        report = self._build_sft_label_mask_report(
+            input_ids=input_ids,
+            labels=labels,
+            attention_mask=attention_mask,
+            start_indices=start_indices,
+            end_indices=end_indices,
+        )
+        if report["errors"] and self.sft_label_mask_validation_mode == "strict":
+            raise ValueError(
+                "SFT label mask validation failed: " + "; ".join(report["errors"])
+            )
+
+    def _build_sft_label_mask_report(
+        self,
+        input_ids: torch.Tensor,
+        labels: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        start_indices: List[int],
+        end_indices: List[int],
+    ) -> Dict[str, Any]:
+        expected_mask = self._build_sft_expected_label_mask(
+            input_ids=input_ids,
+            start_indices=start_indices,
+            end_indices=end_indices,
+        )
+        if attention_mask is not None:
+            expected_mask = expected_mask & (attention_mask != 0)
+
+        active_label_mask = labels != self.ignore_index
+        assistant_label_tokens = int(active_label_mask.sum().item())
+        prompt_label_leaks = int((active_label_mask & ~expected_mask).sum().item())
+        target_label_mismatches = int(
+            ((labels != input_ids) & expected_mask).sum().item()
+        )
+        padding_label_leaks = 0
+        if attention_mask is not None:
+            padding_label_leaks = int(
+                (active_label_mask & (attention_mask == 0)).sum().item()
+            )
+
+        errors = []
+        if len(start_indices) == 0:
+            errors.append("response_start_template was not found.")
+        if assistant_label_tokens < self.sft_label_mask_min_assistant_label_tokens:
+            errors.append(
+                "assistant label token count is below "
+                f"{self.sft_label_mask_min_assistant_label_tokens}."
+            )
+        if prompt_label_leaks > 0:
+            errors.append(f"prompt label leak count={prompt_label_leaks}.")
+        if padding_label_leaks > 0:
+            errors.append(f"padding label leak count={padding_label_leaks}.")
+        if target_label_mismatches > 0:
+            errors.append(f"target label mismatch count={target_label_mismatches}.")
+
+        report = {
+            "assistant_label_tokens": assistant_label_tokens,
+            "response_start_count": len(start_indices),
+            "response_end_count": len(end_indices),
+            "prompt_label_leaks": prompt_label_leaks,
+            "padding_label_leaks": padding_label_leaks,
+            "target_label_mismatches": target_label_mismatches,
+            "truncated_assistant": self._is_assistant_truncated(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                start_indices=start_indices,
+                end_indices=end_indices,
+            ),
+            "errors": errors,
+        }
+        return report
+
+    def _build_sft_expected_label_mask(
+        self,
+        input_ids: torch.Tensor,
+        start_indices: List[int],
+        end_indices: List[int],
+    ) -> torch.Tensor:
+        expected_mask = torch.zeros_like(
+            input_ids,
+            dtype=torch.bool,
+        )
+
+        end_idx_pos = 0
+        for start_idx in start_indices:
+            content_start = start_idx + len(self.response_start_tokens)
+            while end_idx_pos < len(end_indices):
+                if end_indices[end_idx_pos] > start_idx:
+                    content_end = end_indices[end_idx_pos]
+                    expected_mask[content_start:content_end] = True
+                    end_idx_pos += 1
+                    break
+                end_idx_pos += 1
+            else:
+                expected_mask[content_start:] = True
+
+        return expected_mask
+
+    def _is_assistant_truncated(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        start_indices: List[int],
+        end_indices: List[int],
+    ) -> bool:
+        if not self.sft_label_mask_report_truncated_assistant:
+            return False
+        if len(start_indices) == 0:
+            return False
+        if any(end_idx > start_indices[-1] for end_idx in end_indices):
+            return False
+        if attention_mask is None:
+            return input_ids.size(0) >= self.max_length
+        return int(attention_mask.sum().item()) >= self.max_length
 
     def find_pattern_indices(
         self,
@@ -406,6 +583,52 @@ class StructuralDataset(Dataset):
         self.convert_unsupported_extensions = settings["convert_unsupported_extensions"]
         self.unsupported_path_extensions = settings["unsupported_path_extensions"]
         self.converted_image_mode = settings["converted_image_mode"]
+
+    def _init_sft_label_mask_validation(
+        self,
+        sft_label_mask: Optional[Dict[str, Any]],
+    ) -> None:
+        config = sft_label_mask or {}
+        self.sft_label_mask_validation_enabled = bool(
+            self._get_sft_label_mask_config_value(
+                config=config,
+                key="validation_enabled",
+                default=True,
+            )
+        )
+        self.sft_label_mask_validation_mode = str(
+            self._get_sft_label_mask_config_value(
+                config=config,
+                key="validation_mode",
+                default="strict",
+            )
+        )
+        if self.sft_label_mask_validation_mode not in ["strict", "report"]:
+            raise ValueError("sft_label_mask.validation_mode must be strict or report.")
+        self.sft_label_mask_min_assistant_label_tokens = int(
+            self._get_sft_label_mask_config_value(
+                config=config,
+                key="min_assistant_label_tokens",
+                default=1,
+            )
+        )
+        self.sft_label_mask_report_truncated_assistant = bool(
+            self._get_sft_label_mask_config_value(
+                config=config,
+                key="report_truncated_assistant",
+                default=True,
+            )
+        )
+
+    @staticmethod
+    def _get_sft_label_mask_config_value(
+        config: Dict[str, Any],
+        key: str,
+        default: Any,
+    ) -> Any:
+        if key in config:
+            return config[key]
+        return default
 
     def _compute_target_size(
         self,
@@ -520,6 +743,7 @@ class ConversationalDataset(StructuralDataset):
         dataset_file_path: Optional[str] = None,
         allow_dataset_file_name_mismatch: bool = False,
         dataset_image: Optional[Dict[str, Any]] = None,
+        sft_label_mask: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -539,6 +763,7 @@ class ConversationalDataset(StructuralDataset):
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
         self._init_image_io(dataset_image=dataset_image)
+        self._init_sft_label_mask_validation(sft_label_mask=sft_label_mask)
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
