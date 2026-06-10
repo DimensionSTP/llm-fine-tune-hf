@@ -150,3 +150,25 @@ rewards:
     positive_duplicate_iou_threshold: ${reward.grounding_bbox.positive_duplicate_iou_threshold}
     min_reward: ${reward.grounding_bbox.min_reward}
     max_reward: ${reward.grounding_bbox.max_reward}
+    schema_keys: ${reward.grounding_bbox.schema_keys}
+    status_values: ${reward.grounding_bbox.status_values}
+
+  - _target_: src.utils.GroundingSelectionReward
+    is_answer_tag: ${reward.is_answer_tag}
+    think_start_token: ${reward.think_start_token}
+    think_end_token: ${reward.think_end_token}
+    answer_start_token: ${reward.answer_start_token}
+    answer_end_token: ${reward.answer_end_token}
+    eos_token: ${reward.eos_token}
+    extraction_profile: ${reward.extraction_profile}
+    weight: ${reward.weight.grounding_selection}
+    category_token: ${reward.grounding_selection.category_token}
+    format_reward: ${reward.grounding_selection.format_reward}
+    schema_reward: ${reward.grounding_selection.schema_reward}
+    exact_match_reward: ${reward.grounding_selection.exact_match_reward}
+    partial_match_weight: ${reward.grounding_selection.partial_match_weight}
+    over_selection_penalty: ${reward.grounding_selection.over_selection_penalty}
+    wrong_selection_penalty: ${reward.grounding_selection.wrong_selection_penalty}
+    min_reward: ${reward.grounding_selection.min_reward}
+    max_reward: ${reward.grounding_selection.max_reward}
+    schema_keys: ${reward.grounding_selection.schema_keys}
