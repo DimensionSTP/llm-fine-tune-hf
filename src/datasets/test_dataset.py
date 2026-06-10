@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
 
+from ..helpers.dataset_paths import resolve_dataset_file_path
 from ..helpers import build_enable_thinking_kwargs
 
 
@@ -39,8 +40,14 @@ class StructuralDataset(Dataset):
         left_padding: bool,
         is_enable_thinking: bool,
         max_length: int,
+        dataset_subdir: Optional[str] = None,
+        dataset_file_path: Optional[str] = None,
+        allow_dataset_file_name_mismatch: bool = False,
     ) -> None:
         self.data_path = data_path
+        self.dataset_subdir = dataset_subdir
+        self.dataset_file_path = dataset_file_path
+        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
         self.is_preprocessed = is_preprocessed
@@ -150,10 +157,13 @@ class StructuralDataset(Dataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        file_name = f"{self.dataset_name}.{self.dataset_format}"
-        full_data_path = os.path.join(
-            self.data_path,
-            file_name,
+        full_data_path = resolve_dataset_file_path(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_subdir=self.dataset_subdir,
+            dataset_file_path=self.dataset_file_path,
+            allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
 
         if self.dataset_format == "parquet":
@@ -366,8 +376,14 @@ class ConversationalDataset(StructuralDataset):
         left_padding: bool,
         is_enable_thinking: bool,
         max_length: int,
+        dataset_subdir: Optional[str] = None,
+        dataset_file_path: Optional[str] = None,
+        allow_dataset_file_name_mismatch: bool = False,
     ) -> None:
         self.data_path = data_path
+        self.dataset_subdir = dataset_subdir
+        self.dataset_file_path = dataset_file_path
+        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
         self.is_preprocessed = is_preprocessed
@@ -477,10 +493,13 @@ class ConversationalDataset(StructuralDataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        file_name = f"{self.dataset_name}.{self.dataset_format}"
-        full_data_path = os.path.join(
-            self.data_path,
-            file_name,
+        full_data_path = resolve_dataset_file_path(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_subdir=self.dataset_subdir,
+            dataset_file_path=self.dataset_file_path,
+            allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
 
         if self.dataset_format == "parquet":

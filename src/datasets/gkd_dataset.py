@@ -1,11 +1,12 @@
-from typing import Dict, List
-import os
+from typing import Dict, List, Optional
 
 import importlib
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
 load_dataset = datasets.load_dataset
+
+from ..helpers.dataset_paths import resolve_dataset_file_path
 
 
 class StructuralDataset:
@@ -22,8 +23,14 @@ class StructuralDataset:
         role_column_name: str,
         content_column_name: str,
         assistant_column_name: str,
+        dataset_subdir: Optional[str] = None,
+        dataset_file_path: Optional[str] = None,
+        allow_dataset_file_name_mismatch: bool = False,
     ) -> None:
         self.data_path = data_path
+        self.dataset_subdir = dataset_subdir
+        self.dataset_file_path = dataset_file_path
+        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -36,10 +43,13 @@ class StructuralDataset:
         self.assistant_column_name = assistant_column_name
 
     def __call__(self) -> Dict[str, HFDataset]:
-        file_name = f"{self.dataset_name}.{self.dataset_format}"
-        full_data_path = os.path.join(
-            self.data_path,
-            file_name,
+        full_data_path = resolve_dataset_file_path(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_subdir=self.dataset_subdir,
+            dataset_file_path=self.dataset_file_path,
+            allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
 
         dataset_format = self.dataset_format
@@ -133,8 +143,14 @@ class ConversationalDataset:
         dataset_name: str,
         dataset_format: str,
         conversation_column_name: str,
+        dataset_subdir: Optional[str] = None,
+        dataset_file_path: Optional[str] = None,
+        allow_dataset_file_name_mismatch: bool = False,
     ) -> None:
         self.data_path = data_path
+        self.dataset_subdir = dataset_subdir
+        self.dataset_file_path = dataset_file_path
+        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -143,10 +159,13 @@ class ConversationalDataset:
         self.conversation_column_name = conversation_column_name
 
     def __call__(self) -> Dict[str, HFDataset]:
-        file_name = f"{self.dataset_name}.{self.dataset_format}"
-        full_data_path = os.path.join(
-            self.data_path,
-            file_name,
+        full_data_path = resolve_dataset_file_path(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_subdir=self.dataset_subdir,
+            dataset_file_path=self.dataset_file_path,
+            allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
 
         dataset_format = self.dataset_format

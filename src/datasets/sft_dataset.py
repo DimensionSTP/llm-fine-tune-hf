@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
 
+from ..helpers.dataset_paths import resolve_dataset_file_path
 from ..helpers import build_enable_thinking_kwargs
 from .image_augmentation import _build_image_augmenter
 
@@ -48,8 +49,14 @@ class StructuralDataset(Dataset):
         max_length: int,
         response_start_template: str,
         response_end_template: Optional[str],
+        dataset_subdir: Optional[str] = None,
+        dataset_file_path: Optional[str] = None,
+        allow_dataset_file_name_mismatch: bool = False,
     ) -> None:
         self.data_path = data_path
+        self.dataset_subdir = dataset_subdir
+        self.dataset_file_path = dataset_file_path
+        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.split = split
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
@@ -192,10 +199,13 @@ class StructuralDataset(Dataset):
 
     def get_dataset(self) -> Dict[str, List[Any]]:
         if self.split in ["train", "val"]:
-            file_name = f"{self.dataset_name}.{self.dataset_format}"
-            full_data_path = os.path.join(
-                self.data_path,
-                file_name,
+            full_data_path = resolve_dataset_file_path(
+                dataset_name=self.dataset_name,
+                dataset_format=self.dataset_format,
+                data_path=self.data_path,
+                dataset_subdir=self.dataset_subdir,
+                dataset_file_path=self.dataset_file_path,
+                allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
             )
         else:
             raise ValueError(f"Inavalid split: {self.split}")
@@ -514,8 +524,14 @@ class ConversationalDataset(StructuralDataset):
         max_length: int,
         response_start_template: str,
         response_end_template: Optional[str],
+        dataset_subdir: Optional[str] = None,
+        dataset_file_path: Optional[str] = None,
+        allow_dataset_file_name_mismatch: bool = False,
     ) -> None:
         self.data_path = data_path
+        self.dataset_subdir = dataset_subdir
+        self.dataset_file_path = dataset_file_path
+        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.split = split
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
@@ -656,10 +672,13 @@ class ConversationalDataset(StructuralDataset):
 
     def get_dataset(self) -> Dict[str, List[Any]]:
         if self.split in ["train", "val"]:
-            file_name = f"{self.dataset_name}.{self.dataset_format}"
-            full_data_path = os.path.join(
-                self.data_path,
-                file_name,
+            full_data_path = resolve_dataset_file_path(
+                dataset_name=self.dataset_name,
+                dataset_format=self.dataset_format,
+                data_path=self.data_path,
+                dataset_subdir=self.dataset_subdir,
+                dataset_file_path=self.dataset_file_path,
+                allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
             )
         else:
             raise ValueError(f"Inavalid split: {self.split}")
