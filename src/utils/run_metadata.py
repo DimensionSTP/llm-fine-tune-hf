@@ -10,6 +10,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from transformers import TrainingArguments
 
+from ..helpers.dataset_paths import build_dataset_file_path_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
 
 
@@ -359,6 +360,22 @@ def build_paths_section(
         "output_base_dir": config.output_base_dir,
         "output_dir": config.output_dir,
         "save_detail": config.save_detail,
+        "dataset": build_dataset_file_path_metadata(
+            dataset_name=config.dataset_name,
+            dataset_format=config.dataset_format,
+            data_path=config.data_path,
+            dataset_subdir=config.dataset_subdir,
+            dataset_file_path=config.dataset_file_path,
+            allow_dataset_file_name_mismatch=config.allow_dataset_file_name_mismatch,
+        ),
+        "test_dataset": build_dataset_file_path_metadata(
+            dataset_name=config.dataset_name,
+            dataset_format=config.dataset_format,
+            data_path=config.data_path,
+            dataset_subdir=config.test_dataset_subdir,
+            dataset_file_path=config.test_dataset_file_path,
+            allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
+        ),
     }
 
 
@@ -393,6 +410,14 @@ def build_summary_section(
             "revision",
             "dataset_name",
             "dataset_format",
+            "data_path",
+            "dataset_subdir",
+            "dataset_file_path",
+            "allow_dataset_file_name_mismatch",
+            "test_dataset_subdir",
+            "test_dataset_file_path",
+            "allow_test_dataset_file_name_mismatch",
+            "dataset_image",
             "data_type",
             "split",
             "split_ratio",

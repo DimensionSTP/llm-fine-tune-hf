@@ -17,6 +17,7 @@ from huggingface_hub import snapshot_download
 
 from tqdm import tqdm
 
+from ..helpers.dataset_paths import resolve_dataset_file_path
 from .collate_fns import collate_fn_vlm
 
 
@@ -225,12 +226,13 @@ def build_lora_request(
 def load_test_dataframe(
     config: DictConfig,
 ) -> pd.DataFrame:
-    file_name = f"{config.dataset_name}.{config.dataset_format}"
-    full_data_path = os.path.join(
-        config.connected_dir,
-        "data",
-        config.test_data_dir,
-        file_name,
+    full_data_path = resolve_dataset_file_path(
+        dataset_name=config.dataset_name,
+        dataset_format=config.dataset_format,
+        data_path=config.data_path,
+        dataset_subdir=config.test_dataset_subdir,
+        dataset_file_path=config.test_dataset_file_path,
+        allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
     )
 
     if config.dataset_format == "parquet":
