@@ -67,6 +67,7 @@ declare -A reward_weights=(
     ["single_kv"]=0.0
     ["multi_kv"]=0.0
     ["grounding_bbox"]=0.0
+    ["grounding_selection"]=0.0
 )
 
 reward_weight_keys=(
@@ -81,6 +82,7 @@ reward_weight_keys=(
     "single_kv"
     "multi_kv"
     "grounding_bbox"
+    "grounding_selection"
 )
 
 reward_weight_args=()
