@@ -1712,22 +1712,7 @@ class SingleKVReward(BaseReward):
 
     @staticmethod
     def _extract_last_leaf_value(node: Any) -> Optional[Any]:
-        leaves: List[Any] = []
-
-        def walk(obj: Any) -> None:
-            if isinstance(obj, dict):
-                for val in obj.values():
-                    walk(val)
-            elif isinstance(obj, list):
-                if any(isinstance(item, (dict, list)) for item in obj):
-                    for item in obj:
-                        walk(item)
-                else:
-                    leaves.append(obj)
-            else:
-                leaves.append(obj)
-
-        walk(node)
+        leaves = SingleKVReward._collect_leaf_values(node=node)
         if not leaves:
             return None
 
@@ -1735,6 +1720,26 @@ class SingleKVReward(BaseReward):
         if isinstance(leaf, list):
             return leaf[-1] if leaf else ""
         return leaf
+
+    @staticmethod
+    def _collect_leaf_values(
+        node: Any,
+    ) -> List[Any]:
+        leaves: List[Any] = []
+        stack = [node]
+        while stack:
+            obj = stack.pop()
+            if isinstance(obj, dict):
+                stack.extend(reversed(list(obj.values())))
+                continue
+            if isinstance(obj, list):
+                if any(isinstance(item, (dict, list)) for item in obj):
+                    stack.extend(reversed(obj))
+                else:
+                    leaves.append(obj)
+                continue
+            leaves.append(obj)
+        return leaves
 
     def _values_match(
         self,
@@ -1833,9 +1838,11 @@ class SingleKVReward(BaseReward):
             gt_table = gt_tables.get(table_name, {})
             pred_table = pred_tables.get(table_name, {})
 
-            gt_rows = gt_table.get("rows", []) if isinstance(gt_table, dict) else []
-            pred_rows = (
-                pred_table.get("rows", []) if isinstance(pred_table, dict) else []
+            gt_rows = self._normalize_table_rows(
+                rows=gt_table.get("rows", []) if isinstance(gt_table, dict) else []
+            )
+            pred_rows = self._normalize_table_rows(
+                rows=pred_table.get("rows", []) if isinstance(pred_table, dict) else []
             )
 
             max_rows = max(len(gt_rows), len(pred_rows))
@@ -1869,7 +1876,42 @@ class SingleKVReward(BaseReward):
     def _row_values_from_row(row: Any) -> List[Any]:
         if not isinstance(row, dict):
             return []
-        return [val for _, val in row.items()]
+        return [row[key] for key in SingleKVReward._sorted_mapping_keys(mapping=row)]
+
+    @staticmethod
+    def _normalize_table_rows(
+        rows: Any,
+    ) -> List[Any]:
+        if isinstance(rows, list):
+            return rows
+        if not isinstance(rows, dict):
+            return []
+        return [rows[key] for key in SingleKVReward._sorted_mapping_keys(mapping=rows)]
+
+    @staticmethod
+    def _sorted_mapping_keys(
+        mapping: Dict[Any, Any],
+    ) -> List[Any]:
+        keys = list(mapping.keys())
+        if all(SingleKVReward._is_int_like(value=key) for key in keys):
+            return sorted(
+                keys,
+                key=lambda key: int(str(key)),
+            )
+        return sorted(
+            keys,
+            key=lambda key: str(key),
+        )
+
+    @staticmethod
+    def _is_int_like(
+        value: Any,
+    ) -> bool:
+        try:
+            int(str(value))
+        except (TypeError, ValueError):
+            return False
+        return True
 
 
 class MultiKVReward(SingleKVReward):
@@ -1976,23 +2018,38 @@ class MultiKVReward(SingleKVReward):
         node: Any,
     ) -> List[Tuple[Tuple[str, ...], Any]]:
         leaves: List[Tuple[Tuple[str, ...], Any]] = []
-
-        def walk(obj: Any, path: List[str]) -> None:
+        stack: List[Tuple[Any, List[str]]] = [
+            (
+                node,
+                [],
+            )
+        ]
+        while stack:
+            obj, path = stack.pop()
             if isinstance(obj, dict):
-                for key, val in obj.items():
+                for key, val in reversed(list(obj.items())):
                     if key == "tables":
                         continue
-                    walk(val, path + [key])
-            elif isinstance(obj, list):
+                    stack.append(
+                        (
+                            val,
+                            path + [key],
+                        )
+                    )
+                continue
+            if isinstance(obj, list):
                 if any(isinstance(item, (dict, list)) for item in obj):
-                    for item in obj:
-                        walk(item, path)
+                    for item in reversed(obj):
+                        stack.append(
+                            (
+                                item,
+                                path,
+                            )
+                        )
                 else:
                     leaves.append((tuple(path), obj))
-            else:
-                leaves.append((tuple(path), obj))
-
-        walk(node, [])
+                continue
+            leaves.append((tuple(path), obj))
         return leaves
 
     def _compute_table_counts(
@@ -2014,9 +2071,11 @@ class MultiKVReward(SingleKVReward):
             gt_table = gt_tables.get(table_name, {})
             pred_table = pred_tables.get(table_name, {})
 
-            gt_rows = gt_table.get("rows", []) if isinstance(gt_table, dict) else []
-            pred_rows = (
-                pred_table.get("rows", []) if isinstance(pred_table, dict) else []
+            gt_rows = self._normalize_table_rows(
+                rows=gt_table.get("rows", []) if isinstance(gt_table, dict) else []
+            )
+            pred_rows = self._normalize_table_rows(
+                rows=pred_table.get("rows", []) if isinstance(pred_table, dict) else []
             )
 
             max_rows = max(len(gt_rows), len(pred_rows))
