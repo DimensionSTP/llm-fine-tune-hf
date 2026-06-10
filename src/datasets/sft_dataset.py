@@ -1,9 +1,6 @@
 from typing import Dict, List, Tuple, Optional, Any
-import os
-import base64
 import io
 import math
-import urllib.request
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -16,6 +13,7 @@ from transformers import AutoTokenizer, AutoProcessor
 
 from ..helpers.dataset_paths import resolve_dataset_file_path
 from ..helpers import build_enable_thinking_kwargs
+from .image_io import build_image_io_settings, load_image, normalize_image_source
 from .image_augmentation import _build_image_augmenter
 
 
@@ -52,6 +50,7 @@ class StructuralDataset(Dataset):
         dataset_subdir: Optional[str] = None,
         dataset_file_path: Optional[str] = None,
         allow_dataset_file_name_mismatch: bool = False,
+        dataset_image: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -72,6 +71,7 @@ class StructuralDataset(Dataset):
         self.assistant_column_name = assistant_column_name
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
+        self._init_image_io(dataset_image=dataset_image)
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -182,7 +182,9 @@ class StructuralDataset(Dataset):
             if not image:
                 image = None
             elif self.image_augmenter is not None or self._should_resize_images:
-                image = [self._process_single_image(img) for img in image]
+                image = [self._process_single_image(image=img) for img in image]
+            else:
+                image = [self._normalize_single_image(image=img) for img in image]
 
         encoded = self.encode_data(
             data=prompt,
@@ -392,6 +394,19 @@ class StructuralDataset(Dataset):
             and do_resize
         )
 
+    def _init_image_io(
+        self,
+        dataset_image: Optional[Dict[str, Any]],
+    ) -> None:
+        settings = build_image_io_settings(
+            dataset_image=dataset_image,
+            default_image_root_dir=self.data_path,
+        )
+        self.image_root_dir = settings["image_root_dir"]
+        self.convert_unsupported_extensions = settings["convert_unsupported_extensions"]
+        self.unsupported_path_extensions = settings["unsupported_path_extensions"]
+        self.converted_image_mode = settings["converted_image_mode"]
+
     def _compute_target_size(
         self,
         width: int,
@@ -422,51 +437,28 @@ class StructuralDataset(Dataset):
         self,
         image: Any,
     ) -> Optional[Image.Image]:
-        if isinstance(image, Image.Image):
-            return image
+        return load_image(
+            image=image,
+            image_root_dir=self.image_root_dir,
+        )
 
-        if isinstance(image, (bytes, bytearray)):
-            return self._load_image_from_bytes(data=bytes(image))
-
-        if not isinstance(image, str):
-            return None
-
-        value = image.strip()
-        if not value:
-            return None
-
-        if value.startswith(("http://", "https://")):
-            try:
-                with urllib.request.urlopen(value) as response:
-                    return self._load_image_from_bytes(data=response.read())
-            except Exception:
-                return None
-
-        if os.path.exists(value):
-            try:
-                with open(value, "rb") as f:
-                    return self._load_image_from_bytes(data=f.read())
-            except Exception:
-                return None
-
-        try:
-            if "base64," in value:
-                _, value = value.split(
-                    "base64,",
-                    1,
-                )
-            decoded = base64.b64decode(
-                value,
-                validate=False,
-            )
-            return self._load_image_from_bytes(data=decoded)
-        except Exception:
-            return None
+    def _normalize_single_image(
+        self,
+        image: Any,
+    ) -> Any:
+        return normalize_image_source(
+            image=image,
+            image_root_dir=self.image_root_dir,
+            convert_unsupported_extensions=self.convert_unsupported_extensions,
+            unsupported_path_extensions=self.unsupported_path_extensions,
+            converted_image_mode=self.converted_image_mode,
+        )
 
     def _process_single_image(
         self,
         image: Any,
     ) -> Any:
+        image = self._normalize_single_image(image=image)
         if self.image_augmenter is None and not self._should_resize_images:
             return image
 
@@ -527,6 +519,7 @@ class ConversationalDataset(StructuralDataset):
         dataset_subdir: Optional[str] = None,
         dataset_file_path: Optional[str] = None,
         allow_dataset_file_name_mismatch: bool = False,
+        dataset_image: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -545,6 +538,7 @@ class ConversationalDataset(StructuralDataset):
         self.content_column_name = content_column_name
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
+        self._init_image_io(dataset_image=dataset_image)
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -656,7 +650,9 @@ class ConversationalDataset(StructuralDataset):
             if not image:
                 image = None
             elif self.image_augmenter is not None or self._should_resize_images:
-                image = [self._process_single_image(img) for img in image]
+                image = [self._process_single_image(image=img) for img in image]
+            else:
+                image = [self._normalize_single_image(image=img) for img in image]
 
         encoded = self.encode_data(
             data=prompt,
