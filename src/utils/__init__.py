@@ -14,6 +14,7 @@ from .rewards import (
     SingleKVReward,
     MultiKVReward,
     GroundingBBoxReward,
+    GroundingSelectionReward,
 )
 from .reward_vector_store import FaissIndex
 from .reward_embedding import VllmEmbedding
@@ -68,6 +69,7 @@ __all__ = [
     "SingleKVReward",
     "MultiKVReward",
     "GroundingBBoxReward",
+    "GroundingSelectionReward",
     "FaissIndex",
     "VllmEmbedding",
     "register_hydra_resolvers",
