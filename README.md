@@ -239,6 +239,25 @@ is_quantized={True or False}
 is_peft={True or False}
 ```
 
+PEFT training uses fresh LoRA initialization by default:
+
+```shell
+peft_initialization.mode=fresh
+```
+
+To continue training an existing adapter without merging it into the base model, use:
+
+```shell
+is_peft=True
+peft_initialization.mode=continue_from_adapter
+peft_initialization.adapter_path=/path/to/adapter/checkpoint
+peft_initialization.adapter_name=adapter
+```
+
+If the adapter path contains `=`, escape each `=` inside the value as `\=` and pass it as a Hydra-quoted value, such as `peft_initialization.adapter_path="/path/with\=a/checkpoint"`.
+
+Adapter continuation is distinct from `resume_from_checkpoint`; it starts a new training run from an existing PEFT adapter, while `resume_from_checkpoint` resumes the same interrupted run. Continuation requires the adapter base model to match the current `pretrained_model_name`, disables merged-model auto-resolution, and incompatible adapter config or unsupported router-LoRA combinations fail fast. `async_grpo` adapter continuation is intentionally unsupported in this release.
+
 * For LLM full fine-tuning(Continued Pretraining) in multi-GPU, recommended
 
 ```shell
