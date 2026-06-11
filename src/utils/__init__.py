@@ -1,5 +1,10 @@
 from .setup import SetUp
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
+from .peft_initialization import (
+    build_peft_initialization_metadata,
+    initialize_peft_model,
+    validate_peft_initialization_config,
+)
 from .collate_fns import collate_fn_vlm
 from .rewards import (
     RewardManager,
@@ -56,6 +61,9 @@ __all__ = [
     "SetUp",
     "ModelLoadPlan",
     "ModelLoadPlanner",
+    "build_peft_initialization_metadata",
+    "initialize_peft_model",
+    "validate_peft_initialization_config",
     "collate_fn_vlm",
     "RewardManager",
     "ThinkFormatReward",
