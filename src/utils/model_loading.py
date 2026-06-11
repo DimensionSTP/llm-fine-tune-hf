@@ -9,6 +9,11 @@ import torch
 from transformers import AutoConfig, BitsAndBytesConfig, PretrainedConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
+from .peft_initialization import (
+    is_peft_continue_from_adapter,
+    validate_peft_continuation_base_resolution,
+)
+
 
 @dataclass
 class ModelLoadPlan:
@@ -56,6 +61,10 @@ class ModelLoadPlanner:
     def resolve_pretrained_model_name(self) -> str:
         pretrained_model_name = self.config.pretrained_model_name
         if self.is_inference() or not self.config.is_preprocessed:
+            return pretrained_model_name
+
+        if is_peft_continue_from_adapter(config=self.config):
+            validate_peft_continuation_base_resolution(config=self.config)
             return pretrained_model_name
 
         merged_model_path = os.path.join(

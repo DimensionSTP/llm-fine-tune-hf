@@ -25,6 +25,7 @@ def train(
     config: DictConfig,
 ) -> None:
     rank = int(os.environ.get("RANK", 0))
+    validate_peft_initialization_config(config=config)
     prepare_train_artifact_config(
         config=config,
         rank=rank,

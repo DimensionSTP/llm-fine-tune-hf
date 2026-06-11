@@ -24,11 +24,12 @@ from transformers import (
     TrainingArguments,
 )
 
-from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
+from peft import PeftModel, prepare_model_for_kbit_training
 
 from ..datasets import *
 from .config_validation import validate_training_arguments_config
 from .model_loading import ModelLoadPlanner
+from .peft_initialization import initialize_peft_model
 from src.utils.rewards import RewardManager
 
 
@@ -175,20 +176,11 @@ class SetUp:
         ):
             model = prepare_model_for_kbit_training(model)
 
-        if self.config.is_peft:
-            peft_config_dict = OmegaConf.to_container(
-                self.config.peft_config,
-                resolve=True,
-            )
-
-            if self.config.dense_to_moe.router_with_lora:
-                peft_config_dict["modules_to_save"] = ["gate"]
-
-            peft_config = LoraConfig(**peft_config_dict)
-            model = get_peft_model(
-                model=model,
-                peft_config=peft_config,
-            )
+        model = initialize_peft_model(
+            model=model,
+            config=self.config,
+            pretrained_model_name=model_load_plan.pretrained_model_name,
+        )
 
         if self.config.dense_to_moe.router_with_lora:
             router_regex = self.config.dense_to_moe.router_lora_regex

@@ -12,6 +12,7 @@ from transformers import TrainingArguments
 
 from ..helpers.dataset_paths import build_dataset_file_path_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
+from .peft_initialization import build_peft_initialization_metadata
 
 
 def prepare_train_artifact_config(
@@ -330,6 +331,7 @@ def build_run_manifest(
         "schema_version": 1,
         "run": build_run_section(config=config),
         "paths": build_paths_section(config=config),
+        "peft_initialization": build_peft_initialization_section(config=config),
         "source": build_source_section(),
         "runtime": build_runtime_section(config=config),
         "summary": build_summary_section(config=config),
@@ -377,6 +379,12 @@ def build_paths_section(
             allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
         ),
     }
+
+
+def build_peft_initialization_section(
+    config: DictConfig,
+) -> Dict[str, Any]:
+    return build_peft_initialization_metadata(config=config)
 
 
 def build_source_section() -> Dict[str, Any]:
@@ -446,6 +454,7 @@ def build_summary_section(
             "quantization_config",
             "model_loading",
             "is_peft",
+            "peft_initialization",
             "peft_config",
             "gradient_checkpointing",
             "gradient_checkpointing_kwargs",
