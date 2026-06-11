@@ -2,6 +2,17 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.22.0] - 2026-06-11
+
+- Add PEFT adapter continuation support so a new PEFT training run can start from an existing LoRA adapter without first merging the adapter into the base model.
+- Add `configs/peft_initialization/lora.yaml` and compose the PEFT initialization defaults into SFT, DPO, KTO, GKD, GRPO, SDPO, and Async GRPO configs.
+- Wire model setup to choose between fresh LoRA initialization and `continue_from_adapter` initialization through the shared `peft_initialization` config.
+- Validate adapter continuation inputs, including required adapter path, trainable adapter mode, base-model match enforcement, unsupported router-LoRA combinations, and intentionally unsupported Async GRPO continuation.
+- Keep adapter continuation separate from interrupted-run resume behavior by bypassing merged-model auto-resolution when continuing from an adapter.
+- Record PEFT initialization metadata in run manifests, including mode, adapter identity, base-model references, config fingerprints, and continuation-related compatibility details.
+- Export PEFT initialization helper APIs for reuse by model loading, setup, run metadata, and downstream integrations.
+- Document PEFT adapter continuation usage, Hydra escaping for adapter paths, and the difference between adapter continuation and `resume_from_checkpoint`.
+
 ## [v1.21.0] - 2026-06-11
 
 - Add dataset path resolver support for `data_path`, `dataset_subdir`, `dataset_file_path`, and filename mismatch guard settings across training and test datasets.
