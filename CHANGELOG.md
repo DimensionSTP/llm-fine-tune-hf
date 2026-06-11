@@ -2,6 +2,20 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.21.0] - 2026-06-11
+
+- Add dataset path resolver support for `data_path`, `dataset_subdir`, `dataset_file_path`, and filename mismatch guard settings across training and test datasets.
+- Route SFT, DPO, KTO, GKD, GRPO, and test dataset loaders through resolved dataset paths so dataset location overrides use one shared contract.
+- Add shared dataset image IO helpers and dataset image config defaults for image root resolution, unsupported extension conversion, and image mode normalization.
+- Normalize VLM image inputs in dataset loaders, including path, decoded image, and converted image handling for training and test flows.
+- Add SFT label-mask validation with strict defaults for assistant label token coverage and truncated-assistant reporting.
+- Record resolved dataset paths in runtime metadata for reproducibility and run auditing.
+- Centralize reward defaults in `configs/reward/base.yaml` and compose them into GRPO, SDPO, and Async GRPO configs.
+- Add configurable grounding bbox schema/status mapping and new `GroundingSelectionReward` support.
+- Stabilize KV reward table handling and export the new dataset helper and reward APIs.
+- Sync grounding selection reward overrides in GRPO, SDPO, and Async GRPO launcher scripts.
+- Update README, reward documentation, and usage guide coverage for dataset path, image loading, SFT mask validation, and reward configuration changes.
+
 ## [v1.20.2] - 2026-06-05
 
 - Add `configs/run_metadata/allocation.yaml` with configurable distributed run allocation timeout, poll interval, and freshness grace settings.
