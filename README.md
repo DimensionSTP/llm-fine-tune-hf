@@ -204,6 +204,14 @@ sft_loss_type={nll or chunked_nll}
 
 `chunked_nll` is SFT-only and reduces peak VRAM for long-context SFT while keeping the NLL objective. It is not compatible with `training_arguments.use_liger_kernel=True`.
 
+* SFT padding strategy
+
+```shell
+sft_padding_strategy={max_length or dynamic}
+```
+
+`max_length` preserves the existing sample-level fixed padding path. `dynamic` keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
+
 * Use preprocessed tokenizer option
 
 ```shell
@@ -305,7 +313,7 @@ image_augmentation.jpeg_quality_max={1 to 100}
 
 `image_augmentation` is disabled by default and applies only to training images for SFT, DPO, GRPO, async GRPO, and SDPO datasets. Validation, evaluation, and test datasets are not augmented. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees` and `erase_probability` disabled unless labels are transformed consistently.
 
-VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
+VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
 
 * Reward embedding vLLM environment isolation
 
