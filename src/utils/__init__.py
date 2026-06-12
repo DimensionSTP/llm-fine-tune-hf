@@ -5,7 +5,7 @@ from .peft_initialization import (
     initialize_peft_model,
     validate_peft_initialization_config,
 )
-from .collate_fns import collate_fn_vlm
+from .collate_fns import SFTDynamicPaddingCollator, collate_fn_vlm
 from .rewards import (
     RewardManager,
     ThinkFormatReward,
@@ -64,6 +64,7 @@ __all__ = [
     "build_peft_initialization_metadata",
     "initialize_peft_model",
     "validate_peft_initialization_config",
+    "SFTDynamicPaddingCollator",
     "collate_fn_vlm",
     "RewardManager",
     "ThinkFormatReward",
