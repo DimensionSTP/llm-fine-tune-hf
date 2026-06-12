@@ -73,6 +73,7 @@ is_enable_thinking: false
 merged_model_path: ${merge_path}/${pretrained_model_name}
 max_length: 4096
 sft_loss_type: nll
+sft_padding_strategy: max_length
 truncation_mode: keep_start
 pad_to_multiple_of: null
 chat_template_path: null

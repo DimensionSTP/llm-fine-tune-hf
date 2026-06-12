@@ -25,6 +25,8 @@ structural:
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
+  sft_padding_strategy: ${sft_padding_strategy}
+  truncation_mode: ${truncation_mode}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
@@ -58,6 +60,8 @@ conversational:
   left_padding: ${left_padding}
   is_enable_thinking: ${is_enable_thinking}
   max_length: ${max_length}
+  sft_padding_strategy: ${sft_padding_strategy}
+  truncation_mode: ${truncation_mode}
   max_pixels: ${max_pixels}
   do_resize: ${do_resize}
   image_augmentation: ${image_augmentation}
