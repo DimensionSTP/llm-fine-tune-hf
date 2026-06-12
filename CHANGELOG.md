@@ -2,6 +2,12 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.23.1] - 2026-06-12
+
+- Align W&B train run identity with the allocated training artifact `run_id` by passing `id=config.run_id` to train-time `wandb.init`.
+- Enable W&B resume handling for train runs with `resume="allow"` so repeated initialization with the same allocated run id can attach to the existing W&B run instead of creating a separate identity.
+- Keep the existing W&B display name based on `logging_name` while using `run_id` as the stable run identifier shared with output artifacts and run metadata.
+
 ## [v1.23.0] - 2026-06-12
 
 - Add SFT dynamic padding support through `sft_padding_strategy={max_length,dynamic}` while preserving `max_length` as the default behavior.
