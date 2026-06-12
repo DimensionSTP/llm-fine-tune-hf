@@ -2,6 +2,19 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.24.0] - 2026-06-12
+
+- Add configurable experiment tracking backend support with W&B as the default backend and MLflow as an opt-in backend through `tracking={wandb,mlflow}`.
+- Add `configs/tracking/wandb.yaml` and `configs/tracking/mlflow.yaml` with backend, trainer reporting, tracking URI, and artifact location settings.
+- Compose tracking defaults into SFT, DPO, KTO, GKD, GRPO, SDPO, and Async GRPO configs.
+- Route trainer `report_to` settings through `${tracking.report_to}` instead of hard-coding W&B in training argument configs.
+- Add tracking utility APIs for train/eval initialization, table logging, alert handling, and backend finalization.
+- Route train, test, large-model test, vLLM test, multi-turn test, and benchmark flows through the shared tracking backend helpers.
+- Preserve W&B train run identity behavior by using artifact `run_id` as the W&B run id.
+- Add MLflow train/eval run support with artifact run-id tags and `tracking_metadata.json` mapping between artifact `run_id` and MLflow run UUID.
+- Add the pinned MLflow dependency to direct dependency files and ignore local tracking database files.
+- Document tracking backend selection, MLflow storage defaults, and checkpoint artifact run-id mapping in README and usage guide updates.
+
 ## [v1.23.1] - 2026-06-12
 
 - Align W&B train run identity with persisted `tracking_run_id` metadata so fresh artifact runs never reuse the checkpoint-local `run_id` as the W&B internal ID.
