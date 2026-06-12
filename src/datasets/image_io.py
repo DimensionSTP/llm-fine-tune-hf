@@ -35,6 +35,13 @@ def normalize_image_source(
     )
     if resolved_path is None:
         return image
+    if not _path_exists(path=resolved_path):
+        decoded_image = load_base64_image(
+            value=image,
+            converted_image_mode=converted_image_mode,
+        )
+        if decoded_image is not None:
+            return decoded_image
     if _has_unsupported_extension(
         path=resolved_path,
         unsupported_path_extensions=unsupported_path_extensions,
@@ -332,6 +339,15 @@ def _convert_image_mode(
     if image.mode == converted_image_mode:
         return image
     return image.convert(converted_image_mode)
+
+
+def _path_exists(
+    path: str,
+) -> bool:
+    try:
+        return os.path.exists(path)
+    except OSError:
+        return False
 
 
 def _has_unsupported_extension(
