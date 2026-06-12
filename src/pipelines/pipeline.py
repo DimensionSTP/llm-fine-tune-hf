@@ -13,8 +13,6 @@ from torch.utils.data.distributed import DistributedSampler
 
 from transformers import set_seed
 
-import wandb
-
 from tqdm import tqdm
 
 from ..helpers import build_enable_thinking_kwargs
@@ -34,7 +32,7 @@ def train(
         validate_train_artifact_config(
             config=config,
         )
-        init_wandb_train_tracking(config=config)
+        init_train_tracking(config=config)
 
     if "seed" in config:
         set_seed(config.seed)
@@ -186,14 +184,16 @@ def train(
         trainer.save_model()
 
         if rank == 0:
-            wandb.run.alert(
+            alert_tracking(
+                config=config,
                 title="Training Complete",
                 text=f"Training process on {config.dataset_name} has successfully finished.",
                 level="INFO",
             )
     except Exception as e:
         if rank == 0:
-            wandb.run.alert(
+            alert_tracking(
+                config=config,
                 title="Training Error",
                 text=f"An error occurred during training on {config.dataset_name}: {e}",
                 level="ERROR",
@@ -206,6 +206,8 @@ def train(
             process=async_vllm_process,
             log_handle=async_vllm_log_handle,
         )
+        if rank == 0:
+            finish_tracking(config=config)
 
 
 def test(
@@ -220,10 +222,7 @@ def test(
         rank = 0
 
     if rank == 0:
-        wandb.init(
-            project=config.project_name,
-            name=config.model_detail,
-        )
+        init_eval_tracking(config=config)
 
     if "seed" in config:
         set_seed(config.seed)
@@ -279,22 +278,30 @@ def test(
                 output_dir=config.test_output_dir,
                 output_name=config.test_output_name,
             )
-            wandb.log({"test_results": wandb.Table(dataframe=df)})
+            log_tracking_table(
+                config=config,
+                key="test_results",
+                dataframe=df,
+            )
 
-            wandb.run.alert(
+            alert_tracking(
+                config=config,
                 title="Testing Complete",
                 text=f"Testing process on {config.dataset_name} has successfully finished.",
                 level="INFO",
             )
     except Exception as e:
         if rank == 0:
-            wandb.run.alert(
+            alert_tracking(
+                config=config,
                 title="Testing Error",
                 text=f"An error occurred during testing on {config.dataset_name}: {e}",
                 level="ERROR",
             )
         raise e
     finally:
+        if rank == 0:
+            finish_tracking(config=config)
         if world_size > 1:
             dist.destroy_process_group()
 
@@ -302,10 +309,7 @@ def test(
 def test_large(
     config: DictConfig,
 ) -> None:
-    wandb.init(
-        project=config.project_name,
-        name=config.model_detail,
-    )
+    init_eval_tracking(config=config)
 
     if "seed" in config:
         set_seed(config.seed)
@@ -339,29 +343,34 @@ def test_large(
             output_dir=config.test_output_dir,
             output_name=config.test_output_name,
         )
-        wandb.log({"test_results": wandb.Table(dataframe=df)})
+        log_tracking_table(
+            config=config,
+            key="test_results",
+            dataframe=df,
+        )
 
-        wandb.run.alert(
+        alert_tracking(
+            config=config,
             title="Large Model Testing Complete",
             text=f"Testing process on {config.dataset_name} has successfully finished.",
             level="INFO",
         )
     except Exception as e:
-        wandb.run.alert(
+        alert_tracking(
+            config=config,
             title="Large Model Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
         raise e
+    finally:
+        finish_tracking(config=config)
 
 
 def test_vllm(
     config: DictConfig,
 ) -> None:
-    wandb.init(
-        project=config.project_name,
-        name=config.model_detail,
-    )
+    init_eval_tracking(config=config)
 
     if "seed" in config:
         set_seed(config.seed)
@@ -488,29 +497,34 @@ def test_vllm(
             force_ascii=False,
         )
 
-        wandb.log({"test_results": wandb.Table(dataframe=df)})
+        log_tracking_table(
+            config=config,
+            key="test_results",
+            dataframe=df,
+        )
 
-        wandb.run.alert(
+        alert_tracking(
+            config=config,
             title="vLLM Testing Complete",
             text=f"Testing process on {config.dataset_name} has successfully finished.",
             level="INFO",
         )
     except Exception as e:
-        wandb.run.alert(
+        alert_tracking(
+            config=config,
             title="vLLM Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
         raise e
+    finally:
+        finish_tracking(config=config)
 
 
 def test_vllm_multi_turn(
     config: DictConfig,
 ) -> None:
-    wandb.init(
-        project=config.project_name,
-        name=config.model_detail,
-    )
+    init_eval_tracking(config=config)
 
     if "seed" in config:
         set_seed(config.seed)
@@ -658,17 +672,25 @@ def test_vllm_multi_turn(
                 )
             )
 
-        wandb.log({"test_results": wandb.Table(dataframe=result_df)})
-        wandb.run.alert(
+        log_tracking_table(
+            config=config,
+            key="test_results",
+            dataframe=result_df,
+        )
+        alert_tracking(
+            config=config,
             title="vLLM Multi-Turn Testing Complete",
             text=f"Testing process on {config.dataset_name} has successfully finished.",
             level="INFO",
         )
 
     except Exception as e:
-        wandb.run.alert(
+        alert_tracking(
+            config=config,
             title="vLLM Multi-Turn Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
         raise e
+    finally:
+        finish_tracking(config=config)
