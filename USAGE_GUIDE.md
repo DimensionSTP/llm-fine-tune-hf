@@ -53,6 +53,8 @@ python main.py mode=test_vllm_multi_turn
 
 Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, `run_manifest.json` records planned and observed distributed, device, and batch runtime metadata.
 
+W&B is the default tracking backend. Use `tracking=mlflow` to route Trainer reporting and pipeline tracking through MLflow. MLflow uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and train runs write `${output_dir}/tracking_metadata.json` with the generated MLflow run UUID and artifact `run_id` mapping.
+
 ## Script-based Execution
 
 - `bash scripts/preprocessing/preprocess.sh`
@@ -104,6 +106,7 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - SFT padding: `sft_padding_strategy`
 - Training strategy: `strategy=deepspeed`
 - Distributed launch: `distributed.enabled`, `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, `distributed.main_process_port`
+- Tracking backend: `tracking=wandb`, `tracking=mlflow`
 - PEFT/quantization: `is_quantized`, `is_peft`
 - LoRA merge: `merge_max_shard_size`, `merge_pack_qwen_moe_experts`
 - GRPO/vLLM: `use_vllm`, `vllm_mode`, `vllm_sync_strategy`
