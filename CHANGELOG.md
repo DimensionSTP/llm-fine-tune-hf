@@ -2,6 +2,18 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v1.23.0] - 2026-06-12
+
+- Add SFT dynamic padding support through `sft_padding_strategy={max_length,dynamic}` while preserving `max_length` as the default behavior.
+- Add SFT dataset config wiring for `sft_padding_strategy` and `truncation_mode` across structural and conversational SFT datasets.
+- Add `SFTDynamicPaddingCollator` for batch-level right padding of SFT LLM and VLM tensor batches, including sequence tensors and VLM pixel tensors.
+- Wire the training pipeline to pass an SFT-specific data collator into trainer construction when dynamic padding is enabled.
+- Validate dynamic padding constraints, including unsupported left padding, invalid padding strategy values, invalid truncation modes, empty batches, inconsistent batch keys, and non-tensor batch values.
+- Record the active SFT padding strategy in run metadata for reproducibility and auditability.
+- Decode base64 VLM image payloads before path handling so encoded images are not misread as filesystem paths.
+- Export the SFT dynamic padding collator API for downstream reuse.
+- Document SFT padding strategy options, `pad_to_multiple_of` behavior, right-padding limits, and base64 VLM image handling in README and usage guide updates.
+
 ## [v1.22.0] - 2026-06-11
 
 - Add PEFT adapter continuation support so a new PEFT training run can start from an existing LoRA adapter without first merging the adapter into the base model.
