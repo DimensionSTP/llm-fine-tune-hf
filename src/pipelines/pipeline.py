@@ -37,6 +37,8 @@ def train(
         wandb.init(
             project=config.project_name,
             name=config.logging_name,
+            id=config.run_id,
+            resume="allow",
         )
 
     if "seed" in config:
