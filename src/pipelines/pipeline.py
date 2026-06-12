@@ -108,6 +108,7 @@ def train(
     else:
         model = setup.get_model()
     data_encoder = setup.get_data_encoder()
+    data_collator = setup.get_train_data_collator(data_encoder=data_encoder)
 
     trainer_config = OmegaConf.to_container(
         config.trainer,
@@ -135,6 +136,8 @@ def train(
         "processing_class": data_encoder,
         **trainer_config,
     }
+    if data_collator is not None:
+        trainer_kwargs["data_collator"] = data_collator
     if config.fine_tune_method != "async_grpo":
         trainer_kwargs["eval_dataset"] = val_dataset
 

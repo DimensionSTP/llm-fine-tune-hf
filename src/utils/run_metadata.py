@@ -460,6 +460,9 @@ def build_summary_section(
             "gradient_checkpointing_kwargs",
             "max_length",
             "max_new_tokens",
+            "sft_padding_strategy",
+            "truncation_mode",
+            "pad_to_multiple_of",
             "left_padding",
             "is_enable_thinking",
             "chat_template_path",
@@ -478,6 +481,7 @@ def build_method_hyperparameters(
     common_paths_by_method: Dict[str, List[str]] = {
         "sft": [
             "sft_loss_type",
+            "sft_padding_strategy",
             "truncation_mode",
             "pad_to_multiple_of",
             "response_start_template",

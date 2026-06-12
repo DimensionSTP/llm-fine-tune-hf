@@ -45,6 +45,8 @@ class StructuralDataset(Dataset):
         left_padding: bool,
         is_enable_thinking: bool,
         max_length: int,
+        sft_padding_strategy: str,
+        truncation_mode: str,
         response_start_template: str,
         response_end_template: Optional[str],
         dataset_subdir: Optional[str] = None,
@@ -111,6 +113,10 @@ class StructuralDataset(Dataset):
                 self.data_encoder.padding_side = "left"
             else:
                 self.data_encoder.padding_side = "right"
+            self._init_sft_padding(
+                sft_padding_strategy=sft_padding_strategy,
+                truncation_mode=truncation_mode,
+            )
         else:
             self.data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
@@ -134,6 +140,10 @@ class StructuralDataset(Dataset):
                 self.data_encoder.tokenizer.padding_side = "left"
             else:
                 self.data_encoder.tokenizer.padding_side = "right"
+            self._init_sft_padding(
+                sft_padding_strategy=sft_padding_strategy,
+                truncation_mode=truncation_mode,
+            )
 
         self.is_enable_thinking = is_enable_thinking
 
@@ -301,7 +311,7 @@ class StructuralDataset(Dataset):
     ) -> Dict[str, torch.Tensor]:
         kwargs = {
             "text": data,
-            "padding": "max_length",
+            "padding": self._get_encode_padding(),
             "max_length": self.max_length,
             "truncation": True,
             "return_tensors": "pt",
@@ -312,6 +322,10 @@ class StructuralDataset(Dataset):
         encoded = self.data_encoder(**kwargs)
 
         encoded = {k: v.squeeze(0) for k, v in encoded.items()}
+        if self.sft_padding_strategy == "dynamic" and "attention_mask" not in encoded:
+            raise ValueError(
+                "SFT dynamic padding requires attention_mask in encoded data."
+            )
         return encoded
 
     def add_sft_label(
@@ -630,6 +644,31 @@ class StructuralDataset(Dataset):
             return config[key]
         return default
 
+    def _init_sft_padding(
+        self,
+        sft_padding_strategy: str,
+        truncation_mode: str,
+    ) -> None:
+        if sft_padding_strategy not in ["max_length", "dynamic"]:
+            raise ValueError("sft_padding_strategy must be max_length or dynamic.")
+        if truncation_mode not in ["keep_start", "keep_end"]:
+            raise ValueError("truncation_mode must be keep_start or keep_end.")
+
+        self.sft_padding_strategy = sft_padding_strategy
+        self.truncation_mode = truncation_mode
+        truncation_side = "right" if truncation_mode == "keep_start" else "left"
+        if self.modality == "text":
+            self.data_encoder.truncation_side = truncation_side
+        else:
+            self.data_encoder.tokenizer.truncation_side = truncation_side
+
+    def _get_encode_padding(
+        self,
+    ) -> Any:
+        if self.sft_padding_strategy == "max_length":
+            return "max_length"
+        return False
+
     def _compute_target_size(
         self,
         width: int,
@@ -737,6 +776,8 @@ class ConversationalDataset(StructuralDataset):
         left_padding: bool,
         is_enable_thinking: bool,
         max_length: int,
+        sft_padding_strategy: str,
+        truncation_mode: str,
         response_start_template: str,
         response_end_template: Optional[str],
         dataset_subdir: Optional[str] = None,
@@ -801,6 +842,10 @@ class ConversationalDataset(StructuralDataset):
                 self.data_encoder.padding_side = "left"
             else:
                 self.data_encoder.padding_side = "right"
+            self._init_sft_padding(
+                sft_padding_strategy=sft_padding_strategy,
+                truncation_mode=truncation_mode,
+            )
         else:
             self.data_encoder = AutoProcessor.from_pretrained(
                 data_encoder_path,
@@ -824,6 +869,10 @@ class ConversationalDataset(StructuralDataset):
                 self.data_encoder.tokenizer.padding_side = "left"
             else:
                 self.data_encoder.tokenizer.padding_side = "right"
+            self._init_sft_padding(
+                sft_padding_strategy=sft_padding_strategy,
+                truncation_mode=truncation_mode,
+            )
 
         self.is_enable_thinking = is_enable_thinking
 

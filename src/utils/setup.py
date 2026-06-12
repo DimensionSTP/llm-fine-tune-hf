@@ -27,9 +27,10 @@ from transformers import (
 from peft import PeftModel, prepare_model_for_kbit_training
 
 from ..datasets import *
-from .config_validation import validate_training_arguments_config
 from .model_loading import ModelLoadPlanner
+from .config_validation import validate_training_arguments_config
 from .peft_initialization import initialize_peft_model
+from .collate_fns import SFTDynamicPaddingCollator
 from src.utils.rewards import RewardManager
 
 
@@ -274,6 +275,30 @@ class SetUp:
                 data_encoder.tokenizer.padding_side = "right"
 
         return data_encoder
+
+    def get_train_data_collator(
+        self,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+    ) -> Optional[SFTDynamicPaddingCollator]:
+        if self.config.fine_tune_method != "sft":
+            return None
+        if self.config.sft_padding_strategy != "dynamic":
+            return None
+        if self.config.left_padding:
+            raise ValueError("SFT dynamic padding does not support left_padding=true.")
+
+        if self.config.modality == "text":
+            pad_token_id = data_encoder.pad_token_id
+        else:
+            pad_token_id = data_encoder.tokenizer.pad_token_id
+
+        if pad_token_id is None:
+            raise ValueError("SFT dynamic padding requires a pad token id.")
+
+        return SFTDynamicPaddingCollator(
+            pad_token_id=pad_token_id,
+            pad_to_multiple_of=self.config.pad_to_multiple_of,
+        )
 
     def get_training_arguments(
         self,
