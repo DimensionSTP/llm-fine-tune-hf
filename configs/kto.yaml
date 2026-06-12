@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - dataset: kto
+  - tracking: wandb
   - training_arguments: kto
   - trainer: kto
   - deepspeed: ds_config

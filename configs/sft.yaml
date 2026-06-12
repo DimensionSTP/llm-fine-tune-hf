@@ -2,6 +2,7 @@
 defaults:
   - dataset: sft
   - image_augmentation: base
+  - tracking: wandb
   - training_arguments: sft
   - trainer: sft
   - deepspeed: ds_config

@@ -2,6 +2,7 @@
 defaults:
   - dataset: grpo
   - image_augmentation: base
+  - tracking: wandb
   - training_arguments: sdpo
   - trainer: sdpo
   - reward: base

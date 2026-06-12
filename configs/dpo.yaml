@@ -2,6 +2,7 @@
 defaults:
   - dataset: dpo
   - image_augmentation: base
+  - tracking: wandb
   - training_arguments: dpo
   - trainer: dpo
   - deepspeed: ds_config

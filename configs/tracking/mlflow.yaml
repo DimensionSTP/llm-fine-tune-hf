@@ -1,0 +1,4 @@
+backend: mlflow
+report_to: mlflow
+tracking_uri: sqlite:///${connected_dir}/mlflow.db
+artifact_location: file://${connected_dir}/mlflow-artifacts
