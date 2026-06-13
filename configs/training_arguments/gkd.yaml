@@ -5,6 +5,7 @@ dataset_kwargs:
 chat_template_path: ${chat_template_path}
 use_liger_kernel: false
 packing: false
+loss_type: nll
 truncation_mode: ${truncation_mode}
 pad_to_multiple_of: ${pad_to_multiple_of}
 seed: ${seed}

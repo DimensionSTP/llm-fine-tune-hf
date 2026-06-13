@@ -24,7 +24,7 @@ connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
 modality: text
 fine_tune_method: sdpo
 
-seed: 2025
+seed: 2026
 
 data_type: structural
 

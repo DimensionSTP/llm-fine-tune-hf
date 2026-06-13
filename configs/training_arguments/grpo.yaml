@@ -47,6 +47,11 @@ use_vllm: ${use_vllm}
 vllm_mode: ${vllm_mode}
 vllm_tensor_parallel_size: ${vllm_tensor_parallel_size}
 vllm_gpu_memory_utilization: ${gpu_memory_utilization}
+vllm_importance_sampling_correction: ${vllm_importance_sampling_correction}
+vllm_importance_sampling_mode: ${vllm_importance_sampling_mode}
+vllm_importance_sampling_clip_min: ${vllm_importance_sampling_clip_min}
+vllm_importance_sampling_clip_max: ${vllm_importance_sampling_clip_max}
+vllm_importance_sampling_cap: ${vllm_importance_sampling_cap}
 sapo_temperature_pos: ${sapo_temperature_pos}
 sapo_temperature_neg: ${sapo_temperature_neg}
 scale_rewards: ${scale_rewards}

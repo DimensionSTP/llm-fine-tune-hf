@@ -20,7 +20,7 @@ connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
 modality: text
 fine_tune_method: sft
 
-seed: 2025
+seed: 2026
 
 data_type: structural
 
@@ -73,7 +73,7 @@ left_padding: false
 is_enable_thinking: false
 merged_model_path: ${merge_path}/${pretrained_model_name}
 max_length: 4096
-sft_loss_type: nll
+sft_loss_type: chunked_nll
 sft_padding_strategy: max_length
 truncation_mode: keep_start
 pad_to_multiple_of: null

@@ -24,7 +24,7 @@ connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
 modality: text
 fine_tune_method: grpo
 
-seed: 2025
+seed: 2026
 
 data_type: structural
 
@@ -140,6 +140,11 @@ use_vllm: true
 vllm_mode: colocate
 vllm_sync_strategy: default
 vllm_tensor_parallel_size: 1
+vllm_importance_sampling_correction: true
+vllm_importance_sampling_mode: sequence_mask
+vllm_importance_sampling_clip_min: null
+vllm_importance_sampling_clip_max: 3.0
+vllm_importance_sampling_cap: null
 sapo_temperature_pos: 1.0
 sapo_temperature_neg: 1.05
 scale_rewards: group

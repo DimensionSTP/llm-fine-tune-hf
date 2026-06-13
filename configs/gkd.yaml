@@ -19,7 +19,7 @@ connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
 modality: text
 fine_tune_method: gkd
 
-seed: 2025
+seed: 2026
 
 data_type: structural
 
