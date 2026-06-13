@@ -1,1 +1,1 @@
-_target_: trl.KTOTrainer
+_target_: trl.experimental.kto.KTOTrainer

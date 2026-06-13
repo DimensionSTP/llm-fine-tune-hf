@@ -1,4 +1,4 @@
-_target_: trl.KTOConfig
+_target_: trl.experimental.kto.KTOConfig
 use_liger_kernel: false
 seed: ${seed}
 max_length: ${max_length}

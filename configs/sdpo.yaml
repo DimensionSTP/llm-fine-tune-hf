@@ -138,9 +138,19 @@ scale_rewards: group
 use_vllm: true
 vllm_mode: colocate
 vllm_tensor_parallel_size: 1
+use_teacher_server: false
+vllm_server_base_url: null
+vllm_server_host: 0.0.0.0
+vllm_server_port: 8000
+vllm_group_port: 51216
+vllm_server_timeout: 240.0
+vllm_max_model_length: null
+vllm_enable_sleep_mode: false
+vllm_model_impl: vllm
 distillation_weight: 1.0
-teacher_regularization: ema
-ema_update_rate: 0.05
+teacher_model_kind: ema
+teacher_update_rate: 0.05
+teacher_sync_steps: 1
 use_successful_as_teacher: true
 success_reward_threshold: 1.0
 
