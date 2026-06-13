@@ -6,7 +6,6 @@ datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
 load_dataset = datasets.load_dataset
 
-import io
 import math
 
 from PIL import Image
@@ -227,15 +226,6 @@ class StructuralDataset:
         new_width = max(1, int(width * scale))
         new_height = max(1, int(height * scale))
         return new_width, new_height
-
-    def _load_image_from_bytes(
-        self,
-        data: bytes,
-    ) -> Optional[Image.Image]:
-        try:
-            return Image.open(io.BytesIO(data))
-        except Exception:
-            return None
 
     def _load_image(
         self,
