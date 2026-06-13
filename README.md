@@ -204,7 +204,7 @@ is_sft={True or False}
 sft_loss_type={nll or chunked_nll}
 ```
 
-`chunked_nll` is SFT-only and reduces peak VRAM for long-context SFT while keeping the NLL objective. It is not compatible with `training_arguments.use_liger_kernel=True`.
+`chunked_nll` is the default SFT loss type. It is SFT-only and reduces peak VRAM for long-context SFT while keeping the NLL objective. It is not compatible with `training_arguments.use_liger_kernel=True`.
 
 * SFT padding strategy
 
@@ -309,6 +309,29 @@ strategy=deepspeed
 ```shell
 vllm_sync_strategy={default or lora_streaming}
 ```
+
+* GRPO vLLM importance sampling
+
+```shell
+vllm_importance_sampling_correction={True or False}
+vllm_importance_sampling_mode={sequence_mask}
+vllm_importance_sampling_clip_min={null or float}
+vllm_importance_sampling_clip_max={null or float}
+vllm_importance_sampling_cap={null or float}
+```
+
+GRPO vLLM importance-sampling correction is enabled by default with `sequence_mask` mode, `clip_max=3.0`, and no min/cap.
+
+* SDPO teacher server mode
+
+```shell
+teacher_model_kind={ema or live}
+use_teacher_server={False or True}
+vllm_mode={colocate or server}
+vllm_server_base_url={null or http://host:port}
+```
+
+SDPO keeps `teacher_model_kind=ema`, `use_teacher_server=False`, and colocate vLLM by default. Teacher-server mode is opt-in and should be used with the upstream live-teacher server requirements: `teacher_model_kind=live`, `use_teacher_server=True`, and `vllm_mode=server`.
 
 For dense-model external vLLM server mode, keep `data_parallel_size=1`.
 Current vLLM offline server initialization rejects dense-model `data_parallel_size>1`,
