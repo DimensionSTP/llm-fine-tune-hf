@@ -1,0 +1,203 @@
+# @package _global_
+defaults:
+  - dataset: grpo
+  - image_augmentation: base
+  - tracking: wandb
+  - training_arguments: a2po
+  - trainer: a2po
+  - reward: base
+  - reward@reward_manager: manager
+  - reward@reward_database: database
+  - reward@reward_embedding: embedding
+  - deepspeed: ds_config
+  - model_loading: train_runtime
+  - peft_initialization: lora
+  - run_metadata: allocation
+  - dataset@test_dataset: test
+  - dense_to_moe: dense_to_moe
+  - hydra: hydra
+
+package_name: llm-fine-tune-hf
+project_dir: ${oc.env:PROJECT_DIR}/${package_name}
+connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
+
+modality: text
+fine_tune_method: a2po
+
+seed: 2026
+
+data_type: structural
+
+split:
+  train: train
+  val: val
+
+batch_size: 16
+eval_batch_size: 16
+workers_ratio: 8
+use_all_workers: false
+
+split_ratio: 1e-2
+is_strict_split: false
+
+dataset_name: tulu
+dataset_format: parquet
+data_path: ${connected_dir}/data
+dataset_subdir: null
+dataset_file_path: null
+allow_dataset_file_name_mismatch: false
+test_dataset_subdir: ${test_data_dir}
+test_dataset_file_path: null
+allow_test_dataset_file_name_mismatch: false
+is_preprocessed: false
+data_column_name: input
+target_column_name: response
+conversation_column_name: messages
+prompt_column_name: prompt
+solution_column_name: solution
+reward_categories_column_name: reward_categories
+role_column_name: role
+content_column_name: content
+assistant_column_name: assistant
+max_pixels: null
+do_resize: false
+decode_image_paths: false
+dataset_image:
+  image_root_dir: ${data_path}
+  convert_unsupported_extensions: true
+  unsupported_path_extensions: [tif, tiff]
+  converted_image_mode: RGB
+upload_user: Qwen
+model_type: Qwen3.5-9B
+pretrained_model_name: ${upload_user}/${model_type}
+merge_path: ${connected_dir}/merged
+merge_max_shard_size: null
+merge_pack_qwen_moe_experts: false
+custom_data_encoder_path: ${merge_path}/${pretrained_model_name}
+revision: main
+reference_data_encoder_name: Qwen/Qwen3.5-9B
+left_padding: true
+is_enable_thinking: false
+merged_model_path: ${merge_path}/${pretrained_model_name}
+max_length: 2048
+
+user_name: ${oc.env:USER_NAME}
+model_detail: ${model_type}
+upload_tag: a2po
+model_path: ${user_name}/${model_detail}-${upload_tag}
+
+precision: bf16
+attn_implementation: flash_attention_2
+
+is_quantized: false
+quantization_config:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: bfloat16
+is_peft: false
+peft_config:
+  r: 128
+  lora_alpha: 512
+  target_modules: all-linear
+  lora_dropout: 0.0
+  bias: none
+  task_type: CAUSAL_LM
+  inference_mode: false
+
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: true
+
+optim: paged_adamw_32bit
+lr: 5e-7
+weight_decay: 1e-1
+
+scheduler_type: cosine
+warmup_ratio: 5e-2
+
+distributed:
+  enabled: false
+  num_machines: 1
+  num_processes_per_machine: null
+  machine_rank: ${oc.decode:${oc.env:MACHINE_RANK,0}}
+  main_process_ip: ${oc.env:MAIN_PROCESS_IP,127.0.0.1}
+  main_process_port: ${oc.decode:${oc.env:MAIN_PROCESS_PORT,29500}}
+  validation_mode: warn
+
+num_value_samples: 8
+beta1: 0.5
+filter_all_incorrect: true
+beta2: 0.001
+reward_weights: null
+
+chat_template_kwargs:
+  enable_thinking: ${is_enable_thinking}
+
+devices: ${oc.decode:${oc.env:DEVICES,null}}
+strategy: deepspeed
+logging_steps: 2
+is_bf16: true
+gradient_accumulation_steps: 4
+max_grad_norm: 1
+epoch: 2
+step: 250
+
+model_name: CausalLM-A2PO
+mode: train
+
+project_name: ${model_name}-${dataset_name}-${mode}
+reasoning_info: enable_thinking=${is_enable_thinking}
+peft_info: is_quantized=${is_quantized}-is_peft=${is_peft}
+peft_detail: r=${peft_config.r}-a=${peft_config.lora_alpha}
+length_info: max_completion_length=${max_new_tokens}
+method_info: beta1=${beta1}-beta2=${beta2}
+save_detail: ${model_detail}-${method_info}-${reasoning_info}-${peft_info}-${peft_detail}-${length_info}${reward_save_suffix:${reward}}
+logging_name: ${save_detail}-lr${lr}
+
+run_id: null
+output_base_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}
+output_dir: null
+save_strategy: steps
+save_total_limit: -1
+
+resume_training: false
+resume_from_checkpoint: null
+use_validation: true
+eval_strategy: epoch
+
+peft_test:
+  adapter_path: ${output_dir}
+  adapter_name: adapter
+
+max_new_tokens: 2048
+do_sample: true
+generation_config:
+  temperature: 1.0
+  top_p: 1.0
+  top_k: null
+
+test_vllm:
+  gpu_count: null
+  tp_size: 1
+
+gpu_memory_utilization: 0.7
+
+test_data_dir: benchmarks/test
+test_output_dir: ${connected_dir}/tests/${model_type}
+test_output_name: ${dataset_name}
+
+dus_hidden_layers: 42
+wus_hidden_scale: 2
+wus_scaling_method: concat
+wus_attention_scaling: heads
+num_safetensors: 5
+
+korean_model_name: beomi/OPEN-SOLAR-KO-10.7B
+reasoning_model_name: Qwen/QwQ-32B
+reasoning_tokens:
+  - ${reward.think_start_token}
+  - ${reward.think_end_token}
+
+run_name: ${project_name}
+work_dir: ${hydra:runtime.cwd}

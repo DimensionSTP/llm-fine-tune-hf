@@ -1,0 +1,216 @@
+# @package _global_
+defaults:
+  - dataset: gkd
+  - tracking: wandb
+  - training_arguments: gold
+  - trainer: gold
+  - deepspeed: ds_config
+  - model_loading: train_runtime
+  - peft_initialization: lora
+  - run_metadata: allocation
+  - dataset@test_dataset: test
+  - dense_to_moe: dense_to_moe
+  - hydra: hydra
+
+package_name: llm-fine-tune-hf
+project_dir: ${oc.env:PROJECT_DIR}/${package_name}
+connected_dir: ${oc.env:CONNECTED_DIR}/${package_name}
+
+modality: text
+fine_tune_method: gold
+
+seed: 2026
+
+data_type: structural
+
+split:
+  train: train
+  val: val
+
+batch_size: 4
+eval_batch_size: 4
+workers_ratio: 8
+use_all_workers: false
+
+split_ratio: 1e-2
+is_strict_split: false
+
+dataset_name: tulu
+dataset_format: parquet
+data_path: ${connected_dir}/data
+dataset_subdir: null
+dataset_file_path: null
+allow_dataset_file_name_mismatch: false
+test_dataset_subdir: ${test_data_dir}
+test_dataset_file_path: null
+allow_test_dataset_file_name_mismatch: false
+is_preprocessed: false
+data_column_name: input
+target_column_name: response
+conversation_column_name: messages
+role_column_name: role
+content_column_name: content
+assistant_column_name: assistant
+max_pixels: null
+do_resize: false
+dataset_image:
+  image_root_dir: ${data_path}
+  convert_unsupported_extensions: true
+  unsupported_path_extensions: [tif, tiff]
+  converted_image_mode: RGB
+upload_user: Qwen
+model_type: Qwen3.5-9B
+pretrained_model_name: ${upload_user}/${model_type}
+merge_path: ${connected_dir}/merged
+merge_max_shard_size: null
+merge_pack_qwen_moe_experts: false
+custom_data_encoder_path: ${merge_path}/${pretrained_model_name}
+revision: main
+reference_data_encoder_name: Qwen/Qwen3.5-9B
+left_padding: false
+is_enable_thinking: false
+merged_model_path: ${merge_path}/${pretrained_model_name}
+max_length: 4096
+truncation_mode: keep_start
+pad_to_multiple_of: null
+chat_template_path: null
+response_start_template: <|im_start|>${assistant_column_name}
+
+user_name: ${oc.env:USER_NAME}
+model_detail: ${model_type}
+upload_tag: gold
+model_path: ${user_name}/${model_detail}-${upload_tag}
+
+precision: bf16
+attn_implementation: flash_attention_2
+
+is_quantized: false
+quantization_config:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: bfloat16
+is_peft: false
+peft_config:
+  r: 128
+  lora_alpha: 512
+  target_modules: all-linear
+  lora_dropout: 0.0
+  bias: none
+  task_type: CAUSAL_LM
+  inference_mode: false
+
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: true
+
+optim: paged_adamw_32bit
+lr: 5e-6
+weight_decay: 1e-1
+
+scheduler_type: cosine
+warmup_ratio: 5e-2
+
+teacher:
+  upload_user: ${upload_user}
+  model_type: Qwen3.6-27B
+  model: ${teacher.upload_user}/${teacher.model_type}
+  model_init_kwargs:
+    dtype: auto
+
+loss_type: nll
+lmbda: 0.5
+beta: 0.5
+seq_kd: false
+use_uld_loss: false
+num_generations: 1
+generation_batch_size: null
+use_vllm: true
+vllm_mode: colocate
+vllm_tensor_parallel_size: 1
+vllm_max_model_length: null
+vllm_sync_frequency: 1
+vllm_model_impl: vllm
+vllm_enable_sleep_mode: false
+vllm_server_base_url: null
+vllm_server_host: 0.0.0.0
+vllm_server_port: 8001
+vllm_group_port: 51216
+vllm_server_timeout: 240.0
+
+distributed:
+  enabled: false
+  num_machines: 1
+  num_processes_per_machine: null
+  machine_rank: ${oc.decode:${oc.env:MACHINE_RANK,0}}
+  main_process_ip: ${oc.env:MAIN_PROCESS_IP,127.0.0.1}
+  main_process_port: ${oc.decode:${oc.env:MAIN_PROCESS_PORT,29500}}
+  validation_mode: warn
+
+devices: ${oc.decode:${oc.env:DEVICES,null}}
+strategy: deepspeed
+logging_steps: 10
+is_bf16: true
+gradient_accumulation_steps: 4
+max_grad_norm: 1
+epoch: 2
+step: 250
+
+model_name: CausalLM-GOLD
+mode: train
+
+project_name: ${model_name}-${dataset_name}-${mode}
+teacher_info: teacher=${teacher.upload_user}_${teacher.model_type}
+method_info: lmbda=${lmbda}-beta=${beta}
+peft_info: is_quantized=${is_quantized}-is_peft=${is_peft}
+peft_detail: r=${peft_config.r}-a=${peft_config.lora_alpha}
+length_info: max_length=${max_length}-max_completion_length=${max_new_tokens}
+save_detail: ${model_detail}-${teacher_info}-${method_info}-${peft_info}-${peft_detail}-${length_info}
+logging_name: ${save_detail}-lr${lr}
+
+run_id: null
+output_base_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}
+output_dir: null
+save_strategy: steps
+save_total_limit: -1
+
+resume_training: false
+resume_from_checkpoint: null
+use_validation: true
+eval_strategy: epoch
+
+peft_test:
+  adapter_path: ${output_dir}
+  adapter_name: adapter
+
+max_new_tokens: 512
+do_sample: true
+generation_config:
+  temperature: 0.9
+  top_p: 0.95
+  top_k: 0
+
+test_vllm:
+  gpu_count: null
+  tp_size: 1
+
+gpu_memory_utilization: 0.9
+
+test_data_dir: benchmarks/test
+test_output_dir: ${connected_dir}/tests/${model_type}
+test_output_name: ${dataset_name}
+
+dus_hidden_layers: 42
+wus_hidden_scale: 2
+wus_scaling_method: concat
+wus_attention_scaling: heads
+num_safetensors: 5
+
+korean_model_name: beomi/OPEN-SOLAR-KO-10.7B
+reasoning_model_name: Qwen/QwQ-32B
+reasoning_tokens:
+  - <think>
+  - </think>
+
+run_name: ${project_name}
+work_dir: ${hydra:runtime.cwd}
