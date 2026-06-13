@@ -2,6 +2,19 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.0.0] - 2026-06-14
+
+- Upgrade the training stack dependency pins to `transformers==5.11.0`, `trl==1.6.0`, `vllm==0.19.0`, `huggingface-hub==1.19.0`, `liger_kernel==0.8.0`, and related runtime packages.
+- Switch KTO and SDPO configs to upstream TRL experimental trainers and configs, including `trl.experimental.kto.KTOTrainer`, `trl.experimental.kto.KTOConfig`, `trl.experimental.sdpo.SDPOTrainer`, and `trl.experimental.sdpo.SDPOConfig`.
+- Remove the local SDPO trainer shim now superseded by the upstream TRL experimental SDPO trainer path.
+- Add A2PO training support with method config, trainer config, training argument config, pipeline wiring, reward wiring, single-node launcher, and multi-node launchers.
+- Add GOLD training support with method config, trainer config, training argument config, teacher-oriented defaults, single-node launcher, and multi-node launchers.
+- Add KTO VLM dataset support with dataset config controls for `modality`, `decode_image_paths`, and `dataset_image`.
+- Update GRPO, SDPO, A2PO, GOLD, and related TRL 1.6 defaults for loss, vLLM server, colocated vLLM, importance sampling, and trainer-specific settings where applicable.
+- Record expanded method and runtime metadata for the TRL 1.6 method surface, including A2PO, GOLD, upstream KTO, and upstream SDPO paths.
+- Remove stale DPO and GRPO dataset image byte-loader paths in favor of normalized image-source handling.
+- Document supported training methods, TRL 1.6 training options, SDPO teacher-server mode, A2PO/GOLD launchers, and VLM dataset image controls in the README.
+
 ## [v1.24.0] - 2026-06-12
 
 - Add configurable experiment tracking backend support with W&B as the default backend and MLflow as an opt-in backend through `tracking={wandb,mlflow}`.
