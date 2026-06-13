@@ -364,9 +364,19 @@ image_augmentation.jpeg_quality_min={1 to 100}
 image_augmentation.jpeg_quality_max={1 to 100}
 ```
 
-`image_augmentation` is disabled by default and applies only to training images for SFT, DPO, GRPO, async GRPO, and SDPO datasets. Validation, evaluation, and test datasets are not augmented. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees` and `erase_probability` disabled unless labels are transformed consistently.
+`image_augmentation` is disabled by default and applies only to training images. Validation, evaluation, and test datasets are not augmented. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees` and `erase_probability` disabled unless labels are transformed consistently.
 
 VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
+
+VLM dataset inputs use `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, and `dataset_image` where the selected dataset loader supports image fields. The default modality remains `text`.
+
+| Dataset family | Image-capable | Image controls |
+| --- | --- | --- |
+| SFT | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| DPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| GRPO / async GRPO / SDPO / A2PO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| KTO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| GKD / GOLD | No | Text-only dataset contract |
 
 * Reward embedding vLLM environment isolation
 
