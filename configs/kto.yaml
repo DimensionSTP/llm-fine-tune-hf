@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - dataset: kto
+  - image_augmentation: base
   - tracking: wandb
   - training_arguments: kto
   - trainer: kto
@@ -56,6 +57,7 @@ content_column_name: content
 assistant_column_name: assistant
 max_pixels: null
 do_resize: false
+decode_image_paths: false
 dataset_image:
   image_root_dir: ${data_path}
   convert_unsupported_extensions: true

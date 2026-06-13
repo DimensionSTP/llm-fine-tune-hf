@@ -15,6 +15,12 @@ structural:
   role_column_name: ${role_column_name}
   content_column_name: ${content_column_name}
   assistant_column_name: ${assistant_column_name}
+  modality: ${modality}
+  max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
+  decode_image_paths: ${decode_image_paths}
+  dataset_image: ${dataset_image}
 
 conversational:
   _target_: src.datasets.KTOConversationalDataset
@@ -30,3 +36,9 @@ conversational:
   prompt_column_name: ${prompt_column_name}
   completion_column_name: ${completion_column_name}
   label_column_name: ${label_column_name}
+  modality: ${modality}
+  max_pixels: ${max_pixels}
+  do_resize: ${do_resize}
+  image_augmentation: ${image_augmentation}
+  decode_image_paths: ${decode_image_paths}
+  dataset_image: ${dataset_image}
