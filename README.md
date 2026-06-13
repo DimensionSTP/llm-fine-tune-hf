@@ -222,6 +222,26 @@ tracking={wandb or mlflow}
 
 `wandb` is the default. `mlflow` requires the pinned MLflow dependency, uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume. Resume requires existing tracking metadata for both tracking backends.
 
+* Supported training methods
+
+```shell
+python main.py --config-name={method}.yaml mode=train
+```
+
+| Method | Config | Dataset contract | Notes |
+| --- | --- | --- | --- |
+| SFT | `sft.yaml` | SFT | `chunked_nll` is the default loss type. |
+| DPO | `dpo.yaml` | DPO | Preference-pair training. |
+| KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
+| GKD | `gkd.yaml` | GKD | Distillation with `loss_type=nll`. |
+| GRPO | `grpo.yaml` | GRPO | vLLM importance-sampling correction is enabled by default. |
+| async GRPO | `async_grpo.yaml` | GRPO | Requires the trainer/vLLM split runtime. |
+| SDPO | `sdpo.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
+| A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
+| GOLD | `gold.yaml` | GKD-style teacher | Uses the upstream TRL experimental trainer. |
+
+Liger remains opt-in through `training_arguments.use_liger_kernel=True` and is disabled by default.
+
 * Use preprocessed tokenizer option
 
 ```shell
