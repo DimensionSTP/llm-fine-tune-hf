@@ -117,11 +117,11 @@ def train(
     TrainerClass = get_class(config.trainer._target_)
 
     reward_manager = None
-    if config.fine_tune_method in {"grpo", "async_grpo", "sdpo"}:
+    if config.fine_tune_method in {"grpo", "async_grpo", "sdpo", "a2po"}:
         reward_manager = setup.get_reward_manager()
         trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
 
-    if config.fine_tune_method == "gkd":
+    if config.fine_tune_method in {"gkd", "gold"}:
         trainer_config["teacher_model"] = config.teacher.model
 
     trainer_kwargs = {

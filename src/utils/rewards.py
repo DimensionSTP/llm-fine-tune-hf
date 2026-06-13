@@ -84,9 +84,24 @@ class BaseReward(ABC):
 
     @staticmethod
     def get_contents_from_completions(
-        completions: List[List[Dict[str, str]]],
+        completions: List[Any],
     ) -> List[str]:
-        contents = [completion[0]["content"] for completion in completions]
+        contents = []
+        for completion in completions:
+            if isinstance(completion, str):
+                contents.append(completion)
+                continue
+            if (
+                isinstance(completion, list)
+                and len(completion) > 0
+                and isinstance(completion[0], dict)
+                and "content" in completion[0]
+            ):
+                contents.append(completion[0]["content"])
+                continue
+            raise TypeError(
+                f"Unsupported completion payload for reward extraction: {type(completion).__name__}"
+            )
         return contents
 
     def extract_answer_from_generation(
