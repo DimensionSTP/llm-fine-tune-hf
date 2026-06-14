@@ -4,9 +4,9 @@ All notable changes to this repository are documented in this file.
 
 ## [v1.23.1] - 2026-06-12
 
-- Align W&B train run identity with the allocated training artifact `run_id` by passing `id=config.run_id` to train-time `wandb.init`.
-- Enable W&B resume handling for train runs with `resume="allow"` so repeated initialization with the same allocated run id can attach to the existing W&B run instead of creating a separate identity.
-- Keep the existing W&B display name based on `logging_name` while using `run_id` as the stable run identifier shared with output artifacts and run metadata.
+- Align W&B train run identity with persisted `tracking_run_id` metadata so fresh artifact runs never reuse the checkpoint-local `run_id` as the W&B internal ID.
+- Enable W&B resume handling for train runs with `resume="allow"` so interrupted-run resume reuses the persisted tracking identity from `tracking_metadata.json`.
+- Keep the existing W&B display name based on `logging_name` while preserving `run_id` as the checkpoint-local artifact identifier.
 
 ## [v1.23.0] - 2026-06-12
 

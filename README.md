@@ -65,6 +65,8 @@ python main.py mode=train
 
 Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, set `distributed.enabled=true` and configure `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, and `distributed.main_process_port`; `run_manifest.json` records planned and observed distributed, device, and batch runtime metadata. `run_metadata.allocation_timeout_seconds`, `run_metadata.allocation_poll_interval_seconds`, and `run_metadata.allocation_freshness_grace_seconds` control how non-rank0 processes wait for rank0's shared run directory allocation.
 
+W&B train runs use a persisted `tracking_run_id` stored in `${output_dir}/tracking_metadata.json`. The checkpoint `run_id` remains local to `output_base_dir`, while interrupted-run resume reuses the persisted W&B identity instead of falling back to `run_id`.
+
 ### Test
 
 * end-to-end

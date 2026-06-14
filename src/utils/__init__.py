@@ -30,6 +30,7 @@ from .config_validation import (
 )
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .run_metadata import prepare_train_artifact_config, write_run_metadata
+from .tracking import init_wandb_train_tracking
 from .test_utils import (
     build_test_dataloader,
     generate_test_results,
@@ -87,6 +88,7 @@ __all__ = [
     "build_distributed_runtime_snapshot",
     "prepare_train_artifact_config",
     "write_run_metadata",
+    "init_wandb_train_tracking",
     "build_test_dataloader",
     "generate_test_results",
     "save_test_results_json",

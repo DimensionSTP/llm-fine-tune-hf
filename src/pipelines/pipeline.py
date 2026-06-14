@@ -34,12 +34,7 @@ def train(
         validate_train_artifact_config(
             config=config,
         )
-        wandb.init(
-            project=config.project_name,
-            name=config.logging_name,
-            id=config.run_id,
-            resume="allow",
-        )
+        init_wandb_train_tracking(config=config)
 
     if "seed" in config:
         set_seed(config.seed)
