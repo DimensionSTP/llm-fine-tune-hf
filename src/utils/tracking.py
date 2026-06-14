@@ -170,20 +170,28 @@ def _init_mlflow_train_tracking(
     config: DictConfig,
 ) -> None:
     mlflow = _import_mlflow()
+    _validate_tracking_identity_config(config=config)
     _configure_mlflow(config=config)
     metadata = _read_tracking_metadata(config=config)
     tracking_run_id = metadata.get("tracking_run_id")
-    if config.resume_training and tracking_run_id is not None:
+    if config.resume_training:
+        if not isinstance(tracking_run_id, str) or tracking_run_id == "":
+            raise ValueError(
+                "tracking_metadata.json with tracking_run_id is required when "
+                "resume_training is true. Refusing to start a new MLflow run "
+                "because it can split a resumed training run across tracking runs."
+            )
         active_run = mlflow.start_run(run_id=tracking_run_id)
     else:
+        if "tracking_run_id" in metadata:
+            raise ValueError(
+                "tracking_metadata.json already exists for a fresh training run. "
+                "Use resume_training=true for interrupted-run resume, or allocate "
+                "a new artifact run directory."
+            )
         active_run = mlflow.start_run(
             run_name=config.logging_name,
-            tags=_build_mlflow_train_tags(
-                config=config,
-                resume_without_tracking_metadata=(
-                    config.resume_training and tracking_run_id is None
-                ),
-            ),
+            tags=_build_mlflow_train_tags(config=config),
         )
     _write_tracking_metadata(
         config=config,
@@ -222,12 +230,10 @@ def _configure_mlflow(
 
 def _build_mlflow_train_tags(
     config: DictConfig,
-    resume_without_tracking_metadata: bool,
 ) -> Dict[str, str]:
     tags = _build_common_tracking_tags(config=config)
     tags["logging_name"] = str(config.logging_name)
     tags["resume_training"] = str(config.resume_training)
-    tags["resume_without_tracking_metadata"] = str(resume_without_tracking_metadata)
     return tags
 
 
