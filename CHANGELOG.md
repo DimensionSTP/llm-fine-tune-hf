@@ -11,7 +11,7 @@ All notable changes to this repository are documented in this file.
 - Add tracking utility APIs for train/eval initialization, table logging, alert handling, and backend finalization.
 - Route train, test, large-model test, vLLM test, multi-turn test, and benchmark flows through the shared tracking backend helpers.
 - Preserve W&B train run identity behavior by reusing the persisted `tracking_run_id` while keeping artifact `run_id` as checkpoint-local metadata.
-- Add MLflow train/eval run support with artifact run-id tags and `tracking_metadata.json` mapping between artifact `run_id` and MLflow run UUID.
+- Add MLflow train/eval run support with artifact run-id tags and `tracking_metadata.json` mapping between artifact `run_id` and MLflow run UUID, with resume requiring existing tracking metadata.
 - Add the pinned MLflow dependency to direct dependency files and ignore local tracking database files.
 - Document tracking backend selection, MLflow storage defaults, and checkpoint artifact run-id mapping in README and usage guide updates.
 

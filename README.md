@@ -65,7 +65,7 @@ python main.py mode=train
 
 Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, set `distributed.enabled=true` and configure `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, and `distributed.main_process_port`; `run_manifest.json` records planned and observed distributed, device, and batch runtime metadata. `run_metadata.allocation_timeout_seconds`, `run_metadata.allocation_poll_interval_seconds`, and `run_metadata.allocation_freshness_grace_seconds` control how non-rank0 processes wait for rank0's shared run directory allocation.
 
-W&B is the default experiment tracking backend. Use `tracking=mlflow` to switch Trainer reporting and pipeline tracking helpers to MLflow. W&B train runs use a persisted `tracking_run_id` stored in `${output_dir}/tracking_metadata.json`; checkpoint `run_id` remains local to `output_base_dir`, and interrupted-run resume reuses the persisted W&B identity instead of falling back to `run_id`. MLflow stores its generated run UUID in the same metadata file and records artifact `run_id` as `artifact_run_id`.
+W&B is the default experiment tracking backend. Use `tracking=mlflow` to switch Trainer reporting and pipeline tracking helpers to MLflow. Train runs use a persisted `tracking_run_id` stored in `${output_dir}/tracking_metadata.json`; checkpoint `run_id` remains local to `output_base_dir`, and interrupted-run resume reuses the persisted tracking identity instead of falling back to `run_id` or starting a new backend run. MLflow stores its generated run UUID in the same metadata file and records artifact `run_id` as `artifact_run_id`.
 
 ### Test
 
@@ -220,7 +220,7 @@ sft_padding_strategy={max_length or dynamic}
 tracking={wandb or mlflow}
 ```
 
-`wandb` is the default. `mlflow` requires the pinned MLflow dependency, uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume.
+`wandb` is the default. `mlflow` requires the pinned MLflow dependency, uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume. Resume requires existing tracking metadata for both tracking backends.
 
 * Use preprocessed tokenizer option
 
