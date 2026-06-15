@@ -93,6 +93,8 @@ python main.py mode=test_vllm
 python main.py mode=test_vllm_multi_turn
 ```
 
+`test_vllm` and `test_vllm_multi_turn` support VLM inputs by sending resolved images through vLLM `multi_modal_data` when `modality` is not `text`.
+
 ### Examples of shell scipts
 
 * full preprocessing
