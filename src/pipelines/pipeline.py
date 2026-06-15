@@ -565,7 +565,7 @@ def test_vllm_multi_turn(
     setup = SetUp(config)
 
     data_encoder = setup.get_data_encoder()
-    text_decoder = get_text_decoder(data_encoder=data_encoder)
+    text_encoder = resolve_text_encoder(data_encoder=data_encoder)
 
     num_gpus = torch.cuda.device_count()
     tp_size = resolve_vllm_tp_size(
@@ -581,7 +581,7 @@ def test_vllm_multi_turn(
 
     sampling_params = build_sampling_params(
         config=config,
-        stop_token_ids=[text_decoder.eos_token_id],
+        stop_token_ids=[text_encoder.eos_token_id],
     )
     lora_request = build_lora_request(
         config=config,
@@ -618,7 +618,7 @@ def test_vllm_multi_turn(
                         **chat_template_kwargs,
                     )
 
-                    prompt_token_ids = text_decoder.encode(prompt)
+                    prompt_token_ids = text_encoder.encode(prompt)
                     if len(prompt_token_ids) >= model_max_len:
                         print(
                             f"Prompt length ({len(prompt_token_ids)}) is exceeding model max length ({model_max_len}). "

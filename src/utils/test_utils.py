@@ -66,13 +66,13 @@ def generate_test_results(
                 **config.generation_config,
             ).cpu()
 
-            text_decoder = get_text_decoder(data_encoder=data_encoder)
-            instructions = text_decoder.batch_decode(
+            text_encoder = resolve_text_encoder(data_encoder=data_encoder)
+            instructions = text_encoder.batch_decode(
                 batch["input_ids"],
                 skip_special_tokens=True,
             )
 
-            generations = text_decoder.batch_decode(
+            generations = text_encoder.batch_decode(
                 outputs[:, batch["input_ids"].shape[1] :],
                 skip_special_tokens=True,
             )
@@ -104,7 +104,7 @@ def build_generation_inputs(
     }
 
 
-def get_text_decoder(
+def resolve_text_encoder(
     data_encoder: Union[PreTrainedTokenizerBase, ProcessorMixin],
 ) -> PreTrainedTokenizerBase:
     if isinstance(data_encoder, PreTrainedTokenizerBase):
