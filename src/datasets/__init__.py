@@ -10,6 +10,12 @@ from .gkd_dataset import StructuralDataset as GKDStructuralDataset
 from .gkd_dataset import ConversationalDataset as GKDConversationalDataset
 from .test_dataset import StructuralDataset as TestStructuralDataset
 from .test_dataset import ConversationalDataset as TestConversationalDataset
+from .image_io import (
+    build_vllm_prompt_payload,
+    collect_vllm_images,
+    collect_image_sources,
+    is_vlm_content_parts,
+)
 
 __all__ = [
     "SFTStructuralDataset",
@@ -24,4 +30,8 @@ __all__ = [
     "GKDConversationalDataset",
     "TestStructuralDataset",
     "TestConversationalDataset",
+    "build_vllm_prompt_payload",
+    "collect_vllm_images",
+    "collect_image_sources",
+    "is_vlm_content_parts",
 ]
