@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Union, Optional, Any
 import os
 import base64
 import io
@@ -266,6 +266,83 @@ def resolve_image_path(
             value,
         )
     )
+
+
+def build_vllm_prompt_payload(
+    prompt: str,
+    images: List[Any],
+) -> Union[str, Dict[str, Any]]:
+    if len(images) == 0:
+        return prompt
+    image_payload: Union[Any, List[Any]] = images[0] if len(images) == 1 else images
+    return {
+        "prompt": prompt,
+        "multi_modal_data": {
+            "image": image_payload,
+        },
+    }
+
+
+def collect_vllm_images(
+    value: Any,
+    dataset_image: Optional[Dict[str, Any]],
+    data_path: str,
+) -> List[Any]:
+    image_sources = collect_image_sources(value=value)
+    if len(image_sources) == 0:
+        return []
+
+    settings = build_image_io_settings(
+        dataset_image=dataset_image,
+        default_image_root_dir=data_path,
+    )
+    images = []
+    for image_source in image_sources:
+        normalized_image = normalize_image_source(
+            image=image_source,
+            image_root_dir=settings["image_root_dir"],
+            convert_unsupported_extensions=settings["convert_unsupported_extensions"],
+            unsupported_path_extensions=settings["unsupported_path_extensions"],
+            converted_image_mode=settings["converted_image_mode"],
+        )
+        image = load_image(
+            image=normalized_image,
+            image_root_dir=settings["image_root_dir"],
+        )
+        if image is None:
+            raise ValueError(
+                f"Failed to load VLM image source for vLLM inference: {repr(image_source)[:200]}"
+            )
+        images.append(image)
+    return images
+
+
+def collect_image_sources(
+    value: Any,
+) -> List[Any]:
+    if isinstance(value, dict):
+        if value.get("type") == "image":
+            return [value.get("image")]
+        sources = []
+        for item in value.values():
+            sources.extend(collect_image_sources(value=item))
+        return sources
+    if isinstance(value, list):
+        sources = []
+        for item in value:
+            sources.extend(collect_image_sources(value=item))
+        return sources
+    return []
+
+
+def is_vlm_content_parts(
+    value: Any,
+) -> bool:
+    if not isinstance(value, list):
+        return False
+    if len(value) == 0:
+        return False
+    return all(isinstance(item, dict) and "type" in item for item in value)
 
 
 def _normalize_image_dict(
