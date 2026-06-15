@@ -16,6 +16,11 @@ from transformers import set_seed
 from tqdm import tqdm
 
 from ..helpers import build_enable_thinking_kwargs
+from ..datasets import (
+    build_vllm_prompt_payload,
+    collect_vllm_images,
+    is_vlm_content_parts,
+)
 from ..utils import *
 
 
@@ -432,7 +437,21 @@ def test_vllm(
                 add_generation_prompt=True,
                 **chat_template_kwargs,
             )
-            prompts.append(prompt)
+            images = (
+                collect_vllm_images(
+                    value=preprocessed_conversation,
+                    dataset_image=config.dataset_image,
+                    data_path=config.data_path,
+                )
+                if config.modality != "text"
+                else []
+            )
+            prompts.append(
+                build_vllm_prompt_payload(
+                    prompt=prompt,
+                    images=images,
+                )
+            )
             labels.append(label)
 
     elif config.data_type == "structural":
@@ -457,7 +476,21 @@ def test_vllm(
                 add_generation_prompt=True,
                 **chat_template_kwargs,
             )
-            prompts.append(prompt)
+            images = (
+                collect_vllm_images(
+                    value=data,
+                    dataset_image=config.dataset_image,
+                    data_path=config.data_path,
+                )
+                if config.modality != "text"
+                else []
+            )
+            prompts.append(
+                build_vllm_prompt_payload(
+                    prompt=prompt,
+                    images=images,
+                )
+            )
             labels.append(label)
 
     try:
@@ -532,6 +565,7 @@ def test_vllm_multi_turn(
     setup = SetUp(config)
 
     data_encoder = setup.get_data_encoder()
+    text_decoder = get_text_decoder(data_encoder=data_encoder)
 
     num_gpus = torch.cuda.device_count()
     tp_size = resolve_vllm_tp_size(
@@ -547,7 +581,7 @@ def test_vllm_multi_turn(
 
     sampling_params = build_sampling_params(
         config=config,
-        stop_token_ids=[data_encoder.eos_token_id],
+        stop_token_ids=[text_decoder.eos_token_id],
     )
     lora_request = build_lora_request(
         config=config,
@@ -562,7 +596,7 @@ def test_vllm_multi_turn(
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating responses"):
             contents = row[config.content_column_name]
 
-            if isinstance(contents, list):
+            if isinstance(contents, list) and not is_vlm_content_parts(value=contents):
                 conversation = []
                 generations = []
 
@@ -584,7 +618,7 @@ def test_vllm_multi_turn(
                         **chat_template_kwargs,
                     )
 
-                    prompt_token_ids = data_encoder.encode(prompt)
+                    prompt_token_ids = text_decoder.encode(prompt)
                     if len(prompt_token_ids) >= model_max_len:
                         print(
                             f"Prompt length ({len(prompt_token_ids)}) is exceeding model max length ({model_max_len}). "
@@ -594,8 +628,21 @@ def test_vllm_multi_turn(
                         generations.append(generation)
                         break
 
+                    images = (
+                        collect_vllm_images(
+                            value=conversation,
+                            dataset_image=config.dataset_image,
+                            data_path=config.data_path,
+                        )
+                        if config.modality != "text"
+                        else []
+                    )
+                    prompt_payload = build_vllm_prompt_payload(
+                        prompt=prompt,
+                        images=images,
+                    )
                     output = llm.generate(
-                        prompts=prompt,
+                        prompts=prompt_payload,
                         sampling_params=sampling_params,
                         lora_request=lora_request if config.is_peft else None,
                         use_tqdm=False,
@@ -631,8 +678,21 @@ def test_vllm_multi_turn(
                     **chat_template_kwargs,
                 )
 
+                images = (
+                    collect_vllm_images(
+                        value=conversation,
+                        dataset_image=config.dataset_image,
+                        data_path=config.data_path,
+                    )
+                    if config.modality != "text"
+                    else []
+                )
+                prompt_payload = build_vllm_prompt_payload(
+                    prompt=prompt,
+                    images=images,
+                )
                 output = llm.generate(
-                    prompts=prompt,
+                    prompts=prompt_payload,
                     sampling_params=sampling_params,
                     lora_request=lora_request if config.is_peft else None,
                     use_tqdm=False,
