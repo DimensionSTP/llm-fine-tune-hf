@@ -40,6 +40,8 @@ from .tracking import (
 from .test_utils import (
     build_test_dataloader,
     generate_test_results,
+    build_generation_inputs,
+    get_text_decoder,
     save_test_results_json,
     resolve_vllm_tp_size,
     build_vllm,
@@ -101,6 +103,8 @@ __all__ = [
     "finish_tracking",
     "build_test_dataloader",
     "generate_test_results",
+    "build_generation_inputs",
+    "get_text_decoder",
     "save_test_results_json",
     "resolve_vllm_tp_size",
     "build_vllm",
