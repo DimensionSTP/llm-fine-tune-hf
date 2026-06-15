@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset, Sampler
 
-from transformers import PreTrainedTokenizer, ProcessorMixin, PreTrainedModel
+from transformers import PreTrainedTokenizerBase, ProcessorMixin, PreTrainedModel
 
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
@@ -41,7 +41,7 @@ def build_test_dataloader(
 def generate_test_results(
     test_loader: DataLoader,
     model: PreTrainedModel,
-    data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+    data_encoder: Union[PreTrainedTokenizerBase, ProcessorMixin],
     config: DictConfig,
     device: Union[int, torch.device],
     tqdm_desc: str,
@@ -54,23 +54,25 @@ def generate_test_results(
             desc=tqdm_desc,
             disable=tqdm_disable,
         ):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
+            generation_inputs = build_generation_inputs(
+                batch=batch,
+                device=device,
+            )
 
             outputs = model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
+                **generation_inputs,
                 max_new_tokens=config.max_new_tokens,
                 do_sample=config.do_sample,
                 **config.generation_config,
             ).cpu()
 
-            instructions = data_encoder.batch_decode(
+            text_decoder = get_text_decoder(data_encoder=data_encoder)
+            instructions = text_decoder.batch_decode(
                 batch["input_ids"],
                 skip_special_tokens=True,
             )
 
-            generations = data_encoder.batch_decode(
+            generations = text_decoder.batch_decode(
                 outputs[:, batch["input_ids"].shape[1] :],
                 skip_special_tokens=True,
             )
@@ -89,6 +91,25 @@ def generate_test_results(
                 )
 
     return results
+
+
+def build_generation_inputs(
+    batch: Dict[str, Any],
+    device: Union[int, torch.device],
+) -> Dict[str, torch.Tensor]:
+    return {
+        key: value.to(device)
+        for key, value in batch.items()
+        if key != "labels" and isinstance(value, torch.Tensor)
+    }
+
+
+def get_text_decoder(
+    data_encoder: Union[PreTrainedTokenizerBase, ProcessorMixin],
+) -> PreTrainedTokenizerBase:
+    if isinstance(data_encoder, PreTrainedTokenizerBase):
+        return data_encoder
+    return data_encoder.tokenizer
 
 
 def save_test_results_json(
