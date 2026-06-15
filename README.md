@@ -370,11 +370,11 @@ image_augmentation.jpeg_quality_max={1 to 100}
 
 VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
 
-VLM dataset inputs use `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, and `dataset_image` where the selected dataset loader supports image fields. The default modality remains `text`.
+VLM dataset inputs use the image controls listed below where the selected dataset loader supports image fields. The default modality remains `text`.
 
 | Dataset family | Image-capable | Image controls |
 | --- | --- | --- |
-| SFT | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| SFT | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `dataset_image` |
 | DPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
 | GRPO / async GRPO / SDPO / A2PO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
 | KTO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
