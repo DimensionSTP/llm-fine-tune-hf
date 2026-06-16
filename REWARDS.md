@@ -133,11 +133,20 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   section, normalizes table `rows` from either list or dict containers and
   scores per-cell matches. Otherwise compares the last leaf value with
   normalized matching. Returns `1.0` on match, else `json_parse_weight`. Returns
-  `0.0` on parse failure.
+  `0.0` on parse failure. When `reward.auto_kv_stop_format.enabled` is true,
+  terminal `<stop>` is stripped before strict full JSON or full fenced JSON
+  parsing, and the final reward is normalized as
+  `(1 - weight) * kv_reward + weight * stop_format_reward`.
 - reward_categories: any category containing the `kv` token
   (e.g., `single_kv`, `vlm_single_kv`).
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if value mismatches.
+  - `reward.auto_kv_stop_format`: optional shared stop-format shaping. Defaults
+    to disabled. When enabled, exactly one terminal `stop_token` receives
+    `valid_terminal_reward`; missing, middle, or multiple stop tokens receive
+    their configured scores. Malformed or trailing-garbage JSON cannot receive a
+    high reward from terminal stop alone. Stop-format scores must be finite and
+    must not exceed `1.0`, preserving `reward.weight` as the final reward scale.
 
 ### MultiKVReward
 
@@ -145,11 +154,14 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - Logic: Parses JSON, compares all leaf values (excluding `tables`) and table
   cells after list/dict `rows` normalization. Computes accuracy over total items and returns
   `json_parse_weight + (1 - json_parse_weight) * accuracy`. Returns `0.0` on
-  parse failure.
+  parse failure. When `reward.auto_kv_stop_format.enabled` is true, it uses the
+  same terminal stop normalization as `SingleKVReward`.
 - reward_categories: any category containing the `kv` token
   (e.g., `multi_kv`, `vlm_multi_kv`).
 - Extra options:
   - `json_parse_weight`: base score for valid JSON even if accuracy is low.
+  - `reward.auto_kv_stop_format`: same shared stop-format shaping config as
+    `SingleKVReward`.
 
 ### GroundingBBoxReward
 
