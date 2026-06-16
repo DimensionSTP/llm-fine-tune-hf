@@ -90,6 +90,133 @@ class SetUp:
         )
         return test_dataset
 
+    def get_ds_config(self) -> Optional[Dict[str, Any]]:
+        if self.config.strategy == "deepspeed":
+            ds_config = OmegaConf.to_container(
+                self.config.deepspeed,
+                resolve=True,
+            )
+            return ds_config
+        return None
+
+    def get_training_arguments(
+        self,
+        ds_config: Optional[Dict[str, Any]] = None,
+    ) -> TrainingArguments:
+        validate_training_arguments_config(
+            config=self.config,
+        )
+
+        training_argument_kwargs = {
+            "dataloader_num_workers": self.num_workers,
+        }
+        if ds_config is not None:
+            training_argument_kwargs["deepspeed"] = ds_config
+
+        training_arguments: TrainingArguments = instantiate(
+            self.config.training_arguments,
+            **training_argument_kwargs,
+            _convert_="all",
+        )
+        return training_arguments
+
+    def get_data_encoder(self) -> Union[PreTrainedTokenizer, ProcessorMixin]:
+        if self.config.is_preprocessed:
+            data_encoder_path = self.config.custom_data_encoder_path
+        else:
+            data_encoder_path = self.config.pretrained_model_name
+
+        if self.config.modality == "text":
+            data_encoder = AutoTokenizer.from_pretrained(
+                data_encoder_path,
+                use_fast=True,
+                revision=self.revision,
+            )
+
+            if data_encoder.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    self.config.reference_data_encoder_name
+                )
+                data_encoder.chat_template = reference_data_encoder.chat_template
+
+            if data_encoder.pad_token_id is None:
+                data_encoder.pad_token_id = data_encoder.eos_token_id
+            if self.config.left_padding:
+                data_encoder.padding_side = "left"
+            else:
+                data_encoder.padding_side = "right"
+        else:
+            data_encoder = AutoProcessor.from_pretrained(
+                data_encoder_path,
+                revision=self.revision,
+            )
+
+            if data_encoder.tokenizer.chat_template is None:
+                reference_data_encoder = AutoTokenizer.from_pretrained(
+                    self.config.reference_data_encoder_name
+                )
+                data_encoder.tokenizer.chat_template = (
+                    reference_data_encoder.chat_template
+                )
+
+            if data_encoder.tokenizer.pad_token_id is None:
+                data_encoder.tokenizer.pad_token_id = (
+                    data_encoder.tokenizer.eos_token_id
+                )
+            if self.config.left_padding:
+                data_encoder.tokenizer.padding_side = "left"
+            else:
+                data_encoder.tokenizer.padding_side = "right"
+
+        return data_encoder
+
+    def get_data_collator(
+        self,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+    ) -> Optional[SFTDynamicPaddingCollator]:
+        if self.config.fine_tune_method != "sft":
+            return None
+        if self.config.sft_padding_strategy != "dynamic":
+            return None
+        if self.config.left_padding:
+            raise ValueError("SFT dynamic padding does not support left_padding=true.")
+
+        if self.config.modality == "text":
+            pad_token_id = data_encoder.pad_token_id
+        else:
+            pad_token_id = data_encoder.tokenizer.pad_token_id
+
+        if pad_token_id is None:
+            raise ValueError("SFT dynamic padding requires a pad token id.")
+
+        return SFTDynamicPaddingCollator(
+            pad_token_id=pad_token_id,
+            pad_to_multiple_of=self.config.pad_to_multiple_of,
+        )
+
+    def finalize_training_arguments(
+        self,
+        training_arguments: TrainingArguments,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+    ) -> TrainingArguments:
+        if not hasattr(
+            training_arguments,
+            "chat_template_kwargs",
+        ):
+            return training_arguments
+
+        chat_template_kwargs = training_arguments.chat_template_kwargs
+        if chat_template_kwargs is None:
+            return training_arguments
+        if not isinstance(chat_template_kwargs, dict):
+            raise ValueError("training_arguments.chat_template_kwargs must be a dict.")
+
+        training_arguments.chat_template_kwargs = filter_chat_template_kwargs(
+            data_encoder=data_encoder,
+            chat_template_kwargs=chat_template_kwargs,
+        )
+        return training_arguments
+
     def get_model(self) -> PreTrainedModel:
         is_inference = self.config.mode in ["test", "test_large"]
         model_load_plan = self.model_load_planner.build()
@@ -219,133 +346,6 @@ class SetUp:
             )
 
         return model
-
-    def get_data_encoder(self) -> Union[PreTrainedTokenizer, ProcessorMixin]:
-        if self.config.is_preprocessed:
-            data_encoder_path = self.config.custom_data_encoder_path
-        else:
-            data_encoder_path = self.config.pretrained_model_name
-
-        if self.config.modality == "text":
-            data_encoder = AutoTokenizer.from_pretrained(
-                data_encoder_path,
-                use_fast=True,
-                revision=self.revision,
-            )
-
-            if data_encoder.chat_template is None:
-                reference_data_encoder = AutoTokenizer.from_pretrained(
-                    self.config.reference_data_encoder_name
-                )
-                data_encoder.chat_template = reference_data_encoder.chat_template
-
-            if data_encoder.pad_token_id is None:
-                data_encoder.pad_token_id = data_encoder.eos_token_id
-            if self.config.left_padding:
-                data_encoder.padding_side = "left"
-            else:
-                data_encoder.padding_side = "right"
-        else:
-            data_encoder = AutoProcessor.from_pretrained(
-                data_encoder_path,
-                revision=self.revision,
-            )
-
-            if data_encoder.tokenizer.chat_template is None:
-                reference_data_encoder = AutoTokenizer.from_pretrained(
-                    self.config.reference_data_encoder_name
-                )
-                data_encoder.tokenizer.chat_template = (
-                    reference_data_encoder.chat_template
-                )
-
-            if data_encoder.tokenizer.pad_token_id is None:
-                data_encoder.tokenizer.pad_token_id = (
-                    data_encoder.tokenizer.eos_token_id
-                )
-            if self.config.left_padding:
-                data_encoder.tokenizer.padding_side = "left"
-            else:
-                data_encoder.tokenizer.padding_side = "right"
-
-        return data_encoder
-
-    def get_data_collator(
-        self,
-        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
-    ) -> Optional[SFTDynamicPaddingCollator]:
-        if self.config.fine_tune_method != "sft":
-            return None
-        if self.config.sft_padding_strategy != "dynamic":
-            return None
-        if self.config.left_padding:
-            raise ValueError("SFT dynamic padding does not support left_padding=true.")
-
-        if self.config.modality == "text":
-            pad_token_id = data_encoder.pad_token_id
-        else:
-            pad_token_id = data_encoder.tokenizer.pad_token_id
-
-        if pad_token_id is None:
-            raise ValueError("SFT dynamic padding requires a pad token id.")
-
-        return SFTDynamicPaddingCollator(
-            pad_token_id=pad_token_id,
-            pad_to_multiple_of=self.config.pad_to_multiple_of,
-        )
-
-    def finalize_training_arguments(
-        self,
-        training_arguments: TrainingArguments,
-        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
-    ) -> TrainingArguments:
-        if not hasattr(
-            training_arguments,
-            "chat_template_kwargs",
-        ):
-            return training_arguments
-
-        chat_template_kwargs = training_arguments.chat_template_kwargs
-        if chat_template_kwargs is None:
-            return training_arguments
-        if not isinstance(chat_template_kwargs, dict):
-            raise ValueError("training_arguments.chat_template_kwargs must be a dict.")
-
-        training_arguments.chat_template_kwargs = filter_chat_template_kwargs(
-            data_encoder=data_encoder,
-            chat_template_kwargs=chat_template_kwargs,
-        )
-        return training_arguments
-
-    def get_training_arguments(
-        self,
-        ds_config: Optional[Dict[str, Any]] = None,
-    ) -> TrainingArguments:
-        validate_training_arguments_config(
-            config=self.config,
-        )
-
-        training_argument_kwargs = {
-            "dataloader_num_workers": self.num_workers,
-        }
-        if ds_config is not None:
-            training_argument_kwargs["deepspeed"] = ds_config
-
-        training_arguments: TrainingArguments = instantiate(
-            self.config.training_arguments,
-            **training_argument_kwargs,
-            _convert_="all",
-        )
-        return training_arguments
-
-    def get_ds_config(self) -> Optional[Dict[str, Any]]:
-        if self.config.strategy == "deepspeed":
-            ds_config = OmegaConf.to_container(
-                self.config.deepspeed,
-                resolve=True,
-            )
-            return ds_config
-        return None
 
     def get_reward_manager(self) -> RewardManager:
         reward_manager: RewardManager = instantiate(
