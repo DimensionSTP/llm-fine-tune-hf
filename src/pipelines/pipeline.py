@@ -79,12 +79,9 @@ def train(
         runtime_state=async_runtime_state,
     )
 
-    if config.fine_tune_method == "sft":
-        train_dataset = setup.get_train_dataset()
-        val_dataset = setup.get_val_dataset() if config.use_validation else None
-    else:
-        train_dataset = setup.get_dataset()["train"]
-        val_dataset = setup.get_dataset()["val"]
+    train_datasets = setup.get_train_datasets()
+    train_dataset = train_datasets["train"]
+    val_dataset = train_datasets["val"]
 
     ds_config = setup.get_ds_config()
     training_arguments = setup.get_training_arguments(

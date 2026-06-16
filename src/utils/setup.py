@@ -70,25 +70,18 @@ class SetUp:
         )
         self.hf_deepspeed_config = None
 
-    def get_train_dataset(self) -> Dataset:
-        train_dataset: Dataset = instantiate(
-            self.config.dataset[self.data_type],
-            split=self.config.split.train,
-        )
-        return train_dataset
+    def get_train_datasets(self) -> Dict[str, Optional[Union[Dataset, HFDataset]]]:
+        if self.config.fine_tune_method == "sft":
+            return {
+                "train": self._get_train_dataset(),
+                "val": self._get_val_dataset() if self.config.use_validation else None,
+            }
 
-    def get_val_dataset(self) -> Dataset:
-        val_dataset: Dataset = instantiate(
-            self.config.dataset[self.data_type],
-            split=self.config.split.val,
-        )
-        return val_dataset
-
-    def get_dataset(self) -> Dict[str, HFDataset]:
-        dataset: DatasetBuilder = instantiate(
-            self.config.dataset[self.data_type],
-        )
-        return dataset()
+        dataset = self._get_dataset()
+        return {
+            "train": dataset["train"],
+            "val": dataset["val"],
+        }
 
     def get_test_dataset(self) -> Dataset:
         test_dataset: Dataset = instantiate(
@@ -335,3 +328,23 @@ class SetUp:
             self.config.reward_manager,
         )
         return reward_manager
+
+    def _get_train_dataset(self) -> Dataset:
+        train_dataset: Dataset = instantiate(
+            self.config.dataset[self.data_type],
+            split=self.config.split.train,
+        )
+        return train_dataset
+
+    def _get_val_dataset(self) -> Dataset:
+        val_dataset: Dataset = instantiate(
+            self.config.dataset[self.data_type],
+            split=self.config.split.val,
+        )
+        return val_dataset
+
+    def _get_dataset(self) -> Dict[str, HFDataset]:
+        dataset: DatasetBuilder = instantiate(
+            self.config.dataset[self.data_type],
+        )
+        return dataset()
