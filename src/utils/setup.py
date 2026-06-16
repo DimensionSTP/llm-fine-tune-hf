@@ -269,7 +269,7 @@ class SetUp:
 
         return data_encoder
 
-    def get_train_data_collator(
+    def get_data_collator(
         self,
         data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
     ) -> Optional[SFTDynamicPaddingCollator]:

@@ -105,7 +105,7 @@ def train(
     else:
         model = setup.get_model()
     data_encoder = setup.get_data_encoder()
-    data_collator = setup.get_train_data_collator(data_encoder=data_encoder)
+    data_collator = setup.get_data_collator(data_encoder=data_encoder)
 
     trainer_config = OmegaConf.to_container(
         config.trainer,
