@@ -253,8 +253,8 @@ def test(
         sampler=sampler,
     )
 
-    model = setup.get_model()
     data_encoder = setup.get_data_encoder()
+    model = setup.get_model()
 
     model.to(rank)
 
@@ -332,8 +332,8 @@ def test_large(
         sampler=None,
     )
 
-    model = setup.get_model()
     data_encoder = setup.get_data_encoder()
+    model = setup.get_model()
 
     try:
         results = generate_test_results(
@@ -386,6 +386,9 @@ def test_vllm(
     setup = SetUp(config)
 
     data_encoder = setup.get_data_encoder()
+    df = load_test_dataframe(
+        config=config,
+    )
 
     num_gpus = torch.cuda.device_count()
     tp_size = resolve_vllm_tp_size(
@@ -410,9 +413,6 @@ def test_vllm(
     lora_request = build_lora_request(
         config=config,
         lora_int_id=1,
-    )
-    df = load_test_dataframe(
-        config=config,
     )
 
     prompts = []
@@ -569,6 +569,9 @@ def test_vllm_multi_turn(
 
     data_encoder = setup.get_data_encoder()
     text_encoder = resolve_text_encoder(data_encoder=data_encoder)
+    df = load_test_dataframe(
+        config=config,
+    )
 
     num_gpus = torch.cuda.device_count()
     tp_size = resolve_vllm_tp_size(
@@ -589,9 +592,6 @@ def test_vllm_multi_turn(
     lora_request = build_lora_request(
         config=config,
         lora_int_id=0,
-    )
-    df = load_test_dataframe(
-        config=config,
     )
 
     try:
