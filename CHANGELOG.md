@@ -2,6 +2,20 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.1.0] - 2026-06-16
+
+- Add disabled-by-default auto KV stop-format reward shaping through `reward.auto_kv_stop_format` with configurable `stop_token`, blend weight, terminal reward, missing reward, and middle-or-multiple penalty values.
+- Wire `reward.auto_kv_stop_format` into `SingleKVReward` and `MultiKVReward` so KV rewards can combine JSON correctness with terminal stop-token format compliance.
+- Add strict KV JSON parsing for stop-format mode, including support for full JSON objects and fully fenced JSON blocks after a valid terminal stop token is stripped.
+- Prevent malformed JSON or trailing-garbage KV outputs from receiving a high score from terminal stop-token formatting alone.
+- Normalize base64 and converted VLM image sources to PNG data URIs so augmented DPO, GRPO, and KTO preference images remain serializable across dataset and downstream processing boundaries.
+- Preserve existing path-based VLM image handling while passing already-normalized data URI inputs through unchanged.
+- Filter chat template kwargs by actual template variables before calling tokenizer or processor chat template rendering, including `enable_thinking`.
+- Finalize trainer chat template kwargs after data encoder setup so training arguments only receive kwargs supported by the active chat template.
+- Refactor train dataset setup and data collator construction into shared setup helpers while preserving SFT dynamic padding behavior.
+- Align test, large-test, vLLM test, and multi-turn vLLM test encoder/model setup order with the normalized data encoder flow.
+- Document auto KV stop-format reward behavior and scoring constraints in the reward reference.
+
 ## [v2.0.0] - 2026-06-14
 
 - Upgrade the training stack dependency pins to `transformers==5.11.0`, `trl==1.6.0`, `vllm==0.19.0`, `huggingface-hub==1.19.0`, `liger_kernel==0.8.0`, and related runtime packages.
