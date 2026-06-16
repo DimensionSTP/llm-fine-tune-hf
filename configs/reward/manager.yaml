@@ -112,6 +112,12 @@ rewards:
     extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.single_kv}
     json_parse_weight: ${reward.single_kv.json_parse_weight}
+    stop_format_enabled: ${reward.auto_kv_stop_format.enabled}
+    stop_token: ${reward.auto_kv_stop_format.stop_token}
+    stop_format_weight: ${reward.auto_kv_stop_format.weight}
+    valid_terminal_reward: ${reward.auto_kv_stop_format.valid_terminal_reward}
+    missing_reward: ${reward.auto_kv_stop_format.missing_reward}
+    middle_or_multiple_penalty: ${reward.auto_kv_stop_format.middle_or_multiple_penalty}
 
   - _target_: src.utils.MultiKVReward
     is_answer_tag: ${reward.is_answer_tag}
@@ -123,6 +129,12 @@ rewards:
     extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.multi_kv}
     json_parse_weight: ${reward.multi_kv.json_parse_weight}
+    stop_format_enabled: ${reward.auto_kv_stop_format.enabled}
+    stop_token: ${reward.auto_kv_stop_format.stop_token}
+    stop_format_weight: ${reward.auto_kv_stop_format.weight}
+    valid_terminal_reward: ${reward.auto_kv_stop_format.valid_terminal_reward}
+    missing_reward: ${reward.auto_kv_stop_format.missing_reward}
+    middle_or_multiple_penalty: ${reward.auto_kv_stop_format.middle_or_multiple_penalty}
 
   - _target_: src.utils.GroundingBBoxReward
     is_answer_tag: ${reward.is_answer_tag}

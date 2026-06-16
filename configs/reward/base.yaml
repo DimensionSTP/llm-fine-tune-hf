@@ -46,6 +46,13 @@ reward:
     json_parse_weight: 0.2
   multi_kv:
     json_parse_weight: 0.2
+  auto_kv_stop_format:
+    enabled: false
+    stop_token: <stop>
+    weight: 0.05
+    valid_terminal_reward: 1.0
+    missing_reward: 0.0
+    middle_or_multiple_penalty: 0.0
   grounding_bbox:
     category_token: ground
     format_reward: 0.1
