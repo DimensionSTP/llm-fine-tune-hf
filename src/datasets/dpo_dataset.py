@@ -13,6 +13,7 @@ from PIL import Image
 from ..helpers.dataset_paths import resolve_dataset_file_path
 from .image_io import (
     build_image_io_settings,
+    image_to_data_uri,
     load_image,
     normalize_image_payloads,
     normalize_image_source,
@@ -293,12 +294,14 @@ class StructuralDataset:
             height=pil_image.height,
         )
         if target_size is None:
-            return pil_image
+            return image_to_data_uri(image=pil_image)
 
         try:
-            return pil_image.resize(
-                target_size,
-                self.resample_filter,
+            return image_to_data_uri(
+                image=pil_image.resize(
+                    target_size,
+                    self.resample_filter,
+                )
             )
         except Exception:
             return image
