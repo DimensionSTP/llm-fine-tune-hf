@@ -1626,6 +1626,12 @@ class SingleKVReward(BaseReward):
         extraction_profile: str,
         weight: float,
         json_parse_weight: float,
+        stop_format_enabled: bool,
+        stop_token: str,
+        stop_format_weight: float,
+        valid_terminal_reward: float,
+        missing_reward: float,
+        middle_or_multiple_penalty: float,
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -1638,6 +1644,13 @@ class SingleKVReward(BaseReward):
             weight=weight,
         )
         self.json_parse_weight = json_parse_weight
+        self.stop_format_enabled = stop_format_enabled
+        self.stop_token = stop_token
+        self.stop_format_weight = stop_format_weight
+        self.valid_terminal_reward = valid_terminal_reward
+        self.missing_reward = missing_reward
+        self.middle_or_multiple_penalty = middle_or_multiple_penalty
+        self._validate_stop_format_config()
 
     def compute(
         self,
@@ -1660,12 +1673,11 @@ class SingleKVReward(BaseReward):
                 rewards.append(None)
                 continue
 
-            extracted_answer = self.extract_answer_from_generation(generation=content)
-            extracted_answer = self.split_on_keywords(text=extracted_answer)
+            extracted_answer = self._extract_kv_answer_for_json(generation=content)
 
-            pred_json = self._try_parse_json(text=extracted_answer)
+            pred_json = self._parse_kv_json(text=extracted_answer)
             if pred_json is None:
-                rewards.append(0.0)
+                rewards.append(self._compute_invalid_kv_json_reward(generation=content))
                 continue
 
             gt_json = self._try_parse_json(text=sol)
@@ -1682,7 +1694,12 @@ class SingleKVReward(BaseReward):
                     pred_json=pred_json,
                     gt_json=gt_json,
                 )
-                rewards.append(reward)
+                rewards.append(
+                    self._apply_stop_format_reward(
+                        generation=content,
+                        reward=reward,
+                    )
+                )
                 continue
 
             pred_leaf = self._extract_last_leaf_value(node=pred_json)
@@ -1692,11 +1709,148 @@ class SingleKVReward(BaseReward):
                 pred_leaf=pred_leaf,
                 gt_leaf=gt_leaf,
             ):
-                rewards.append(1.0)
+                reward = 1.0
             else:
-                rewards.append(self.json_parse_weight)
+                reward = self.json_parse_weight
+
+            rewards.append(
+                self._apply_stop_format_reward(
+                    generation=content,
+                    reward=reward,
+                )
+            )
 
         return rewards
+
+    def _extract_kv_answer_for_json(
+        self,
+        generation: str,
+    ) -> Optional[str]:
+        extracted_answer = self.extract_answer_from_generation(generation=generation)
+        extracted_answer = self.split_on_keywords(text=extracted_answer)
+        return self._strip_valid_terminal_stop(text=extracted_answer)
+
+    def _validate_stop_format_config(
+        self,
+    ) -> None:
+        if not self.stop_format_enabled:
+            return
+        if not isinstance(self.stop_token, str) or not self.stop_token:
+            raise ValueError("stop_token must be a non-empty string")
+        self._validate_stop_format_number(
+            name="stop_format_weight",
+            value=self.stop_format_weight,
+        )
+        self._validate_stop_format_number(
+            name="valid_terminal_reward",
+            value=self.valid_terminal_reward,
+        )
+        self._validate_stop_format_number(
+            name="missing_reward",
+            value=self.missing_reward,
+        )
+        self._validate_stop_format_number(
+            name="middle_or_multiple_penalty",
+            value=self.middle_or_multiple_penalty,
+        )
+        if not 0.0 <= self.stop_format_weight < 1.0:
+            raise ValueError("stop_format_weight must be >= 0 and < 1")
+        if not 0.0 <= self.valid_terminal_reward <= 1.0:
+            raise ValueError("valid_terminal_reward must be >= 0 and <= 1")
+        if self.missing_reward > 1.0:
+            raise ValueError("missing_reward must be <= 1")
+        if self.middle_or_multiple_penalty > 1.0:
+            raise ValueError("middle_or_multiple_penalty must be <= 1")
+
+    @staticmethod
+    def _validate_stop_format_number(
+        name: str,
+        value: float,
+    ) -> None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be a finite number")
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be a finite number")
+
+    def _parse_kv_json(
+        self,
+        text: Optional[str],
+    ) -> Optional[Any]:
+        if text is None:
+            return None
+        if not self.stop_format_enabled:
+            return self._try_parse_json(text=text)
+        return self._try_parse_strict_json(text=text)
+
+    def _apply_stop_format_reward(
+        self,
+        generation: str,
+        reward: float,
+    ) -> float:
+        if not self.stop_format_enabled:
+            return reward
+        stop_score = self._compute_stop_format_score(generation=generation)
+        reward_weight = 1.0 - self.stop_format_weight
+        return reward * reward_weight + stop_score * self.stop_format_weight
+
+    def _compute_invalid_kv_json_reward(
+        self,
+        generation: str,
+    ) -> float:
+        if not self.stop_format_enabled:
+            return 0.0
+        stop_score = self._compute_stop_format_score(generation=generation)
+        if stop_score == self.valid_terminal_reward:
+            return 0.0
+        return stop_score * self.stop_format_weight
+
+    def _compute_stop_format_score(
+        self,
+        generation: str,
+    ) -> float:
+        extracted_answer = self.extract_answer_from_generation(generation=generation)
+        extracted_answer = self.split_on_keywords(text=extracted_answer)
+        stripped_answer = extracted_answer.strip()
+        stop_count = stripped_answer.count(self.stop_token)
+        if stop_count == 0:
+            return self.missing_reward
+        if stop_count == 1 and stripped_answer.endswith(self.stop_token):
+            return self.valid_terminal_reward
+        return self.middle_or_multiple_penalty
+
+    def _strip_valid_terminal_stop(
+        self,
+        text: str,
+    ) -> Optional[str]:
+        if not self.stop_format_enabled:
+            return text
+        stripped_text = text.strip()
+        stop_count = stripped_text.count(self.stop_token)
+        if stop_count == 0:
+            return stripped_text
+        if stop_count == 1 and stripped_text.endswith(self.stop_token):
+            return stripped_text[: -len(self.stop_token)].rstrip()
+        return None
+
+    @staticmethod
+    def _try_parse_strict_json(text: str) -> Optional[Any]:
+        stripped_text = text.strip()
+        try:
+            return json.loads(stripped_text)
+        except json.JSONDecodeError:
+            pass
+
+        fenced = re.fullmatch(
+            r"```(?:json)?\s*(\{.*\})\s*```",
+            stripped_text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if fenced:
+            try:
+                return json.loads(fenced.group(1))
+            except json.JSONDecodeError:
+                return None
+        return None
 
     @staticmethod
     def _try_parse_json(text: str) -> Optional[Any]:
@@ -1951,12 +2105,11 @@ class MultiKVReward(SingleKVReward):
                 rewards.append(None)
                 continue
 
-            extracted_answer = self.extract_answer_from_generation(generation=content)
-            extracted_answer = self.split_on_keywords(text=extracted_answer)
+            extracted_answer = self._extract_kv_answer_for_json(generation=content)
 
-            pred_json = self._try_parse_json(text=extracted_answer)
+            pred_json = self._parse_kv_json(text=extracted_answer)
             if pred_json is None:
-                rewards.append(0.0)
+                rewards.append(self._compute_invalid_kv_json_reward(generation=content))
                 continue
 
             gt_json = self._try_parse_json(text=sol)
@@ -1977,12 +2130,22 @@ class MultiKVReward(SingleKVReward):
             matched_items = kv_matched + table_matched
 
             if total_items == 0:
-                rewards.append(self.json_parse_weight)
+                rewards.append(
+                    self._apply_stop_format_reward(
+                        generation=content,
+                        reward=self.json_parse_weight,
+                    )
+                )
                 continue
 
             accuracy = matched_items / float(total_items)
             reward = self.json_parse_weight + (1 - self.json_parse_weight) * accuracy
-            rewards.append(reward)
+            rewards.append(
+                self._apply_stop_format_reward(
+                    generation=content,
+                    reward=reward,
+                )
+            )
 
         return rewards
 
