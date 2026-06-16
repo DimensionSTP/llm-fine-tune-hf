@@ -29,19 +29,28 @@ def normalize_image_source(
     if not isinstance(image, str):
         return image
 
+    if image.startswith("data:"):
+        return image
+
     resolved_path = resolve_image_path(
         image_path=image,
         image_root_dir=image_root_dir,
     )
     if resolved_path is None:
-        return image
-    if not _path_exists(path=resolved_path):
-        decoded_image = load_base64_image(
+        normalized_base64 = normalize_base64_image_data_uri(
             value=image,
             converted_image_mode=converted_image_mode,
         )
-        if decoded_image is not None:
-            return decoded_image
+        if normalized_base64 is not None:
+            return normalized_base64
+        return image
+    if not _path_exists(path=resolved_path):
+        normalized_base64 = normalize_base64_image_data_uri(
+            value=image,
+            converted_image_mode=converted_image_mode,
+        )
+        if normalized_base64 is not None:
+            return normalized_base64
     if _has_unsupported_extension(
         path=resolved_path,
         unsupported_path_extensions=unsupported_path_extensions,
@@ -59,7 +68,7 @@ def normalize_image_source(
             raise ValueError(
                 f"Failed to decode unsupported image extension: {resolved_path}"
             )
-        return converted_image
+        return image_to_data_uri(image=converted_image)
     return resolved_path
 
 
@@ -241,6 +250,31 @@ def load_base64_image(
         )
     except Exception:
         return None
+
+
+def normalize_base64_image_data_uri(
+    value: str,
+    converted_image_mode: Optional[str] = None,
+) -> Optional[str]:
+    image = load_base64_image(
+        value=value,
+        converted_image_mode=converted_image_mode,
+    )
+    if image is None:
+        return None
+    return image_to_data_uri(image=image)
+
+
+def image_to_data_uri(
+    image: Image.Image,
+) -> str:
+    buffer = io.BytesIO()
+    image.save(
+        buffer,
+        format="PNG",
+    )
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 def resolve_image_path(
