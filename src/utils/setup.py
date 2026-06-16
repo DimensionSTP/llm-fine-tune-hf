@@ -31,6 +31,7 @@ from .model_loading import ModelLoadPlanner
 from .config_validation import validate_training_arguments_config
 from .peft_initialization import initialize_peft_model
 from .collate_fns import SFTDynamicPaddingCollator
+from ..helpers import filter_chat_template_kwargs
 from src.utils.rewards import RewardManager
 
 
@@ -292,6 +293,29 @@ class SetUp:
             pad_token_id=pad_token_id,
             pad_to_multiple_of=self.config.pad_to_multiple_of,
         )
+
+    def finalize_training_arguments(
+        self,
+        training_arguments: TrainingArguments,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+    ) -> TrainingArguments:
+        if not hasattr(
+            training_arguments,
+            "chat_template_kwargs",
+        ):
+            return training_arguments
+
+        chat_template_kwargs = training_arguments.chat_template_kwargs
+        if chat_template_kwargs is None:
+            return training_arguments
+        if not isinstance(chat_template_kwargs, dict):
+            raise ValueError("training_arguments.chat_template_kwargs must be a dict.")
+
+        training_arguments.chat_template_kwargs = filter_chat_template_kwargs(
+            data_encoder=data_encoder,
+            chat_template_kwargs=chat_template_kwargs,
+        )
+        return training_arguments
 
     def get_training_arguments(
         self,

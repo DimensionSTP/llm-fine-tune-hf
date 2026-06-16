@@ -87,6 +87,14 @@ def train(
     training_arguments = setup.get_training_arguments(
         ds_config=ds_config,
     )
+
+    data_encoder = setup.get_data_encoder()
+    data_collator = setup.get_data_collator(data_encoder=data_encoder)
+
+    training_arguments = setup.finalize_training_arguments(
+        training_arguments=training_arguments,
+        data_encoder=data_encoder,
+    )
     write_run_metadata(
         config=config,
         training_arguments=training_arguments,
@@ -104,8 +112,6 @@ def train(
                 model = merged_model_path
     else:
         model = setup.get_model()
-    data_encoder = setup.get_data_encoder()
-    data_collator = setup.get_data_collator(data_encoder=data_encoder)
 
     trainer_config = OmegaConf.to_container(
         config.trainer,
