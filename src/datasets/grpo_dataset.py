@@ -235,6 +235,7 @@ class StructuralDataset:
         return load_image(
             image=image,
             image_root_dir=self.image_root_dir,
+            converted_image_mode=self.converted_image_mode,
         )
 
     def _normalize_single_image(
