@@ -161,7 +161,7 @@ def build_image_io_settings(
 def load_image(
     image: Any,
     image_root_dir: str,
-    converted_image_mode: Optional[str] = None,
+    converted_image_mode: Optional[str],
 ) -> Optional[Image.Image]:
     if isinstance(image, Image.Image):
         return _convert_image_mode(
@@ -218,7 +218,7 @@ def load_image(
 
 def load_image_from_bytes(
     data: bytes,
-    converted_image_mode: Optional[str] = None,
+    converted_image_mode: Optional[str],
 ) -> Optional[Image.Image]:
     try:
         image = Image.open(io.BytesIO(data))
@@ -232,7 +232,7 @@ def load_image_from_bytes(
 
 def load_base64_image(
     value: str,
-    converted_image_mode: Optional[str] = None,
+    converted_image_mode: Optional[str],
 ) -> Optional[Image.Image]:
     try:
         if "base64," in value:
@@ -254,7 +254,7 @@ def load_base64_image(
 
 def normalize_base64_image_data_uri(
     value: str,
-    converted_image_mode: Optional[str] = None,
+    converted_image_mode: Optional[str],
 ) -> Optional[str]:
     image = load_base64_image(
         value=value,
@@ -342,6 +342,7 @@ def collect_vllm_images(
         image = load_image(
             image=normalized_image,
             image_root_dir=settings["image_root_dir"],
+            converted_image_mode=settings["converted_image_mode"],
         )
         if image is None:
             raise ValueError(

@@ -23,9 +23,9 @@ class StructuralDataset:
         role_column_name: str,
         content_column_name: str,
         assistant_column_name: str,
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -143,9 +143,9 @@ class ConversationalDataset:
         dataset_name: str,
         dataset_format: str,
         conversation_column_name: str,
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir

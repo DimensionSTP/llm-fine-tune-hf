@@ -38,10 +38,10 @@ class StructuralDataset(Dataset):
         left_padding: bool,
         is_enable_thinking: bool,
         max_length: int,
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
-        dataset_image: Optional[Dict[str, Any]] = None,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
+        dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -305,6 +305,7 @@ class StructuralDataset(Dataset):
         return load_image(
             image=image,
             image_root_dir=self.image_root_dir,
+            converted_image_mode=self.converted_image_mode,
         )
 
     def _normalize_single_image(
@@ -368,10 +369,10 @@ class ConversationalDataset(StructuralDataset):
         left_padding: bool,
         is_enable_thinking: bool,
         max_length: int,
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
-        dataset_image: Optional[Dict[str, Any]] = None,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
+        dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir

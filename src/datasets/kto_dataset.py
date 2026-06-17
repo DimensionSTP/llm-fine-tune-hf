@@ -40,11 +40,11 @@ class StructuralDataset:
         max_pixels: Optional[int],
         do_resize: bool,
         image_augmentation: Dict[str, Any],
-        decode_image_paths: bool = False,
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
-        dataset_image: Optional[Dict[str, Any]] = None,
+        decode_image_paths: bool,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
+        dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -457,11 +457,11 @@ class ConversationalDataset(StructuralDataset):
         max_pixels: Optional[int],
         do_resize: bool,
         image_augmentation: Dict[str, Any],
-        decode_image_paths: bool = False,
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
-        dataset_image: Optional[Dict[str, Any]] = None,
+        decode_image_paths: bool,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
+        dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir

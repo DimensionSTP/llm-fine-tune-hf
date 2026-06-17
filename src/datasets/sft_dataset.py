@@ -49,11 +49,11 @@ class StructuralDataset(Dataset):
         truncation_mode: str,
         response_start_template: str,
         response_end_template: Optional[str],
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
-        dataset_image: Optional[Dict[str, Any]] = None,
-        sft_label_mask: Optional[Dict[str, Any]] = None,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
+        dataset_image: Optional[Dict[str, Any]],
+        sft_label_mask: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -702,6 +702,7 @@ class StructuralDataset(Dataset):
         return load_image(
             image=image,
             image_root_dir=self.image_root_dir,
+            converted_image_mode=self.converted_image_mode,
         )
 
     def _normalize_single_image(
@@ -780,11 +781,11 @@ class ConversationalDataset(StructuralDataset):
         truncation_mode: str,
         response_start_template: str,
         response_end_template: Optional[str],
-        dataset_subdir: Optional[str] = None,
-        dataset_file_path: Optional[str] = None,
-        allow_dataset_file_name_mismatch: bool = False,
-        dataset_image: Optional[Dict[str, Any]] = None,
-        sft_label_mask: Optional[Dict[str, Any]] = None,
+        dataset_subdir: Optional[str],
+        dataset_file_path: Optional[str],
+        allow_dataset_file_name_mismatch: bool,
+        dataset_image: Optional[Dict[str, Any]],
+        sft_label_mask: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir

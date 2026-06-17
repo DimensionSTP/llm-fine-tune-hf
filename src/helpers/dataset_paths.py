@@ -6,9 +6,9 @@ def resolve_dataset_file_path(
     dataset_name: str,
     dataset_format: str,
     data_path: str,
-    dataset_subdir: Optional[str] = None,
-    dataset_file_path: Optional[str] = None,
-    allow_dataset_file_name_mismatch: bool = False,
+    dataset_subdir: Optional[str],
+    dataset_file_path: Optional[str],
+    allow_dataset_file_name_mismatch: bool,
 ) -> str:
     expected_file_name = build_dataset_file_name(
         dataset_name=dataset_name,
@@ -57,9 +57,9 @@ def build_dataset_file_path_metadata(
     dataset_name: str,
     dataset_format: str,
     data_path: str,
-    dataset_subdir: Optional[str] = None,
-    dataset_file_path: Optional[str] = None,
-    allow_dataset_file_name_mismatch: bool = False,
+    dataset_subdir: Optional[str],
+    dataset_file_path: Optional[str],
+    allow_dataset_file_name_mismatch: bool,
 ) -> Dict[str, Any]:
     resolved_path = resolve_dataset_file_path(
         dataset_name=dataset_name,
