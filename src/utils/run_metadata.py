@@ -644,13 +644,14 @@ def build_method_hyperparameters(
     return select_config_values(
         config=config,
         paths=common_paths_by_method[str(config.fine_tune_method)],
+        extra=None,
     )
 
 
 def select_config_values(
     config: DictConfig,
     paths: List[str],
-    extra: Optional[Dict[str, Any]] = None,
+    extra: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     selected = dict(extra or {})
     sentinel = object()

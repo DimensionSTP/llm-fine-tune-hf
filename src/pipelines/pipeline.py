@@ -65,6 +65,7 @@ def train(
     if rank == 0:
         validate_distributed_runtime_config(
             config=config,
+            runtime_snapshot=None,
         )
 
     setup = SetUp(config)

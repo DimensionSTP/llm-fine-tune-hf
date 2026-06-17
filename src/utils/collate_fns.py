@@ -42,8 +42,8 @@ class SFTDynamicPaddingCollator:
     def __init__(
         self,
         pad_token_id: int,
-        pad_to_multiple_of: Optional[int] = None,
-        ignore_index: int = -100,
+        pad_to_multiple_of: Optional[int],
+        ignore_index: int,
     ) -> None:
         if pad_to_multiple_of is not None and pad_to_multiple_of <= 0:
             raise ValueError("pad_to_multiple_of must be a positive integer or None.")

@@ -66,7 +66,7 @@ def validate_train_artifact_config(
 
 def validate_distributed_runtime_config(
     config: DictConfig,
-    runtime_snapshot: Optional[Dict[str, Any]] = None,
+    runtime_snapshot: Optional[Dict[str, Any]],
 ) -> None:
     if config.mode != "train":
         return

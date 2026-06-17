@@ -2308,8 +2308,8 @@ class GroundingBBoxReward(BaseReward):
         positive_duplicate_iou_threshold: float,
         min_reward: float,
         max_reward: float,
-        schema_keys: Optional[Dict[str, List[str]]] = None,
-        status_values: Optional[Dict[str, List[str]]] = None,
+        schema_keys: Optional[Dict[str, List[str]]],
+        status_values: Optional[Dict[str, List[str]]],
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -3045,7 +3045,7 @@ class GroundingSelectionReward(BaseReward):
         wrong_selection_penalty: float,
         min_reward: float,
         max_reward: float,
-        schema_keys: Optional[Dict[str, List[str]]] = None,
+        schema_keys: Optional[Dict[str, List[str]]],
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,

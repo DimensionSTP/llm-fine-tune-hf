@@ -5,7 +5,7 @@ from omegaconf import DictConfig, OmegaConf
 
 def _to_float(
     value: Any,
-    default: float = 0.0,
+    default: float,
 ) -> float:
     try:
         return float(value)
@@ -16,7 +16,13 @@ def _to_float(
 def _is_active_reward(
     weight: Any,
 ) -> bool:
-    return _to_float(weight) > 0.0
+    return (
+        _to_float(
+            value=weight,
+            default=0.0,
+        )
+        > 0.0
+    )
 
 
 def _reward_save_suffix(

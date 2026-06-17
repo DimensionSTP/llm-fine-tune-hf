@@ -101,7 +101,7 @@ class SetUp:
 
     def get_training_arguments(
         self,
-        ds_config: Optional[Dict[str, Any]] = None,
+        ds_config: Optional[Dict[str, Any]],
     ) -> TrainingArguments:
         validate_training_arguments_config(
             config=self.config,
@@ -192,6 +192,7 @@ class SetUp:
         return SFTDynamicPaddingCollator(
             pad_token_id=pad_token_id,
             pad_to_multiple_of=self.config.pad_to_multiple_of,
+            ignore_index=-100,
         )
 
     def finalize_training_arguments(

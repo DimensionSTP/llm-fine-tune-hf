@@ -86,8 +86,8 @@ def _resolve_vllm_tensor_parallel_size(
 def wait_vllm_server_ready(
     base_url: str,
     max_wait_sec: int,
-    process: Optional[subprocess.Popen] = None,
-    log_path: Optional[str] = None,
+    process: Optional[subprocess.Popen],
+    log_path: Optional[str],
 ) -> bool:
     target_url = f"{base_url.rstrip('/')}/v1/models"
     for _ in range(int(max_wait_sec)):
@@ -334,8 +334,8 @@ def run_async_inference_server(
     )
     try:
         if not wait_vllm_server_ready(
-            config.vllm_server_base_url,
-            config.async_runtime.vllm_server.ready_timeout,
+            base_url=config.vllm_server_base_url,
+            max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
             process=process,
             log_path=config.async_runtime.vllm_server.log_path,
         ):
@@ -368,8 +368,10 @@ def start_async_training_runtime(
 
     if runtime_state["server_managed_by_rank1"]:
         if not wait_vllm_server_ready(
-            config.vllm_server_base_url,
-            config.async_runtime.vllm_server.ready_timeout,
+            base_url=config.vllm_server_base_url,
+            max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
+            process=None,
+            log_path=None,
         ):
             raise RuntimeError(
                 f"vLLM server did not become ready: {config.vllm_server_base_url}"
@@ -379,7 +381,12 @@ def start_async_training_runtime(
     if not config.async_runtime.vllm_server.auto_start:
         return None, None
 
-    if wait_vllm_server_ready(config.vllm_server_base_url, 1):
+    if wait_vllm_server_ready(
+        base_url=config.vllm_server_base_url,
+        max_wait_sec=1,
+        process=None,
+        log_path=None,
+    ):
         raise ValueError(
             f"Existing vLLM server already running at {config.vllm_server_base_url}"
         )
@@ -389,8 +396,8 @@ def start_async_training_runtime(
         vllm_gpu_ids=runtime_state["gpu_partition"]["vllm_gpu_ids"],
     )
     if not wait_vllm_server_ready(
-        config.vllm_server_base_url,
-        config.async_runtime.vllm_server.ready_timeout,
+        base_url=config.vllm_server_base_url,
+        max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
         process=process,
         log_path=config.async_runtime.vllm_server.log_path,
     ):
