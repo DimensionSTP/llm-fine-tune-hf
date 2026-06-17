@@ -22,6 +22,7 @@
 *.pth
 *.mdc
 *.db
+*.zip
 *__pycache__
 logs/runs/
 logs/wandb/
