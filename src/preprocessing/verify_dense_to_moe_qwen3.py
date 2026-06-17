@@ -101,7 +101,7 @@ def _mean_abs_diff(
 def _cosine_sim(
     a: torch.Tensor,
     b: torch.Tensor,
-    eps: float = 1e-12,
+    eps: float,
 ) -> float:
     a = a.flatten().float()
     b = b.flatten().float()
@@ -166,7 +166,9 @@ def verify_dense_to_moe(
         if k not in cfg_dict:
             raise RuntimeError(f"Missing MoE field in config: {k}")
     if "num_experts" not in cfg_dict and "num_local_experts" not in cfg_dict:
-        raise RuntimeError("Missing MoE field in config: num_experts or num_local_experts")
+        raise RuntimeError(
+            "Missing MoE field in config: num_experts or num_local_experts"
+        )
 
     num_experts = int(cfg_dict.get("num_experts", cfg_dict.get("num_local_experts")))
     print(
@@ -179,7 +181,9 @@ def verify_dense_to_moe(
     for l in range(num_layers):
         mlp = moe_model.model.layers[l].mlp
         if hasattr(mlp, "experts"):
-            if hasattr(mlp.experts, "gate_up_proj") and hasattr(mlp.experts, "down_proj"):
+            if hasattr(mlp.experts, "gate_up_proj") and hasattr(
+                mlp.experts, "down_proj"
+            ):
                 if mlp.experts.gate_up_proj.shape[0] != num_experts:
                     raise RuntimeError(
                         f"Layer {l}: packed experts {mlp.experts.gate_up_proj.shape[0]} != config num_experts {num_experts}"
@@ -241,12 +245,16 @@ def verify_dense_to_moe(
                     b = moe_state_dict[expert_k].detach().to("cpu")
                 except KeyError:
                     expert_k = f"model.layers.{layer}.mlp.experts[{expert}].{proj}"
-                    b = _get_packed_expert_weight(
-                        state_dict=moe_state_dict,
-                        layer=layer,
-                        expert=expert,
-                        proj=proj,
-                    ).detach().to("cpu")
+                    b = (
+                        _get_packed_expert_weight(
+                            state_dict=moe_state_dict,
+                            layer=layer,
+                            expert=expert,
+                            proj=proj,
+                        )
+                        .detach()
+                        .to("cpu")
+                    )
 
                 mad = _max_abs_diff(
                     a=a,
@@ -259,6 +267,7 @@ def verify_dense_to_moe(
                 cos = _cosine_sim(
                     a=a,
                     b=b,
+                    eps=1e-12,
                 )
 
                 ok = mad <= tol if tol > 0 else mad == 0.0

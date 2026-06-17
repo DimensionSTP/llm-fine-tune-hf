@@ -38,7 +38,7 @@ def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
 
 
 def _list_explicit_expert_ffn_weight_keys(
-    state_dict: Dict[str, torch.Tensor]
+    state_dict: Dict[str, torch.Tensor],
 ) -> List[str]:
     pat = re.compile(
         r"^model\.layers\.(\d+)\.mlp\.(?:experts|expert)\.(\d+)\.(up_proj|gate_proj|down_proj)\.weight$"
@@ -68,7 +68,9 @@ def _detect_moe_layout(
     if len(explicit_keys) > 0:
         return "explicit"
 
-    packed_gate_up_pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts\.gate_up_proj$")
+    packed_gate_up_pat = re.compile(
+        r"^model\.layers\.(\d+)\.mlp\.experts\.gate_up_proj$"
+    )
     packed_down_pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts\.down_proj$")
     if any(packed_gate_up_pat.match(k) for k in state_dict) and any(
         packed_down_pat.match(k) for k in state_dict
@@ -202,7 +204,7 @@ def _apply_lora_delta_inplace(
     base_weight: torch.Tensor,
     lora: LoraWeights,
     alpha_override: float,
-    weight_coef: float = 1.0,
+    weight_coef: float,
 ) -> None:
     """
     base_weight += weight_coef * alpha_override * (B @ A) * (lora.scale)
@@ -227,14 +229,22 @@ def _apply_lora_delta_to_mixtral_expert_inplace(
     proj: str,
     lora: LoraWeights,
     alpha_override: float,
-    weight_coef: float = 1.0,
+    weight_coef: float,
 ) -> None:
     delta = (lora.B @ lora.A) * (
         lora.scale * float(alpha_override) * float(weight_coef)
     )
     delta = delta.to(
-        dtype=gate_up_weight.dtype if proj in ["gate_proj", "up_proj"] else down_weight.dtype,
-        device=gate_up_weight.device if proj in ["gate_proj", "up_proj"] else down_weight.device,
+        dtype=(
+            gate_up_weight.dtype
+            if proj in ["gate_proj", "up_proj"]
+            else down_weight.dtype
+        ),
+        device=(
+            gate_up_weight.device
+            if proj in ["gate_proj", "up_proj"]
+            else down_weight.device
+        ),
     )
 
     with torch.no_grad():

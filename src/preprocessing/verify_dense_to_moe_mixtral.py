@@ -55,7 +55,7 @@ def _mean_abs_diff(
 def _cosine_sim(
     a: torch.Tensor,
     b: torch.Tensor,
-    eps: float = 1e-12,
+    eps: float,
 ) -> float:
     a = a.flatten().float()
     b = b.flatten().float()
@@ -179,12 +179,18 @@ def verify_dense_to_moe(
             )
 
     verify_cfg = getattr(d2m_cfg, "verify_merge", {})
-    verify_layers = list(getattr(verify_cfg, "layers", [0, num_layers // 2, num_layers - 1]))
+    verify_layers = list(
+        getattr(verify_cfg, "layers", [0, num_layers // 2, num_layers - 1])
+    )
     verify_experts = list(getattr(verify_cfg, "experts", [0, num_experts - 1]))
-    verify_projs = list(getattr(verify_cfg, "projs", ["up_proj", "gate_proj", "down_proj"]))
+    verify_projs = list(
+        getattr(verify_cfg, "projs", ["up_proj", "gate_proj", "down_proj"])
+    )
 
     verify_layers = [layer for layer in verify_layers if 0 <= int(layer) < num_layers]
-    verify_experts = [expert for expert in verify_experts if 0 <= int(expert) < num_experts]
+    verify_experts = [
+        expert for expert in verify_experts if 0 <= int(expert) < num_experts
+    ]
     tol = float(getattr(verify_cfg, "weight_tol", 0.0))
 
     report = {"mlp_copy_checks": []}
@@ -197,12 +203,16 @@ def verify_dense_to_moe(
                     raise KeyError(f"Missing dense key: {dense_key}")
 
                 dense_tensor = dense_sd[dense_key].detach().cpu()
-                expert_tensor = _get_expert_proj_tensor(
-                    state_dict=moe_state_dict,
-                    layer=int(layer),
-                    expert=int(expert),
-                    proj=proj,
-                ).detach().cpu()
+                expert_tensor = (
+                    _get_expert_proj_tensor(
+                        state_dict=moe_state_dict,
+                        layer=int(layer),
+                        expert=int(expert),
+                        proj=proj,
+                    )
+                    .detach()
+                    .cpu()
+                )
 
                 mad = _max_abs_diff(
                     a=dense_tensor,
@@ -215,6 +225,7 @@ def verify_dense_to_moe(
                 cos = _cosine_sim(
                     a=dense_tensor,
                     b=expert_tensor,
+                    eps=1e-12,
                 )
 
                 ok = mad <= tol if tol > 0 else mad == 0.0
