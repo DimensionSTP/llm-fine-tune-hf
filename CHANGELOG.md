@@ -2,6 +2,16 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.2.0] - 2026-06-17
+
+- Add an Albumentations-backed VLM image augmentation backend selectable with `image_augmentation.backend=albumentations` while keeping `pil` as the default backend.
+- Add extended Albumentations image degradation controls for resize, rotate, blur, noise, seasoning, coarse dropout, scan, color, HSV, RGB shift, JPEG, and weather transforms.
+- Add pinned `albumentations==2.0.8` and `opencv-python-headless==4.13.0.92` dependencies to direct dependency files.
+- Fix VLM preference dataset image conversion by passing the configured image conversion mode through DPO, GRPO, and KTO image augmentation paths.
+- Refactor dataset path, image IO, train utility, reward, runtime, and preprocessing helpers to require explicit arguments instead of relying on implicit config access.
+- Document Albumentations image augmentation usage, smoke-test overrides, grounding/bbox safety guidance, and vLLM max-model-length guidance for small Qwen3-VL GRPO smoke runs.
+- Ignore local `.zip` archives so packaged local artifacts do not appear as repository changes.
+
 ## [v2.1.0] - 2026-06-16
 
 - Add disabled-by-default auto KV stop-format reward shaping through `reward.auto_kv_stop_format` with configurable `stop_token`, blend weight, terminal reward, missing reward, and middle-or-multiple penalty values.
