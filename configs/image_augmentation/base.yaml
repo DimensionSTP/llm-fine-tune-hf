@@ -2,6 +2,7 @@
 image_augmentation:
   enabled: false
   seed_offset: 0
+  backend: pil
   probability: 0.0
   rotation_degrees: 0.0
   jpeg_quality_min: 95
@@ -20,3 +21,60 @@ image_augmentation:
   erase_area_max: 0.0
   ink_bleed_probability: 0.0
   ink_bleed_strength: 0.0
+  albumentations:
+    resize:
+      probability: 0.0
+      scale_percent_range: [70, 130]
+    rotate:
+      probability: 0.0
+      limit: [-10, 10]
+    blur:
+      probability: 0.0
+      types: [average, median, motion, gaussian, lowres]
+      average: [3, 7]
+      median: [3, 7]
+      motion: [3, 15]
+      gaussian_sigma: [0.5, 3.0]
+      lowres_factor: [0.4, 1.0]
+    noise:
+      probability: 0.0
+      types: [gaussian, laplace, poisson]
+      gaussian_std: [0.0, 0.1]
+      laplace_color_shift: [0.01, 0.05]
+      laplace_intensity: [0.1, 0.5]
+      poisson_multiplier: [0.9, 1.1]
+    seasoning:
+      probability: 0.0
+      seasoning_range: [0.01, 0.03]
+    coarse_dropout:
+      probability: 0.0
+      num_holes_range: [3, 10]
+      hole_height_range: [5, 20]
+      hole_width_range: [5, 20]
+    scan:
+      fax_probability: 0.0
+      black_white_probability: 0.0
+      adaptive_threshold_block_size: 25
+      adaptive_threshold_c: 10
+    color:
+      probability: 0.0
+      types: [grayscale]
+      posterize_num_bits: 4
+      hue_shift_limit: 20
+      saturation_shift_limit: 30
+    hsv:
+      probability: 0.0
+      hue_shift: [-20, 20]
+      saturation_shift: [-30, 30]
+      value_shift: [-20, 20]
+    rgb_shift:
+      probability: 0.0
+      red_shift: [-20, 20]
+      green_shift: [-20, 20]
+      blue_shift: [-20, 20]
+    jpeg:
+      probability: 0.0
+      quality_range: [80, 95]
+    weather:
+      probability: 0.0
+      types: [rain]
