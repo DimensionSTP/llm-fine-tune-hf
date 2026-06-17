@@ -360,13 +360,25 @@ completion_termination.include_model_generation_eos={True or False}
 
 ```shell
 image_augmentation.enabled={True or False}
+image_augmentation.backend={pil or albumentations}
 image_augmentation.probability={0.0 to 1.0}
 image_augmentation.rotation_degrees={degrees}
 image_augmentation.jpeg_quality_min={1 to 100}
 image_augmentation.jpeg_quality_max={1 to 100}
 ```
 
-`image_augmentation` is disabled by default and applies only to training images. Validation, evaluation, and test datasets are not augmented. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees` and `erase_probability` disabled unless labels are transformed consistently.
+`image_augmentation` is disabled by default and applies only to training images. Validation, evaluation, and test datasets are not augmented. The default backend is `pil`; `backend=albumentations` enables the extended VLM degradation stack and requires `albumentations` plus `opencv-python-headless`. See `configs/image_augmentation/base.yaml` for all controls; `erase_area_min` and `erase_area_max` are area ratios. For bbox/grounding tasks, keep geometry-changing or evidence-removing options such as `rotation_degrees`, `erase_probability`, `albumentations.resize.probability`, and `albumentations.coarse_dropout.probability` disabled unless labels are transformed consistently.
+
+Example Albumentations smoke override:
+
+```shell
+image_augmentation.enabled=True
+image_augmentation.backend=albumentations
+image_augmentation.probability=1.0
+image_augmentation.albumentations.seasoning.probability=1.0
+```
+
+For Qwen3-VL GRPO with colocated vLLM, small smoke runs may need an explicit `training_arguments.vllm_max_model_length` because the model advertises a very long context window and vLLM sizes KV cache from that value.
 
 VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
 
