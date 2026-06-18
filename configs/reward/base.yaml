@@ -61,7 +61,7 @@ reward:
     table_structure_weight: 0.15
     score_threshold: 0.95
   grounding_bbox:
-    category_token: ground
+    category_token: bbox
     format_reward: 0.1
     schema_reward: 0.1
     page_reward: 0.2
@@ -94,7 +94,7 @@ reward:
     min_reward: 0.0
     max_reward: 1.0
   grounding_selection:
-    category_token: grounding
+    category_token: evidence
     format_reward: 0.1
     schema_reward: 0.1
     exact_match_reward: 0.6
