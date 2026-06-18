@@ -159,6 +159,34 @@ def _load_lora_state_dict(adapter_dir: str) -> Dict[str, torch.Tensor]:
     )
 
 
+def _normalize_lora_module_path(
+    key: str,
+) -> str:
+    key_without_weight = key[: -len(".weight")]
+
+    key_without_lora = re.sub(
+        r"\.lora_[AB](\.[^.]+)?$",
+        "",
+        key_without_weight,
+    )
+
+    if "model." in key_without_lora:
+        key_without_lora = key_without_lora[key_without_lora.find("model.") :]
+
+    while key_without_lora.startswith("model.model."):
+        key_without_lora = "model." + key_without_lora[len("model.model.") :]
+
+    key_without_lora = key_without_lora.replace(
+        "model.model.layers.",
+        "model.layers.",
+    )
+
+    if key_without_lora.startswith("layers."):
+        key_without_lora = "model." + key_without_lora
+
+    return key_without_lora
+
+
 def _list_ffn_lora_targets_from_adapter(
     lora_state_dict: Dict[str, torch.Tensor],
 ) -> List[Tuple[int, str]]:
@@ -176,32 +204,8 @@ def _list_ffn_lora_targets_from_adapter(
         k for k in lora_state_dict.keys() if ".lora_B" in k and k.endswith(".weight")
     ]
 
-    def _normalize_module_path(key: str) -> str:
-        key_without_weight = key[: -len(".weight")]
-
-        key_without_lora = re.sub(
-            r"\.lora_[AB](\.[^.]+)?$",
-            "",
-            key_without_weight,
-        )
-
-        if "model." in key_without_lora:
-            key_without_lora = key_without_lora[key_without_lora.find("model.") :]
-
-        while key_without_lora.startswith("model.model."):
-            key_without_lora = "model." + key_without_lora[len("model.model.") :]
-
-        key_without_lora = key_without_lora.replace(
-            "model.model.layers.", "model.layers."
-        )
-
-        if key_without_lora.startswith("layers."):
-            key_without_lora = "model." + key_without_lora
-
-        return key_without_lora
-
-    a_modules = set(_normalize_module_path(k) for k in a_keys)
-    b_modules = set(_normalize_module_path(k) for k in b_keys)
+    a_modules = set(_normalize_lora_module_path(key=k) for k in a_keys)
+    b_modules = set(_normalize_lora_module_path(key=k) for k in b_keys)
     modules_with_both = sorted(list(a_modules.intersection(b_modules)))
 
     ffn_targets: List[Tuple[int, str]] = []
@@ -231,6 +235,56 @@ def _list_ffn_lora_targets_from_adapter(
 
     ffn_targets.sort(key=lambda x: (x[0], x[1]))
     return ffn_targets
+
+
+def _score_lora_candidate_key(
+    candidate_key: str,
+    target_module_path_tail: str,
+) -> Tuple[int, int, int, int]:
+    """
+    Higher is better.
+    Priority:
+    1) prefer explicit '.default.' adapter
+    2) prefer exact tail match of module path
+    3) prefer keys that end exactly with '.lora_A.weight' / '.lora_B.weight'
+    4) prefer shorter keys (fewer prefixes)
+    """
+    score_default = 1 if ".default." in candidate_key else 0
+    score_tail_match = 1 if target_module_path_tail in candidate_key else 0
+    score_exact_end = (
+        1
+        if (
+            candidate_key.endswith(".lora_A.weight")
+            or candidate_key.endswith(".lora_B.weight")
+        )
+        else 0
+    )
+    score_shorter = -len(candidate_key)
+    return (
+        score_default,
+        score_tail_match,
+        score_exact_end,
+        score_shorter,
+    )
+
+
+def _select_lora_candidate_key(
+    candidate_keys: List[str],
+    target_module_path_tail: str,
+) -> str:
+    scored_keys = [
+        (
+            _score_lora_candidate_key(
+                candidate_key=candidate_key,
+                target_module_path_tail=target_module_path_tail,
+            ),
+            -index,
+            candidate_key,
+        )
+        for index, candidate_key in enumerate(candidate_keys)
+    ]
+    scored_keys.sort(reverse=True)
+    return scored_keys[0][2]
 
 
 def _collect_lora_A_B(
@@ -277,43 +331,14 @@ def _collect_lora_A_B(
     if not a_candidates or not b_candidates:
         return None
 
-    def _score(candidate_key: str) -> Tuple[int, int, int, int]:
-        """
-        Higher is better.
-        Priority:
-        1) prefer explicit '.default.' adapter
-        2) prefer exact tail match of module path
-        3) prefer keys that end exactly with '.lora_A.weight' / '.lora_B.weight'
-        4) prefer shorter keys (fewer prefixes)
-        """
-        score_default = 1 if ".default." in candidate_key else 0
-        score_tail_match = 1 if target_module_path_tail in candidate_key else 0
-        score_exact_end = (
-            1
-            if (
-                candidate_key.endswith(".lora_A.weight")
-                or candidate_key.endswith(".lora_B.weight")
-            )
-            else 0
-        )
-        score_shorter = -len(candidate_key)
-        return (
-            score_default,
-            score_tail_match,
-            score_exact_end,
-            score_shorter,
-        )
-
-    a_key = sorted(
-        a_candidates,
-        key=_score,
-        reverse=True,
-    )[0]
-    b_key = sorted(
-        b_candidates,
-        key=_score,
-        reverse=True,
-    )[0]
+    a_key = _select_lora_candidate_key(
+        candidate_keys=a_candidates,
+        target_module_path_tail=target_module_path_tail,
+    )
+    b_key = _select_lora_candidate_key(
+        candidate_keys=b_candidates,
+        target_module_path_tail=target_module_path_tail,
+    )
 
     return (
         lora_state_dict[a_key].to(torch.float32),
@@ -371,7 +396,9 @@ def _get_ffn_weight_delta(
     proj: str,
 ) -> torch.Tensor:
     if moe_layout == "explicit":
-        expert_key = f"model.layers.{int(layer)}.mlp.experts.{int(expert)}.{proj}.weight"
+        expert_key = (
+            f"model.layers.{int(layer)}.mlp.experts.{int(expert)}.{proj}.weight"
+        )
         return (
             merged_state_dict[expert_key].float() - base_state_dict[expert_key].float()
         )
@@ -386,7 +413,10 @@ def _get_ffn_weight_delta(
             merged_gate_up = merged_state_dict[gate_up_key].float()[int(expert)]
             intermediate_size = base_gate_up.shape[0] // 2
             if proj == "gate_proj":
-                return merged_gate_up[:intermediate_size] - base_gate_up[:intermediate_size]
+                return (
+                    merged_gate_up[:intermediate_size]
+                    - base_gate_up[:intermediate_size]
+                )
             return merged_gate_up[intermediate_size:] - base_gate_up[intermediate_size:]
 
         if proj == "down_proj":

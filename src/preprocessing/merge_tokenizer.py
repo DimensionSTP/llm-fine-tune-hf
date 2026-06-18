@@ -12,6 +12,19 @@ import hydra
 from omegaconf import DictConfig
 
 
+def _is_korean_token(
+    token: str,
+) -> bool:
+    for char in token:
+        if (
+            "\uac00" <= char <= "\ud7a3"
+            or "\u1100" <= char <= "\u11ff"
+            or "\u3130" <= char <= "\u318f"
+        ):
+            return True
+    return False
+
+
 @hydra.main(
     config_path="../../configs/",
     config_name="sft.yaml",
@@ -22,18 +35,10 @@ def merge_tokenizer(
     korean_tokenizer = AutoTokenizer.from_pretrained(config.korean_model_name)
     tokenizer = AutoTokenizer.from_pretrained(config.pretrained_model_name)
 
-    def is_korean(token):
-        for char in token:
-            if (
-                "\uac00" <= char <= "\ud7a3"
-                or "\u1100" <= char <= "\u11ff"
-                or "\u3130" <= char <= "\u318f"
-            ):
-                return True
-        return False
-
     korean_tokenizer_tokens = korean_tokenizer.get_vocab().keys()
-    korean_tokens = [token for token in korean_tokenizer_tokens if is_korean(token)]
+    korean_tokens = [
+        token for token in korean_tokenizer_tokens if _is_korean_token(token=token)
+    ]
 
     tokenizer_tokens = tokenizer.get_vocab().keys()
     new_tokens = [token for token in korean_tokens if token not in tokenizer_tokens]
