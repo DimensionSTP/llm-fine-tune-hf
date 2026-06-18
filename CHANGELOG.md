@@ -2,6 +2,18 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.3.0] - 2026-06-18
+
+- Replace separate `SingleKVReward` and `MultiKVReward` wiring with one unified `KVReward` implementation for reward categories containing the configurable `reward.kv.category_token`.
+- Replace `reward.weight.single_kv` and `reward.weight.multi_kv` with `reward.weight.kv`, and update GRPO, Async GRPO, A2PO, and SDPO launcher defaults to use the unified reward key.
+- Add `reward.kv.*` controls for strict JSON parsing, required terminal stop token, invalid JSON reward, root-shape caps, stop-token caps, serialized-length caps, leaf-count caps, KV value/path weighting, table value/structure weighting, and match threshold.
+- Change grounding reward category tokens to `bbox` for grounding bbox rewards and `evidence` for grounding selection rewards.
+- Update README and reward documentation to describe unified KV reward routing, grounding category tokens, and reward activation rules.
+- Refactor vLLM synchronization by extracting callback handling into shared sync helpers while preserving existing Qwen packed-MoE, sparse decoder MoE, and LoRA streaming sync paths.
+- Normalize dense-to-MoE preprocessing and tokenizer merge formatting, and remove nested preprocessing helper structure from related verification utilities.
+- Enforce Hydra config EOF discipline and ignore local `.jsonl` reference data artifacts under `references/`.
+- Refresh `packages.txt` with current environment freeze additions for transitive parser packages.
+
 ## [v2.2.0] - 2026-06-17
 
 - Add an Albumentations-backed VLM image augmentation backend selectable with `image_augmentation.backend=albumentations` while keeping `pil` as the default backend.
