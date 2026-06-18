@@ -8,6 +8,7 @@
 *.txt
 *.xml
 *.json
+*.jsonl
 *.pkl
 *.pickle
 *.ipynb
@@ -46,3 +47,4 @@ adapters/
 dense_to_moe/
 merge_dense_lora_to_moe/
 !configs/dense_to_moe/
+references/
