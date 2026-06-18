@@ -419,13 +419,21 @@ reward.extraction_profile={default or gemma4}
 
 Reward default hyperparameters and weights are centralized in `configs/reward/base.yaml`; reward class wiring stays in `configs/reward/manager.yaml`.
 
+* KV reward
+
+```shell
+reward.weight.kv={0.0 or positive float}
+```
+
+`kv` is the only KV reward class for samples whose reward category contains the `kv` token, such as `single_kv` and `multi_kv`. It scores each sample once, so use `reward.weight.kv`.
+
 * Grounding bbox reward
 
 ```shell
 reward.weight.grounding_bbox={0.0 or positive float}
 reward.weight.grounding_selection={0.0 or positive float}
-reward.grounding_bbox.category_token=ground
-reward.grounding_selection.category_token=grounding
+reward.grounding_bbox.category_token=bbox
+reward.grounding_selection.category_token=evidence
 ```
 
 `grounding_bbox` is disabled by default. It is evaluated only when the sample reward category contains `reward.grounding_bbox.category_token`.

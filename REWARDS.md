@@ -126,42 +126,40 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   - `reward_database` / `reward_embedding`: same retrieval backends as
     `RetrievalHitReward`.
 
-### SingleKVReward
+### KVReward
 
-- Purpose: Single key-value extraction reward for JSON outputs.
-- Logic: Parses JSON from prediction and solution. If JSON contains a `tables`
-  section, normalizes table `rows` from either list or dict containers and
-  scores per-cell matches. Otherwise compares the last leaf value with
-  normalized matching. Returns `1.0` on match, else `json_parse_weight`. Returns
-  `0.0` on parse failure. When `reward.auto_kv_stop_format.enabled` is true,
-  terminal `<stop>` is stripped before strict full JSON or full fenced JSON
-  parsing, and the final reward is normalized as
-  `(1 - weight) * kv_reward + weight * stop_format_reward`.
-- reward_categories: any category containing the `kv` token
-  (e.g., `single_kv`, `vlm_single_kv`).
+- Purpose: KV extraction reward for JSON outputs covering both `single_kv` and
+  `multi_kv` samples.
+- Logic: Extracts the answer text, enforces the configured terminal stop token,
+  parses strict JSON, then scores the ground-truth root. For `kv` roots it
+  scores value matches and path/value matches. For `tables` roots it scores row
+  values and table/column/row structure. The final unit score is capped by
+  content quality, stop-token format, root-shape validity, serialized length,
+  and leaf-count growth, then scaled by `reward.weight.kv`.
+- reward_categories: any category containing `reward.kv.category_token`
+  (default: `kv`). Default examples: `single_kv`, `multi_kv`.
 - Extra options:
-  - `json_parse_weight`: base score for valid JSON even if value mismatches.
-  - `reward.auto_kv_stop_format`: optional shared stop-format shaping. Defaults
-    to disabled. When enabled, exactly one terminal `stop_token` receives
-    `valid_terminal_reward`; missing, middle, or multiple stop tokens receive
-    their configured scores. Malformed or trailing-garbage JSON cannot receive a
-    high reward from terminal stop alone. Stop-format scores must be finite and
-    must not exceed `1.0`, preserving `reward.weight` as the final reward scale.
-
-### MultiKVReward
-
-- Purpose: Multi key-value extraction reward for JSON outputs.
-- Logic: Parses JSON, compares all leaf values (excluding `tables`) and table
-  cells after list/dict `rows` normalization. Computes accuracy over total items and returns
-  `json_parse_weight + (1 - json_parse_weight) * accuracy`. Returns `0.0` on
-  parse failure. When `reward.auto_kv_stop_format.enabled` is true, it uses the
-  same terminal stop normalization as `SingleKVReward`.
-- reward_categories: any category containing the `kv` token
-  (e.g., `multi_kv`, `vlm_multi_kv`).
-- Extra options:
-  - `json_parse_weight`: base score for valid JSON even if accuracy is low.
-  - `reward.auto_kv_stop_format`: same shared stop-format shaping config as
-    `SingleKVReward`.
+  - `reward.kv.strict_json`: require full JSON or full fenced JSON parsing.
+  - `reward.kv.required_stop_token`: terminal stop token expected after the
+    JSON answer.
+  - `reward.kv.invalid_json_reward`: score for invalid prediction JSON.
+  - `reward.kv.root_mismatch_cap`: max unit score when the prediction uses the
+    wrong root shape.
+  - `reward.kv.missing_stop_cap`: max unit score when the terminal stop token is
+    missing.
+  - `reward.kv.middle_or_multiple_stop_cap`: max unit score when the stop token
+    appears in the middle or multiple times.
+  - `reward.kv.trailing_text_cap`: max unit score when text remains after the
+    terminal stop token.
+  - `reward.kv.max_serialized_length_ratio` and `reward.kv.length_ratio_cap`:
+    cap overlong predictions.
+  - `reward.kv.max_leaf_count_ratio` and `reward.kv.leaf_count_ratio_cap`: cap
+    predictions with too many extracted leaves.
+  - `reward.kv.kv_value_weight` and `reward.kv.kv_path_weight`: value/path
+    balance for `kv` roots.
+  - `reward.kv.table_value_weight` and `reward.kv.table_structure_weight`:
+    value/structure balance for `tables` roots.
+  - `reward.kv.score_threshold`: fuzzy-match threshold for item matching.
 
 ### GroundingBBoxReward
 
@@ -175,7 +173,7 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   `grounding_status` and empty `evidence_occurrences` receives `max_reward`.
   Invalid JSON returns `0.0`; samples without matching category return `None`.
 - reward_categories: any category containing
-  `reward.grounding_bbox.category_token` (default: `ground`).
+  `reward.grounding_bbox.category_token` (default: `bbox`).
 - Expected label schema in `solution`:
   - `grounding_status`: `found` or a non-`found` status.
   - `coord_system`: optional coordinate-system string checked against predicted
@@ -216,7 +214,7 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   does not crash on malformed JSON. It does not use `grounding_status`; value
   targets are expected to provide evidence candidate ids through `selected_ids`.
 - reward_categories: any category containing
-  `reward.grounding_selection.category_token` (default: `grounding`).
+  `reward.grounding_selection.category_token` (default: `evidence`).
 - Expected label schema in `solution`:
   - top-level `grounding`: list of target selection items.
   - item `target_id`: unique target id.
@@ -247,10 +245,9 @@ Current matching rules in `src/utils/rewards.py`:
 - Retrieval-family rewards (`RetrievalHitReward`, `RetrievalnDCGReward`) run
   when category contains token `retrieval`.
   Examples: `retrieval`, `retrieval_hit`, `retrieval_ndcg`.
-- KV-family rewards (`SingleKVReward`, `MultiKVReward`) run when category
-  contains token `kv`.
-  Examples: `single_kv`, `multi_kv`, `vlm_single_kv`, `vlm_multi_kv`.
+- `KVReward` runs when category contains token `kv`.
+  Examples: `single_kv`, `multi_kv`.
 - Grounding rewards run when category contains their configured category token:
   `reward.grounding_bbox.category_token` or
-  `reward.grounding_selection.category_token` (default: `grounding` for
-  selection).
+  `reward.grounding_selection.category_token`.
+  Examples: `bbox`, `evidence`.
