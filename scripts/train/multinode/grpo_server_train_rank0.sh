@@ -69,8 +69,7 @@ declare -A reward_weights=(
     ["equation"]=0.0
     ["retrieval_hit"]=0.0
     ["retrieval_ndcg"]=0.0
-    ["single_kv"]=0.0
-    ["multi_kv"]=0.0
+    ["kv"]=0.0
     ["grounding_bbox"]=0.0
     ["grounding_selection"]=0.0
 )
@@ -84,8 +83,7 @@ reward_weight_keys=(
     "equation"
     "retrieval_hit"
     "retrieval_ndcg"
-    "single_kv"
-    "multi_kv"
+    "kv"
     "grounding_bbox"
     "grounding_selection"
 )
