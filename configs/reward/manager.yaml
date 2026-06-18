@@ -102,7 +102,7 @@ rewards:
     weighting_mode: ${reward.retrieval.ndcg.weighting_mode}
     epsilon: ${reward.retrieval.ndcg.epsilon}
 
-  - _target_: src.utils.SingleKVReward
+  - _target_: src.utils.KVReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -110,31 +110,24 @@ rewards:
     answer_end_token: ${reward.answer_end_token}
     eos_token: ${reward.eos_token}
     extraction_profile: ${reward.extraction_profile}
-    weight: ${reward.weight.single_kv}
-    json_parse_weight: ${reward.single_kv.json_parse_weight}
-    stop_format_enabled: ${reward.auto_kv_stop_format.enabled}
-    stop_token: ${reward.auto_kv_stop_format.stop_token}
-    stop_format_weight: ${reward.auto_kv_stop_format.weight}
-    valid_terminal_reward: ${reward.auto_kv_stop_format.valid_terminal_reward}
-    missing_reward: ${reward.auto_kv_stop_format.missing_reward}
-    middle_or_multiple_penalty: ${reward.auto_kv_stop_format.middle_or_multiple_penalty}
-
-  - _target_: src.utils.MultiKVReward
-    is_answer_tag: ${reward.is_answer_tag}
-    think_start_token: ${reward.think_start_token}
-    think_end_token: ${reward.think_end_token}
-    answer_start_token: ${reward.answer_start_token}
-    answer_end_token: ${reward.answer_end_token}
-    eos_token: ${reward.eos_token}
-    extraction_profile: ${reward.extraction_profile}
-    weight: ${reward.weight.multi_kv}
-    json_parse_weight: ${reward.multi_kv.json_parse_weight}
-    stop_format_enabled: ${reward.auto_kv_stop_format.enabled}
-    stop_token: ${reward.auto_kv_stop_format.stop_token}
-    stop_format_weight: ${reward.auto_kv_stop_format.weight}
-    valid_terminal_reward: ${reward.auto_kv_stop_format.valid_terminal_reward}
-    missing_reward: ${reward.auto_kv_stop_format.missing_reward}
-    middle_or_multiple_penalty: ${reward.auto_kv_stop_format.middle_or_multiple_penalty}
+    weight: ${reward.weight.kv}
+    category_token: ${reward.kv.category_token}
+    strict_json: ${reward.kv.strict_json}
+    required_stop_token: ${reward.kv.required_stop_token}
+    invalid_json_reward: ${reward.kv.invalid_json_reward}
+    root_mismatch_cap: ${reward.kv.root_mismatch_cap}
+    missing_stop_cap: ${reward.kv.missing_stop_cap}
+    middle_or_multiple_stop_cap: ${reward.kv.middle_or_multiple_stop_cap}
+    trailing_text_cap: ${reward.kv.trailing_text_cap}
+    max_serialized_length_ratio: ${reward.kv.max_serialized_length_ratio}
+    length_ratio_cap: ${reward.kv.length_ratio_cap}
+    max_leaf_count_ratio: ${reward.kv.max_leaf_count_ratio}
+    leaf_count_ratio_cap: ${reward.kv.leaf_count_ratio_cap}
+    kv_value_weight: ${reward.kv.kv_value_weight}
+    kv_path_weight: ${reward.kv.kv_path_weight}
+    table_value_weight: ${reward.kv.table_value_weight}
+    table_structure_weight: ${reward.kv.table_structure_weight}
+    score_threshold: ${reward.kv.score_threshold}
 
   - _target_: src.utils.GroundingBBoxReward
     is_answer_tag: ${reward.is_answer_tag}

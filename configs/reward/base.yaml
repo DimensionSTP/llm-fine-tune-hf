@@ -42,17 +42,24 @@ reward:
       alpha: 0.5
       weighting_mode: large_k
       epsilon: 1.0e-8
-  single_kv:
-    json_parse_weight: 0.2
-  multi_kv:
-    json_parse_weight: 0.2
-  auto_kv_stop_format:
-    enabled: false
-    stop_token: <stop>
-    weight: 0.05
-    valid_terminal_reward: 1.0
-    missing_reward: 0.0
-    middle_or_multiple_penalty: 0.0
+  kv:
+    category_token: kv
+    strict_json: true
+    required_stop_token: <stop>
+    invalid_json_reward: 0.0
+    root_mismatch_cap: 0.2
+    missing_stop_cap: 0.6
+    middle_or_multiple_stop_cap: 0.2
+    trailing_text_cap: 0.2
+    max_serialized_length_ratio: 2.0
+    length_ratio_cap: 0.7
+    max_leaf_count_ratio: 1.5
+    leaf_count_ratio_cap: 0.7
+    kv_value_weight: 0.8
+    kv_path_weight: 0.2
+    table_value_weight: 0.85
+    table_structure_weight: 0.15
+    score_threshold: 0.95
   grounding_bbox:
     category_token: ground
     format_reward: 0.1
@@ -109,7 +116,6 @@ reward:
     equation: 0.0
     retrieval_hit: 0.0
     retrieval_ndcg: 0.0
-    single_kv: 0.0
-    multi_kv: 0.0
+    kv: 0.0
     grounding_bbox: 0.0
     grounding_selection: 0.0
