@@ -1,5 +1,6 @@
 from typing import Dict, List, Tuple, Set, Union, Optional, Callable, Any
 from abc import ABC, abstractmethod
+from difflib import SequenceMatcher
 import re
 import json
 import unicodedata
@@ -1614,7 +1615,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         return dcg / idcg
 
 
-class SingleKVReward(BaseReward):
+class KVReward(BaseReward):
     def __init__(
         self,
         is_answer_tag: bool,
@@ -1625,15 +1626,26 @@ class SingleKVReward(BaseReward):
         eos_token: str,
         extraction_profile: str,
         weight: float,
-        json_parse_weight: float,
-        stop_format_enabled: bool,
-        stop_token: str,
-        stop_format_weight: float,
-        valid_terminal_reward: float,
-        missing_reward: float,
-        middle_or_multiple_penalty: float,
+        category_token: str,
+        strict_json: bool,
+        required_stop_token: str,
+        invalid_json_reward: float,
+        root_mismatch_cap: float,
+        missing_stop_cap: float,
+        middle_or_multiple_stop_cap: float,
+        trailing_text_cap: float,
+        max_serialized_length_ratio: float,
+        length_ratio_cap: float,
+        max_leaf_count_ratio: float,
+        leaf_count_ratio_cap: float,
+        kv_value_weight: float,
+        kv_path_weight: float,
+        table_value_weight: float,
+        table_structure_weight: float,
+        score_threshold: float,
     ) -> None:
-        super().__init__(
+        BaseReward.__init__(
+            self,
             is_answer_tag=is_answer_tag,
             think_start_token=think_start_token,
             think_end_token=think_end_token,
@@ -1643,14 +1655,28 @@ class SingleKVReward(BaseReward):
             extraction_profile=extraction_profile,
             weight=weight,
         )
-        self.json_parse_weight = json_parse_weight
-        self.stop_format_enabled = stop_format_enabled
-        self.stop_token = stop_token
-        self.stop_format_weight = stop_format_weight
-        self.valid_terminal_reward = valid_terminal_reward
-        self.missing_reward = missing_reward
-        self.middle_or_multiple_penalty = middle_or_multiple_penalty
-        self._validate_stop_format_config()
+        self.category_token = category_token
+        self.strict_json = strict_json
+        self.required_stop_token = required_stop_token
+        self.invalid_json_reward = invalid_json_reward
+        self.root_mismatch_cap = root_mismatch_cap
+        self.missing_stop_cap = missing_stop_cap
+        self.middle_or_multiple_stop_cap = middle_or_multiple_stop_cap
+        self.trailing_text_cap = trailing_text_cap
+        self.max_serialized_length_ratio = max_serialized_length_ratio
+        self.length_ratio_cap = length_ratio_cap
+        self.max_leaf_count_ratio = max_leaf_count_ratio
+        self.leaf_count_ratio_cap = leaf_count_ratio_cap
+        self.kv_value_weight = kv_value_weight
+        self.kv_path_weight = kv_path_weight
+        self.table_value_weight = table_value_weight
+        self.table_structure_weight = table_structure_weight
+        self.score_threshold = score_threshold
+        self._validate_kv_reward_config()
+
+    @property
+    def name(self) -> str:
+        return "kv_reward"
 
     def compute(
         self,
@@ -1664,7 +1690,7 @@ class SingleKVReward(BaseReward):
         for content, sol, category in zip(contents, solution, reward_categories):
             if not self.has_category_token(
                 category=category,
-                token="kv",
+                token=self.category_token,
             ):
                 rewards.append(None)
                 continue
@@ -1673,164 +1699,178 @@ class SingleKVReward(BaseReward):
                 rewards.append(None)
                 continue
 
-            extracted_answer = self._extract_kv_answer_for_json(generation=content)
-
-            pred_json = self._parse_kv_json(text=extracted_answer)
+            answer_text, format_cap = self._extract_json_text_and_format_cap(
+                generation=content,
+            )
+            pred_json = self._parse_prediction_json(text=answer_text)
             if pred_json is None:
-                rewards.append(self._compute_invalid_kv_json_reward(generation=content))
+                rewards.append(self.invalid_json_reward)
                 continue
 
-            gt_json = self._try_parse_json(text=sol)
+            gt_json = self._try_parse_strict_json(text=sol)
             if gt_json is None:
                 rewards.append(None)
                 continue
 
-            if self._contains_tables(
-                obj=pred_json,
-            ) or self._contains_tables(
-                obj=gt_json,
-            ):
-                reward = self._compute_table_reward(
-                    pred_json=pred_json,
-                    gt_json=gt_json,
-                )
-                rewards.append(
-                    self._apply_stop_format_reward(
-                        generation=content,
-                        reward=reward,
-                    )
-                )
+            root_name = self._resolve_gt_root_name(gt_json=gt_json)
+            if root_name is None:
+                rewards.append(None)
                 continue
 
-            pred_leaf = self._extract_last_leaf_value(node=pred_json)
-            gt_leaf = self._extract_last_leaf_value(node=gt_json)
-
-            if self._values_match(
-                pred_leaf=pred_leaf,
-                gt_leaf=gt_leaf,
-            ):
-                reward = 1.0
-            else:
-                reward = self.json_parse_weight
-
-            rewards.append(
-                self._apply_stop_format_reward(
-                    generation=content,
-                    reward=reward,
-                )
+            root_cap = self._compute_root_cap(
+                pred_json=pred_json,
+                root_name=root_name,
             )
+            length_cap = self._compute_length_cap(
+                pred_json=pred_json,
+                gt_json=gt_json,
+                root_name=root_name,
+            )
+            content_score = self._compute_root_score(
+                pred_json=pred_json,
+                gt_json=gt_json,
+                root_name=root_name,
+            )
+            reward = min(content_score, format_cap, root_cap, length_cap)
+            rewards.append(self._clip_unit_score(score=reward))
 
         return rewards
 
-    def _extract_kv_answer_for_json(
-        self,
-        generation: str,
-    ) -> Optional[str]:
-        extracted_answer = self.extract_answer_from_generation(generation=generation)
-        extracted_answer = self.split_on_keywords(text=extracted_answer)
-        return self._strip_valid_terminal_stop(text=extracted_answer)
-
-    def _validate_stop_format_config(
+    def _validate_kv_reward_config(
         self,
     ) -> None:
-        if not self.stop_format_enabled:
-            return
-        if not isinstance(self.stop_token, str) or not self.stop_token:
-            raise ValueError("stop_token must be a non-empty string")
-        self._validate_stop_format_number(
-            name="stop_format_weight",
-            value=self.stop_format_weight,
+        if not isinstance(self.category_token, str) or not self.category_token.strip():
+            raise ValueError("reward.kv.category_token must be a non-empty string")
+        if not isinstance(self.strict_json, bool):
+            raise ValueError("reward.kv.strict_json must be a bool")
+        if (
+            not isinstance(self.required_stop_token, str)
+            or not self.required_stop_token
+        ):
+            raise ValueError("reward.kv.required_stop_token must be a non-empty string")
+        for name, value in [
+            ("invalid_json_reward", self.invalid_json_reward),
+            ("root_mismatch_cap", self.root_mismatch_cap),
+            ("missing_stop_cap", self.missing_stop_cap),
+            ("middle_or_multiple_stop_cap", self.middle_or_multiple_stop_cap),
+            ("trailing_text_cap", self.trailing_text_cap),
+            ("length_ratio_cap", self.length_ratio_cap),
+            ("leaf_count_ratio_cap", self.leaf_count_ratio_cap),
+            ("kv_value_weight", self.kv_value_weight),
+            ("kv_path_weight", self.kv_path_weight),
+            ("table_value_weight", self.table_value_weight),
+            ("table_structure_weight", self.table_structure_weight),
+            ("score_threshold", self.score_threshold),
+        ]:
+            self._validate_unit_number(
+                name=name,
+                value=value,
+            )
+        for name, value in [
+            ("max_serialized_length_ratio", self.max_serialized_length_ratio),
+            ("max_leaf_count_ratio", self.max_leaf_count_ratio),
+        ]:
+            self._validate_positive_number(
+                name=name,
+                value=value,
+            )
+        self._validate_weight_sum(
+            first_name="kv_value_weight",
+            first_value=self.kv_value_weight,
+            second_name="kv_path_weight",
+            second_value=self.kv_path_weight,
         )
-        self._validate_stop_format_number(
-            name="valid_terminal_reward",
-            value=self.valid_terminal_reward,
+        self._validate_weight_sum(
+            first_name="table_value_weight",
+            first_value=self.table_value_weight,
+            second_name="table_structure_weight",
+            second_value=self.table_structure_weight,
         )
-        self._validate_stop_format_number(
-            name="missing_reward",
-            value=self.missing_reward,
-        )
-        self._validate_stop_format_number(
-            name="middle_or_multiple_penalty",
-            value=self.middle_or_multiple_penalty,
-        )
-        if not 0.0 <= self.stop_format_weight < 1.0:
-            raise ValueError("stop_format_weight must be >= 0 and < 1")
-        if not 0.0 <= self.valid_terminal_reward <= 1.0:
-            raise ValueError("valid_terminal_reward must be >= 0 and <= 1")
-        if self.missing_reward > 1.0:
-            raise ValueError("missing_reward must be <= 1")
-        if self.middle_or_multiple_penalty > 1.0:
-            raise ValueError("middle_or_multiple_penalty must be <= 1")
 
     @staticmethod
-    def _validate_stop_format_number(
+    def _validate_unit_number(
         name: str,
         value: float,
     ) -> None:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError(f"{name} must be a finite number")
-        if not math.isfinite(value):
-            raise ValueError(f"{name} must be a finite number")
+            raise ValueError(f"reward.kv.{name} must be a finite number in [0, 1]")
+        if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise ValueError(f"reward.kv.{name} must be a finite number in [0, 1]")
 
-    def _parse_kv_json(
-        self,
-        text: Optional[str],
-    ) -> Optional[Any]:
-        if text is None:
-            return None
-        if not self.stop_format_enabled:
-            return self._try_parse_json(text=text)
-        return self._try_parse_strict_json(text=text)
+    @staticmethod
+    def _validate_positive_number(
+        name: str,
+        value: float,
+    ) -> None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"reward.kv.{name} must be a positive finite number")
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(f"reward.kv.{name} must be a positive finite number")
 
-    def _apply_stop_format_reward(
-        self,
-        generation: str,
-        reward: float,
-    ) -> float:
-        if not self.stop_format_enabled:
-            return reward
-        stop_score = self._compute_stop_format_score(generation=generation)
-        reward_weight = 1.0 - self.stop_format_weight
-        return reward * reward_weight + stop_score * self.stop_format_weight
+    @staticmethod
+    def _validate_weight_sum(
+        first_name: str,
+        first_value: float,
+        second_name: str,
+        second_value: float,
+    ) -> None:
+        if not math.isclose(
+            first_value + second_value,
+            1.0,
+            rel_tol=1.0e-6,
+            abs_tol=1.0e-6,
+        ):
+            raise ValueError(f"reward.kv.{first_name} + {second_name} must equal 1.0")
 
-    def _compute_invalid_kv_json_reward(
-        self,
-        generation: str,
-    ) -> float:
-        if not self.stop_format_enabled:
-            return 0.0
-        stop_score = self._compute_stop_format_score(generation=generation)
-        if stop_score == self.valid_terminal_reward:
-            return 0.0
-        return stop_score * self.stop_format_weight
-
-    def _compute_stop_format_score(
+    def _extract_json_text_and_format_cap(
         self,
         generation: str,
-    ) -> float:
+    ) -> Tuple[str, float]:
         extracted_answer = self.extract_answer_from_generation(generation=generation)
         extracted_answer = self.split_on_keywords(text=extracted_answer)
         stripped_answer = extracted_answer.strip()
-        stop_count = stripped_answer.count(self.stop_token)
-        if stop_count == 0:
-            return self.missing_reward
-        if stop_count == 1 and stripped_answer.endswith(self.stop_token):
-            return self.valid_terminal_reward
-        return self.middle_or_multiple_penalty
+        stop_split = self._find_parseable_stop_split(text=stripped_answer)
 
-    def _strip_valid_terminal_stop(
+        if stop_split is None:
+            if self._parse_prediction_json(text=stripped_answer) is not None:
+                return stripped_answer, self.missing_stop_cap
+            if self.required_stop_token in stripped_answer:
+                return stripped_answer, self.middle_or_multiple_stop_cap
+            return stripped_answer, self.missing_stop_cap
+
+        json_text, trailing_text = stop_split
+        if not trailing_text:
+            return json_text, 1.0
+        if self.required_stop_token in trailing_text:
+            return json_text, self.middle_or_multiple_stop_cap
+        return json_text, self.trailing_text_cap
+
+    def _find_parseable_stop_split(
         self,
         text: str,
-    ) -> Optional[str]:
-        if not self.stop_format_enabled:
-            return text
-        stripped_text = text.strip()
-        stop_count = stripped_text.count(self.stop_token)
-        if stop_count == 0:
-            return stripped_text
-        if stop_count == 1 and stripped_text.endswith(self.stop_token):
-            return stripped_text[: -len(self.stop_token)].rstrip()
+    ) -> Optional[Tuple[str, str]]:
+        stop_indices = [
+            match.start()
+            for match in re.finditer(
+                re.escape(self.required_stop_token),
+                text,
+            )
+        ]
+        for stop_index in reversed(stop_indices):
+            json_text = text[:stop_index].rstrip()
+            if self._parse_prediction_json(text=json_text) is None:
+                continue
+            trailing_text = text[stop_index + len(self.required_stop_token) :].strip()
+            return json_text, trailing_text
         return None
+
+    def _parse_prediction_json(
+        self,
+        text: str,
+    ) -> Optional[Any]:
+        if self.strict_json:
+            return self._try_parse_strict_json(text=text)
+        return self._try_parse_json(text=text)
 
     @staticmethod
     def _try_parse_strict_json(text: str) -> Optional[Any]:
@@ -1880,74 +1920,316 @@ class SingleKVReward(BaseReward):
         return None
 
     @staticmethod
-    def _extract_last_leaf_value(node: Any) -> Optional[Any]:
-        leaves = SingleKVReward._collect_leaf_values(node=node)
-        if not leaves:
+    def _resolve_gt_root_name(
+        gt_json: Any,
+    ) -> Optional[str]:
+        if not isinstance(gt_json, dict):
             return None
+        if isinstance(gt_json.get("kv"), dict):
+            return "kv"
+        if isinstance(gt_json.get("tables"), dict):
+            return "tables"
+        return None
 
-        leaf = leaves[-1]
-        if isinstance(leaf, list):
-            return leaf[-1] if leaf else ""
-        return leaf
+    def _compute_root_cap(
+        self,
+        pred_json: Any,
+        root_name: str,
+    ) -> float:
+        if isinstance(pred_json, dict) and isinstance(pred_json.get(root_name), dict):
+            return 1.0
+        return self.root_mismatch_cap
 
-    @staticmethod
-    def _collect_leaf_values(
+    def _compute_length_cap(
+        self,
+        pred_json: Any,
+        gt_json: Any,
+        root_name: str,
+    ) -> float:
+        cap = 1.0
+        pred_serialized = json.dumps(
+            pred_json,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        gt_serialized = json.dumps(
+            gt_json,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        if (
+            len(pred_serialized) / max(len(gt_serialized), 1)
+            > self.max_serialized_length_ratio
+        ):
+            cap = min(cap, self.length_ratio_cap)
+
+        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
+        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
+        pred_leaf_count = self._count_leaf_values(node=pred_root)
+        gt_leaf_count = self._count_leaf_values(node=gt_root)
+        if (
+            gt_leaf_count > 0
+            and pred_leaf_count / gt_leaf_count > self.max_leaf_count_ratio
+        ):
+            cap = min(cap, self.leaf_count_ratio_cap)
+        return cap
+
+    def _compute_root_score(
+        self,
+        pred_json: Any,
+        gt_json: Any,
+        root_name: str,
+    ) -> float:
+        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
+        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
+        if root_name == "kv":
+            return self._compute_kv_root_score(
+                pred_kv=pred_root,
+                gt_kv=gt_root,
+            )
+        return self._compute_table_root_score(
+            pred_tables=pred_root,
+            gt_tables=gt_root,
+        )
+
+    def _compute_kv_root_score(
+        self,
+        pred_kv: Any,
+        gt_kv: Any,
+    ) -> float:
+        pred_items = self._flatten_kv_items(node=pred_kv)
+        gt_items = self._flatten_kv_items(node=gt_kv)
+        value_score = self._compute_fuzzy_f1(
+            pred_items=pred_items,
+            gt_items=gt_items,
+            match_mode="value",
+        )
+        path_score = self._compute_fuzzy_f1(
+            pred_items=pred_items,
+            gt_items=gt_items,
+            match_mode="path_value",
+        )
+        return self._clip_unit_score(
+            score=self.kv_value_weight * value_score + self.kv_path_weight * path_score
+        )
+
+    def _compute_table_root_score(
+        self,
+        pred_tables: Any,
+        gt_tables: Any,
+    ) -> float:
+        pred_items = self._flatten_table_items(tables=pred_tables)
+        gt_items = self._flatten_table_items(tables=gt_tables)
+        value_score = self._compute_fuzzy_f1(
+            pred_items=pred_items,
+            gt_items=gt_items,
+            match_mode="row_value",
+        )
+        structure_score = self._compute_fuzzy_f1(
+            pred_items=pred_items,
+            gt_items=gt_items,
+            match_mode="path_row_value",
+        )
+        return self._clip_unit_score(
+            score=self.table_value_weight * value_score
+            + self.table_structure_weight * structure_score
+        )
+
+    def _flatten_kv_items(
+        self,
         node: Any,
-    ) -> List[Any]:
-        leaves: List[Any] = []
-        stack = [node]
+    ) -> List[Tuple[Tuple[str, ...], int, Any]]:
+        leaves: List[Tuple[Tuple[str, ...], int, Any]] = []
+        stack: List[Tuple[Any, List[str]]] = [
+            (
+                node,
+                [],
+            )
+        ]
         while stack:
-            obj = stack.pop()
+            obj, path = stack.pop()
             if isinstance(obj, dict):
-                stack.extend(reversed(list(obj.values())))
+                for key, value in reversed(list(obj.items())):
+                    stack.append(
+                        (
+                            value,
+                            path + [str(key)],
+                        )
+                    )
                 continue
             if isinstance(obj, list):
                 if any(isinstance(item, (dict, list)) for item in obj):
-                    stack.extend(reversed(obj))
-                else:
-                    leaves.append(obj)
+                    for item in reversed(obj):
+                        stack.append(
+                            (
+                                item,
+                                path,
+                            )
+                        )
+                    continue
+                for index, item in enumerate(obj):
+                    leaves.append((tuple(path), index, item))
+                if not obj:
+                    leaves.append((tuple(path), 0, ""))
                 continue
-            leaves.append(obj)
+            leaves.append((tuple(path), 0, obj))
         return leaves
 
-    def _values_match(
+    def _flatten_table_items(
         self,
-        pred_leaf: Any,
-        gt_leaf: Any,
-    ) -> bool:
-        pred_clean, pred_coarse = self._normalize_leaf(value=pred_leaf)
-        gt_clean, gt_coarse = self._normalize_leaf(value=gt_leaf)
+        tables: Any,
+    ) -> List[Tuple[Tuple[str, ...], int, Any]]:
+        if not isinstance(tables, dict):
+            return []
 
-        if pred_clean == ("",) and gt_clean == ("",):
-            return True
-        if pred_clean and gt_clean and pred_clean == gt_clean:
-            return True
-        if pred_coarse and gt_coarse and pred_coarse == gt_coarse:
-            return True
-        return False
+        leaves: List[Tuple[Tuple[str, ...], int, Any]] = []
+        for table_name in self._sorted_mapping_keys(mapping=tables):
+            table_value = tables.get(table_name, {})
+            rows = self._normalize_table_rows(
+                rows=(
+                    table_value.get("rows", []) if isinstance(table_value, dict) else []
+                )
+            )
+            column_names = self._collect_table_column_names(rows=rows)
+            for row_index, row in enumerate(rows):
+                for column_name in column_names:
+                    value = row.get(column_name, "") if isinstance(row, dict) else ""
+                    leaves.append(
+                        (
+                            (
+                                str(table_name),
+                                str(column_name),
+                            ),
+                            row_index,
+                            value,
+                        )
+                    )
+            if not rows:
+                leaves.append(((str(table_name),), 0, ""))
+        return leaves
 
-    def _normalize_leaf(
-        self,
+    @staticmethod
+    def _normalize_table_rows(
+        rows: Any,
+    ) -> List[Any]:
+        if isinstance(rows, list):
+            return rows
+        if not isinstance(rows, dict):
+            return []
+        return [rows[key] for key in KVReward._sorted_mapping_keys(mapping=rows)]
+
+    @staticmethod
+    def _sorted_mapping_keys(
+        mapping: Dict[Any, Any],
+    ) -> List[Any]:
+        keys = list(mapping.keys())
+        if all(KVReward._is_int_like(value=key) for key in keys):
+            return sorted(
+                keys,
+                key=lambda key: int(str(key)),
+            )
+        return sorted(
+            keys,
+            key=lambda key: str(key),
+        )
+
+    @staticmethod
+    def _is_int_like(
         value: Any,
-    ) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
-        if value is None:
-            return ("",), ("",)
+    ) -> bool:
+        try:
+            int(str(value))
+        except (TypeError, ValueError):
+            return False
+        return True
 
-        if isinstance(value, list):
-            if not value:
-                return ("",), ("",)
-            cleaned = tuple(
-                self._clean_text(text=str(item)) if item is not None else ""
-                for item in value
-            )
-            coarse = tuple(
-                self._coarse_normalize(text=str(item)) if item is not None else ""
-                for item in value
-            )
-            return cleaned, coarse
+    def _collect_table_column_names(
+        self,
+        rows: List[Any],
+    ) -> List[str]:
+        column_names = []
+        seen_columns = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key in self._sorted_mapping_keys(mapping=row):
+                column_name = str(key)
+                if column_name in seen_columns:
+                    continue
+                column_names.append(column_name)
+                seen_columns.add(column_name)
+        return column_names
 
-        text = str(value)
-        return (self._clean_text(text=text),), (self._coarse_normalize(text=text),)
+    def _compute_fuzzy_f1(
+        self,
+        pred_items: List[Tuple[Tuple[str, ...], int, Any]],
+        gt_items: List[Tuple[Tuple[str, ...], int, Any]],
+        match_mode: str,
+    ) -> float:
+        pred_count = len(pred_items)
+        gt_count = len(gt_items)
+        if pred_count == 0 and gt_count == 0:
+            return 1.0
+        if pred_count == 0 or gt_count == 0:
+            return 0.0
+
+        candidate_matches: List[Tuple[float, int, int]] = []
+        for gt_index, gt_item in enumerate(gt_items):
+            for pred_index, pred_item in enumerate(pred_items):
+                score = self._compute_item_similarity(
+                    pred_item=pred_item,
+                    gt_item=gt_item,
+                    match_mode=match_mode,
+                )
+                if score >= self.score_threshold:
+                    candidate_matches.append(
+                        (
+                            score,
+                            gt_index,
+                            pred_index,
+                        )
+                    )
+
+        candidate_matches.sort(
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        matched_gt = set()
+        matched_pred = set()
+        true_positive = 0
+        for _, gt_index, pred_index in candidate_matches:
+            if gt_index in matched_gt or pred_index in matched_pred:
+                continue
+            matched_gt.add(gt_index)
+            matched_pred.add(pred_index)
+            true_positive += 1
+
+        precision = true_positive / pred_count
+        recall = true_positive / gt_count
+        if precision + recall == 0.0:
+            return 0.0
+        return 2.0 * precision * recall / (precision + recall)
+
+    def _compute_item_similarity(
+        self,
+        pred_item: Tuple[Tuple[str, ...], int, Any],
+        gt_item: Tuple[Tuple[str, ...], int, Any],
+        match_mode: str,
+    ) -> float:
+        pred_path, pred_index, pred_value = pred_item
+        gt_path, gt_index, gt_value = gt_item
+        if match_mode == "path_value" and pred_path != gt_path:
+            return 0.0
+        if match_mode == "row_value" and pred_index != gt_index:
+            return 0.0
+        if match_mode == "path_row_value" and (
+            pred_path != gt_path or pred_index != gt_index
+        ):
+            return 0.0
+        return self._value_similarity(
+            pred_value=pred_value,
+            gt_value=gt_value,
+        )
 
     def _clean_text(
         self,
@@ -1983,301 +2265,43 @@ class SingleKVReward(BaseReward):
         )
         return text
 
-    @staticmethod
-    def _contains_tables(obj: Any) -> bool:
-        return isinstance(obj, dict) and "tables" in obj
-
-    def _compute_table_reward(
+    def _value_similarity(
         self,
-        pred_json: Any,
-        gt_json: Any,
+        pred_value: Any,
+        gt_value: Any,
     ) -> float:
-        pred_tables = pred_json.get("tables") if isinstance(pred_json, dict) else None
-        gt_tables = gt_json.get("tables") if isinstance(gt_json, dict) else None
-
-        if not isinstance(pred_tables, dict) or not isinstance(gt_tables, dict):
-            return self.json_parse_weight
-
-        total_cells = 0
-        matched_cells = 0
-
-        table_names = set(gt_tables.keys()) | set(pred_tables.keys())
-
-        for table_name in table_names:
-            gt_table = gt_tables.get(table_name, {})
-            pred_table = pred_tables.get(table_name, {})
-
-            gt_rows = self._normalize_table_rows(
-                rows=gt_table.get("rows", []) if isinstance(gt_table, dict) else []
-            )
-            pred_rows = self._normalize_table_rows(
-                rows=pred_table.get("rows", []) if isinstance(pred_table, dict) else []
-            )
-
-            max_rows = max(len(gt_rows), len(pred_rows))
-            for row_idx in range(max_rows):
-                gt_row = gt_rows[row_idx] if row_idx < len(gt_rows) else {}
-                pred_row = pred_rows[row_idx] if row_idx < len(pred_rows) else {}
-
-                gt_vals = self._row_values_from_row(row=gt_row)
-                pred_vals = self._row_values_from_row(row=pred_row)
-                max_cells = max(len(gt_vals), len(pred_vals))
-
-                for cell_idx in range(max_cells):
-                    total_cells += 1
-                    gt_val = gt_vals[cell_idx] if cell_idx < len(gt_vals) else [""]
-                    pred_val = (
-                        pred_vals[cell_idx] if cell_idx < len(pred_vals) else [""]
-                    )
-                    if self._values_match(
-                        pred_leaf=pred_val,
-                        gt_leaf=gt_val,
-                    ):
-                        matched_cells += 1
-
-        if total_cells == 0:
-            return self.json_parse_weight
-
-        cell_accuracy = matched_cells / total_cells
-        return self.json_parse_weight + (1 - self.json_parse_weight) * cell_accuracy
-
-    @staticmethod
-    def _row_values_from_row(row: Any) -> List[Any]:
-        if not isinstance(row, dict):
-            return []
-        return [row[key] for key in SingleKVReward._sorted_mapping_keys(mapping=row)]
-
-    @staticmethod
-    def _normalize_table_rows(
-        rows: Any,
-    ) -> List[Any]:
-        if isinstance(rows, list):
-            return rows
-        if not isinstance(rows, dict):
-            return []
-        return [rows[key] for key in SingleKVReward._sorted_mapping_keys(mapping=rows)]
-
-    @staticmethod
-    def _sorted_mapping_keys(
-        mapping: Dict[Any, Any],
-    ) -> List[Any]:
-        keys = list(mapping.keys())
-        if all(SingleKVReward._is_int_like(value=key) for key in keys):
-            return sorted(
-                keys,
-                key=lambda key: int(str(key)),
-            )
-        return sorted(
-            keys,
-            key=lambda key: str(key),
+        pred_clean = self._clean_text(
+            text="" if pred_value is None else str(pred_value)
         )
+        gt_clean = self._clean_text(text="" if gt_value is None else str(gt_value))
+        pred_coarse = self._coarse_normalize(
+            text="" if pred_value is None else str(pred_value)
+        )
+        gt_coarse = self._coarse_normalize(
+            text="" if gt_value is None else str(gt_value)
+        )
+        if pred_clean == "" and gt_clean == "":
+            return 1.0
+        if pred_clean == "" or gt_clean == "":
+            return 0.0
+        if pred_clean == gt_clean or pred_coarse == gt_coarse:
+            return 1.0
+        return SequenceMatcher(
+            a=pred_clean,
+            b=gt_clean,
+        ).ratio()
 
-    @staticmethod
-    def _is_int_like(
-        value: Any,
-    ) -> bool:
-        try:
-            int(str(value))
-        except (TypeError, ValueError):
-            return False
-        return True
-
-
-class MultiKVReward(SingleKVReward):
-    def compute(
-        self,
-        completions: List[List[Dict[str, str]]],
-        solution: List[str],
-        reward_categories: List[str],
-        **kwargs,
-    ) -> List[Optional[float]]:
-        rewards = []
-        contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
-            if not self.has_category_token(
-                category=category,
-                token="kv",
-            ):
-                rewards.append(None)
-                continue
-
-            if not sol:
-                rewards.append(None)
-                continue
-
-            extracted_answer = self._extract_kv_answer_for_json(generation=content)
-
-            pred_json = self._parse_kv_json(text=extracted_answer)
-            if pred_json is None:
-                rewards.append(self._compute_invalid_kv_json_reward(generation=content))
-                continue
-
-            gt_json = self._try_parse_json(text=sol)
-            if gt_json is None:
-                rewards.append(None)
-                continue
-
-            kv_total, kv_matched = self._compute_kv_counts(
-                pred_json=pred_json,
-                gt_json=gt_json,
-            )
-            table_total, table_matched = self._compute_table_counts(
-                pred_json=pred_json,
-                gt_json=gt_json,
-            )
-
-            total_items = kv_total + table_total
-            matched_items = kv_matched + table_matched
-
-            if total_items == 0:
-                rewards.append(
-                    self._apply_stop_format_reward(
-                        generation=content,
-                        reward=self.json_parse_weight,
-                    )
-                )
-                continue
-
-            accuracy = matched_items / float(total_items)
-            reward = self.json_parse_weight + (1 - self.json_parse_weight) * accuracy
-            rewards.append(
-                self._apply_stop_format_reward(
-                    generation=content,
-                    reward=reward,
-                )
-            )
-
-        return rewards
-
-    def _compute_kv_counts(
-        self,
-        pred_json: Any,
-        gt_json: Any,
-    ) -> Tuple[int, int]:
-        pred_leaves = self._extract_leaf_values_excluding_tables(node=pred_json)
-        gt_leaves = self._extract_leaf_values_excluding_tables(node=gt_json)
-
-        if not pred_leaves and not gt_leaves:
-            return 0, 0
-
-        matched = 0
-        remaining_pred = list(pred_leaves)
-        for gt_leaf in gt_leaves:
-            matched_idx = self._find_match_index(
-                candidates=remaining_pred,
-                target=gt_leaf,
-            )
-            if matched_idx is not None:
-                matched += 1
-                remaining_pred.pop(matched_idx)
-
-        total = len(gt_leaves) + (len(pred_leaves) - matched)
-        return total, matched
-
-    def _find_match_index(
-        self,
-        candidates: List[Tuple[Tuple[str, ...], Any]],
-        target: Tuple[Tuple[str, ...], Any],
-    ) -> Optional[int]:
-        target_path, target_leaf = target
-        for idx, candidate in enumerate(candidates):
-            candidate_path, candidate_leaf = candidate
-            if candidate_path != target_path:
-                continue
-            if self._values_match(
-                pred_leaf=candidate_leaf,
-                gt_leaf=target_leaf,
-            ):
-                return idx
-        return None
-
-    def _extract_leaf_values_excluding_tables(
+    def _count_leaf_values(
         self,
         node: Any,
-    ) -> List[Tuple[Tuple[str, ...], Any]]:
-        leaves: List[Tuple[Tuple[str, ...], Any]] = []
-        stack: List[Tuple[Any, List[str]]] = [
-            (
-                node,
-                [],
-            )
-        ]
-        while stack:
-            obj, path = stack.pop()
-            if isinstance(obj, dict):
-                for key, val in reversed(list(obj.items())):
-                    if key == "tables":
-                        continue
-                    stack.append(
-                        (
-                            val,
-                            path + [key],
-                        )
-                    )
-                continue
-            if isinstance(obj, list):
-                if any(isinstance(item, (dict, list)) for item in obj):
-                    for item in reversed(obj):
-                        stack.append(
-                            (
-                                item,
-                                path,
-                            )
-                        )
-                else:
-                    leaves.append((tuple(path), obj))
-                continue
-            leaves.append((tuple(path), obj))
-        return leaves
+    ) -> int:
+        return len(self._flatten_kv_items(node=node))
 
-    def _compute_table_counts(
-        self,
-        pred_json: Any,
-        gt_json: Any,
-    ) -> Tuple[int, int]:
-        pred_tables = pred_json.get("tables") if isinstance(pred_json, dict) else None
-        gt_tables = gt_json.get("tables") if isinstance(gt_json, dict) else None
-        pred_tables = pred_tables if isinstance(pred_tables, dict) else {}
-        gt_tables = gt_tables if isinstance(gt_tables, dict) else {}
-
-        total_cells = 0
-        matched_cells = 0
-
-        table_names = set(gt_tables.keys()) | set(pred_tables.keys())
-
-        for table_name in table_names:
-            gt_table = gt_tables.get(table_name, {})
-            pred_table = pred_tables.get(table_name, {})
-
-            gt_rows = self._normalize_table_rows(
-                rows=gt_table.get("rows", []) if isinstance(gt_table, dict) else []
-            )
-            pred_rows = self._normalize_table_rows(
-                rows=pred_table.get("rows", []) if isinstance(pred_table, dict) else []
-            )
-
-            max_rows = max(len(gt_rows), len(pred_rows))
-            for row_idx in range(max_rows):
-                gt_row = gt_rows[row_idx] if row_idx < len(gt_rows) else {}
-                pred_row = pred_rows[row_idx] if row_idx < len(pred_rows) else {}
-
-                gt_vals = self._row_values_from_row(row=gt_row)
-                pred_vals = self._row_values_from_row(row=pred_row)
-                max_cells = max(len(gt_vals), len(pred_vals))
-
-                for cell_idx in range(max_cells):
-                    total_cells += 1
-                    gt_val = gt_vals[cell_idx] if cell_idx < len(gt_vals) else [""]
-                    pred_val = (
-                        pred_vals[cell_idx] if cell_idx < len(pred_vals) else [""]
-                    )
-                    if self._values_match(
-                        pred_leaf=pred_val,
-                        gt_leaf=gt_val,
-                    ):
-                        matched_cells += 1
-
-        return total_cells, matched_cells
+    @staticmethod
+    def _clip_unit_score(
+        score: float,
+    ) -> float:
+        return min(max(float(score), 0.0), 1.0)
 
 
 class GroundingBBoxReward(BaseReward):
