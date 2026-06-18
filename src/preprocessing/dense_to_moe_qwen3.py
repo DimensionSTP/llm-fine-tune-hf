@@ -95,7 +95,10 @@ def copy_dense_mlp_to_all_experts(
         if hasattr(experts, "gate_up_proj") and hasattr(experts, "down_proj"):
             gate_up_proj = experts.gate_up_proj
             down_proj = experts.down_proj
-            if gate_up_proj.shape[0] != num_experts or down_proj.shape[0] != num_experts:
+            if (
+                gate_up_proj.shape[0] != num_experts
+                or down_proj.shape[0] != num_experts
+            ):
                 raise ValueError(
                     f"Layer {layer_idx}: packed experts mismatch: gate_up={gate_up_proj.shape[0]} down={down_proj.shape[0]} expected={num_experts}"
                 )
@@ -103,19 +106,19 @@ def copy_dense_mlp_to_all_experts(
             intermediate_size = dense_mlp.gate_proj.weight.shape[0]
             with torch.no_grad():
                 gate_up_proj[:, :intermediate_size, :].copy_(
-                    dense_mlp.gate_proj.weight.detach().unsqueeze(0).expand_as(
-                        gate_up_proj[:, :intermediate_size, :]
-                    )
+                    dense_mlp.gate_proj.weight.detach()
+                    .unsqueeze(0)
+                    .expand_as(gate_up_proj[:, :intermediate_size, :])
                 )
                 gate_up_proj[:, intermediate_size:, :].copy_(
-                    dense_mlp.up_proj.weight.detach().unsqueeze(0).expand_as(
-                        gate_up_proj[:, intermediate_size:, :]
-                    )
+                    dense_mlp.up_proj.weight.detach()
+                    .unsqueeze(0)
+                    .expand_as(gate_up_proj[:, intermediate_size:, :])
                 )
                 down_proj.copy_(
-                    dense_mlp.down_proj.weight.detach().unsqueeze(0).expand_as(
-                        down_proj
-                    )
+                    dense_mlp.down_proj.weight.detach()
+                    .unsqueeze(0)
+                    .expand_as(down_proj)
                 )
             copied += num_experts * 3
             layers += 1
