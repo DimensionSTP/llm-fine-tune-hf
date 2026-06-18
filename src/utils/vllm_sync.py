@@ -1,5 +1,6 @@
 from typing import List, Callable, Any
 from contextlib import nullcontext
+from functools import partial
 from types import MethodType
 
 from omegaconf import DictConfig
@@ -15,57 +16,63 @@ def _build_router_with_lora_sync(
     *,
     remap_name: Callable[[str], str],
 ) -> Callable[[Any], None]:
-    def sync_weights_router_with_lora(
-        self: Any,
-    ) -> None:
-        if self.mode == "colocate" and self.enable_sleep_mode:
-            torch.cuda.empty_cache()
-            self.llm.wake_up(tags=["weights"])
+    return partial(
+        _sync_weights_router_with_lora,
+        remap_name=remap_name,
+    )
 
-        model = self.model
-        accelerator = self.accelerator
-        gather_if_zero3 = _get_gather_context(accelerator=accelerator)
 
-        with gather_if_zero3(list(model.parameters())):
-            model.merge_adapter()
+def _sync_weights_router_with_lora(
+    self: Any,
+    *,
+    remap_name: Callable[[str], str],
+) -> None:
+    if self.mode == "colocate" and self.enable_sleep_mode:
+        torch.cuda.empty_cache()
+        self.llm.wake_up(tags=["weights"])
 
-            for name, param in model.named_parameters():
-                name = name.removeprefix("base_model.model.").replace(
-                    ".base_layer",
-                    "",
+    model = self.model
+    accelerator = self.accelerator
+    gather_if_zero3 = _get_gather_context(accelerator=accelerator)
+
+    with gather_if_zero3(list(model.parameters())):
+        model.merge_adapter()
+
+        for name, param in model.named_parameters():
+            name = name.removeprefix("base_model.model.").replace(
+                ".base_layer",
+                "",
+            )
+
+            if model.prefix in name:
+                continue
+
+            if "original_module" in name:
+                continue
+
+            name = self._fix_param_name_to_vllm(
+                name,
+                extra_prefixes=["modules_to_save.default."],
+            )
+            name = remap_name(name)
+
+            if not name.endswith(".weight"):
+                continue
+
+            if self.mode == "server" and accelerator.is_main_process:
+                self.vllm_client.update_named_param(name, param.data)
+            elif self.mode == "colocate":
+                llm_model = (
+                    self.llm.llm_engine.model_executor.driver_worker.model_runner.model
                 )
+                llm_model.load_weights([(name, param.data)])
 
-                if model.prefix in name:
-                    continue
+        model.unmerge_adapter()
 
-                if "original_module" in name:
-                    continue
-
-                name = self._fix_param_name_to_vllm(
-                    name,
-                    extra_prefixes=["modules_to_save.default."],
-                )
-                name = remap_name(name)
-
-                if not name.endswith(".weight"):
-                    continue
-
-                if self.mode == "server" and accelerator.is_main_process:
-                    self.vllm_client.update_named_param(name, param.data)
-                elif self.mode == "colocate":
-                    llm_model = (
-                        self.llm.llm_engine.model_executor.driver_worker.model_runner.model
-                    )
-                    llm_model.load_weights([(name, param.data)])
-
-            model.unmerge_adapter()
-
-        if self.mode == "server" and accelerator.is_main_process:
-            self.vllm_client.reset_prefix_cache()
-        elif self.mode == "colocate":
-            self.llm.reset_prefix_cache()
-
-    return sync_weights_router_with_lora
+    if self.mode == "server" and accelerator.is_main_process:
+        self.vllm_client.reset_prefix_cache()
+    elif self.mode == "colocate":
+        self.llm.reset_prefix_cache()
 
 
 def _get_gather_context(
