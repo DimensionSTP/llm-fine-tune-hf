@@ -2,6 +2,6 @@
 peft_initialization:
   mode: fresh
   adapter_path: null
-  adapter_name: adapter
+  adapter_name: default
   is_trainable: true
   require_base_model_match: true

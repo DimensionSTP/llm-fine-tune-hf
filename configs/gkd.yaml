@@ -160,7 +160,7 @@ eval_strategy: epoch
 
 peft_test:
   adapter_path: ${output_dir}
-  adapter_name: adapter
+  adapter_name: default
 
 max_new_tokens: 512
 do_sample: true

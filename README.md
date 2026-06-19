@@ -291,7 +291,7 @@ To continue training an existing adapter without merging it into the base model,
 is_peft=True
 peft_initialization.mode=continue_from_adapter
 peft_initialization.adapter_path=/path/to/adapter/checkpoint
-peft_initialization.adapter_name=adapter
+peft_initialization.adapter_name=default
 ```
 
 If the adapter path contains `=`, escape each `=` inside the value as `\=` and pass it as a Hydra-quoted value, such as `peft_initialization.adapter_path="/path/with\=a/checkpoint"`.
