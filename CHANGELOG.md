@@ -2,6 +2,13 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.3.1] - 2026-06-19
+
+- Change the default SFT loss type from `chunked_nll` to `nll` so assistant-only SFT (`is_sft=True`) uses the supported non-chunked loss path by default.
+- Document `chunked_nll` as an opt-in long-context SFT loss path for non-assistant-only SFT, and note that `chunked_nll` should not be combined with `is_sft=True` or Liger kernel execution.
+- Change default PEFT adapter names from `adapter` to `default` across PEFT initialization and PEFT test configs for SFT, DPO, KTO, GKD, GRPO, Async GRPO, SDPO, A2PO, and GOLD.
+- Update the PEFT continuation README example to use `peft_initialization.adapter_name=default`.
+
 ## [v2.3.0] - 2026-06-18
 
 - Replace separate `SingleKVReward` and `MultiKVReward` wiring with one unified `KVReward` implementation for reward categories containing the configurable `reward.kv.category_token`.
