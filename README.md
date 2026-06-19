@@ -206,7 +206,9 @@ is_sft={True or False}
 sft_loss_type={nll or chunked_nll}
 ```
 
-`chunked_nll` is the default SFT loss type. It is SFT-only and reduces peak VRAM for long-context SFT while keeping the NLL objective. It is not compatible with `training_arguments.use_liger_kernel=True`.
+`nll` is the default SFT loss type and is the supported default for assistant-only SFT (`is_sft=True`).
+
+`chunked_nll` is an optional SFT-only loss path that reduces peak VRAM for long-context SFT while keeping the NLL objective. Use it for non-assistant-only long-context SFT when VRAM pressure is the bottleneck. Do not use it with `training_arguments.use_liger_kernel=True` or assistant-only SFT (`is_sft=True`). Smoke tests on both LLM and VLM paths showed that `chunked_nll + is_sft=True` can stall at the first training step. The likely reason is that `chunked_nll` drops `labels == -100` tokens before the LM head, while assistant-only masking makes valid label positions sparse and non-contiguous, causing the hidden-state gather/compaction path to become the bottleneck. `dynamic` padding is independent of the loss choice and is compatible with both `nll` and `chunked_nll`. The unsupported combination is only `chunked_nll + is_sft=True`.
 
 * SFT padding strategy
 
@@ -232,7 +234,7 @@ python main.py --config-name={method}.yaml mode=train
 
 | Method | Config | Dataset contract | Notes |
 | --- | --- | --- | --- |
-| SFT | `sft.yaml` | SFT | `chunked_nll` is the default loss type. |
+| SFT | `sft.yaml` | SFT | `nll` is the default loss type; `chunked_nll` is opt-in for non-assistant-only long-context SFT. |
 | DPO | `dpo.yaml` | DPO | Preference-pair training. |
 | KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
 | GKD | `gkd.yaml` | GKD | Distillation with `loss_type=nll`. |
