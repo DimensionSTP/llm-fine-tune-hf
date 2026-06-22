@@ -16,6 +16,13 @@ from .image_io import (
     collect_image_sources,
     is_vlm_content_parts,
 )
+from .dataset_loading import (
+    load_hf_dataset,
+    load_hf_train_val_datasets,
+    load_pandas_dataset,
+    load_pandas_dataset_file,
+    resolve_hf_dataset_format,
+)
 
 __all__ = [
     "SFTStructuralDataset",
@@ -34,4 +41,9 @@ __all__ = [
     "collect_vllm_images",
     "collect_image_sources",
     "is_vlm_content_parts",
+    "load_hf_dataset",
+    "load_hf_train_val_datasets",
+    "load_pandas_dataset",
+    "load_pandas_dataset_file",
+    "resolve_hf_dataset_format",
 ]
