@@ -24,17 +24,16 @@ from .collate_fns import collate_fn_vlm
 def build_test_dataloader(
     test_dataset: Dataset,
     config: DictConfig,
-    num_workers: int,
+    dataloader_kwargs: Dict[str, Any],
     sampler: Optional[Sampler],
 ) -> DataLoader:
     return DataLoader(
         dataset=test_dataset,
         batch_size=config.eval_batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
         sampler=sampler,
         collate_fn=collate_fn_vlm if config.modality != "text" else None,
+        **dataloader_kwargs,
     )
 
 

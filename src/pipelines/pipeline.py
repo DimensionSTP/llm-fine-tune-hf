@@ -250,7 +250,7 @@ def test(
     test_loader = build_test_dataloader(
         test_dataset=test_dataset,
         config=config,
-        num_workers=setup.num_workers,
+        dataloader_kwargs=setup.get_dataloader_kwargs(),
         sampler=sampler,
     )
 
@@ -329,7 +329,7 @@ def test_large(
     test_loader = build_test_dataloader(
         test_dataset=test_dataset,
         config=config,
-        num_workers=setup.num_workers,
+        dataloader_kwargs=setup.get_dataloader_kwargs(),
         sampler=None,
     )
 
