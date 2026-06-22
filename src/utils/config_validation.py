@@ -4,6 +4,7 @@ import os
 from omegaconf import DictConfig
 
 from .distributed_runtime import build_distributed_runtime_snapshot
+from .dataloader_runtime import validate_dataloader_runtime_config
 from .model_loading import ModelLoadPlanner
 
 
@@ -20,6 +21,7 @@ def validate_training_arguments_config(
         config=config,
         torch_dtype="auto",
     ).validate()
+    validate_dataloader_runtime_config(config=config)
 
     if config.fine_tune_method != "sft":
         return

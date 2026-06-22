@@ -1,5 +1,4 @@
 from typing import Dict, Union, Optional, Protocol, Any
-import os
 import re
 
 from omegaconf import DictConfig, OmegaConf
@@ -27,12 +26,14 @@ from transformers import (
 from peft import PeftModel, prepare_model_for_kbit_training
 
 from ..datasets import *
+from .distributed_runtime import build_distributed_runtime_snapshot
+from .dataloader_runtime import resolve_dataloader_runtime
 from .model_loading import ModelLoadPlanner
 from .config_validation import validate_training_arguments_config
 from .peft_initialization import initialize_peft_model
 from .collate_fns import SFTDynamicPaddingCollator
 from ..helpers import filter_chat_template_kwargs
-from src.utils.rewards import RewardManager
+from .rewards import RewardManager
 
 
 class DatasetBuilder(Protocol):
@@ -47,14 +48,14 @@ class SetUp:
         self.config = config
         self.data_type = self.config.data_type
         self.revision = self.config.revision
-        self.num_cpus = os.cpu_count()
-        self.num_fit_workers = min(
-            self.num_cpus,
-            (config.devices * config.workers_ratio),
+        self.distributed_runtime_snapshot = build_distributed_runtime_snapshot(
+            config=config,
         )
-        self.num_workers = (
-            self.num_cpus if config.use_all_workers else self.num_fit_workers
+        self.dataloader_runtime = resolve_dataloader_runtime(
+            config=config,
+            distributed_runtime_snapshot=self.distributed_runtime_snapshot,
         )
+        self.dataloader_runtime_resolved = self.dataloader_runtime["resolved"]
 
         if config.precision in [32, "32"]:
             self.torch_dtype = torch.float32
@@ -107,9 +108,7 @@ class SetUp:
             config=self.config,
         )
 
-        training_argument_kwargs = {
-            "dataloader_num_workers": self.num_workers,
-        }
+        training_argument_kwargs = self._build_dataloader_training_kwargs()
         if ds_config is not None:
             training_argument_kwargs["deepspeed"] = ds_config
 
@@ -119,6 +118,20 @@ class SetUp:
             _convert_="all",
         )
         return training_arguments
+
+    def get_dataloader_kwargs(self) -> Dict[str, Any]:
+        dataloader_kwargs = {
+            "num_workers": self.dataloader_runtime_resolved["num_workers_per_process"],
+            "pin_memory": self.dataloader_runtime_resolved["pin_memory"],
+        }
+        if self.dataloader_runtime_resolved["num_workers_per_process"] > 0:
+            dataloader_kwargs["persistent_workers"] = self.dataloader_runtime_resolved[
+                "persistent_workers"
+            ]
+            dataloader_kwargs["prefetch_factor"] = self.dataloader_runtime_resolved[
+                "prefetch_factor"
+            ]
+        return dataloader_kwargs
 
     def get_data_encoder(self) -> Union[PreTrainedTokenizer, ProcessorMixin]:
         if self.config.is_preprocessed:
@@ -353,6 +366,20 @@ class SetUp:
             self.config.reward_manager,
         )
         return reward_manager
+
+    def _build_dataloader_training_kwargs(self) -> Dict[str, Any]:
+        return {
+            "dataloader_num_workers": self.dataloader_runtime_resolved[
+                "num_workers_per_process"
+            ],
+            "dataloader_pin_memory": self.dataloader_runtime_resolved["pin_memory"],
+            "dataloader_persistent_workers": self.dataloader_runtime_resolved[
+                "persistent_workers"
+            ],
+            "dataloader_prefetch_factor": self.dataloader_runtime_resolved[
+                "prefetch_factor"
+            ],
+        }
 
     def _get_train_dataset(self) -> Dataset:
         train_dataset: Dataset = instantiate(
