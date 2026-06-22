@@ -218,6 +218,14 @@ sft_padding_strategy={max_length or dynamic}
 
 `max_length` preserves the existing sample-level fixed padding path. `dynamic` keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
 
+* DataLoader runtime policy
+
+```shell
+dataloader_runtime.mode={auto or manual}
+```
+
+`auto` is the default. It resolves DataLoader workers per process from node-local CPU capacity and local rank count, then records the configured and resolved values in run metadata. The same resolved policy is used by Trainer-backed training and standalone test DataLoaders. All workloads use `prefetch_factor=2` when workers are enabled. `persistent_workers` is enabled only when the resolved worker count is greater than zero.
+
 * Tracking backend
 
 ```shell
