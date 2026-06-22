@@ -267,15 +267,23 @@ data_path=${connected_dir}/data
 dataset_subdir={null or relative directory under data_path}
 dataset_file_path={null or full dataset file path}
 dataset_file_paths={null or list of dataset file paths}
+dataset_files={null or list of {path, format, weight?} source specs}
 val_dataset_file_path={null or full validation dataset file path}
 val_dataset_file_paths={null or list of validation dataset file paths}
+val_dataset_files={null or list of {path, format} validation source specs}
 dataset_mix_name={null or explicit multi-dataset logging name}
 allow_dataset_file_name_mismatch={False or True}
 allow_val_dataset_file_name_mismatch={False or True}
+test_dataset_file_path={null or full test dataset file path}
 test_dataset_file_paths={null or list of test dataset file paths}
+test_dataset_files={null or list of {path, format} test source specs}
+dataset_resampling.enabled={False or True}
+dataset_resampling.strategy={weighted_offline}
+dataset_resampling.replacement={False or True}
+dataset_resampling.target_size={null or positive integer}
 ```
 
-`dataset_name` remains the logical dataset family. By default the train dataset resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, `dataset_file_path` is a single-file escape hatch, and `dataset_file_paths` merges multiple compatible files in order. If `dataset_file_paths` is set, `dataset_mix_name` is required and becomes `effective_dataset_name` for project, logging, and checkpoint naming. Explicit `val_dataset_file_path(s)` disables train-internal validation sampling and uses the provided validation file(s); without explicit validation files, validation is still sampled from train with `split_ratio`. Test data uses `test_dataset_subdir`, `test_dataset_file_path`, or `test_dataset_file_paths` with the same basename mismatch policy.
+`dataset_name` remains the logical dataset family. By default the train dataset resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, `dataset_file_path` is a single-file escape hatch, and `dataset_file_paths` merges same-format files in order. `dataset_files` supports multi-format train sources and still merges by default; set `dataset_resampling.enabled=true` only when weighted offline resampling is required. If `dataset_file_paths` or `dataset_files` is set, `dataset_mix_name` is required and becomes `effective_dataset_name` for project, logging, and checkpoint naming. Explicit `val_dataset_file_path(s)` or `val_dataset_files` disables train-internal validation sampling and uses the provided validation source(s); validation and test sources support multi-format merge only, not weights or resampling. Test data uses `test_dataset_subdir`, `test_dataset_file_path`, `test_dataset_file_paths`, or `test_dataset_files` with the same basename mismatch policy. Default scripts do not need dataset override changes; scripted experiments should override primitive dataset keys and let composed names resolve from config.
 
 * Left padding option
 
