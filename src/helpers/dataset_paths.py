@@ -1,7 +1,7 @@
 from typing import Dict, List, Union, Optional, Any
 import os
 
-from omegaconf import ListConfig
+from omegaconf import DictConfig, ListConfig
 
 
 def resolve_dataset_file_path(
@@ -108,6 +108,59 @@ def resolve_dataset_file_paths(
     return resolved_paths
 
 
+def resolve_dataset_file_specs(
+    dataset_name: str,
+    dataset_format: str,
+    data_path: str,
+    dataset_subdir: Optional[str],
+    dataset_file_path: Optional[str],
+    dataset_file_paths: Optional[Union[List[str], ListConfig]],
+    dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
+    allow_dataset_file_name_mismatch: bool,
+    path_label: str,
+    allow_weight: bool,
+) -> List[Dict[str, Any]]:
+    normalized_dataset_files = _normalize_optional_dataset_file_specs(
+        dataset_files=dataset_files,
+        path_label=path_label,
+        allow_weight=allow_weight,
+    )
+    if normalized_dataset_files is None:
+        return [
+            {
+                "path": path,
+                "format": dataset_format,
+                "weight": None,
+            }
+            for path in resolve_dataset_file_paths(
+                dataset_name=dataset_name,
+                dataset_format=dataset_format,
+                data_path=data_path,
+                dataset_subdir=dataset_subdir,
+                dataset_file_path=dataset_file_path,
+                dataset_file_paths=dataset_file_paths,
+                allow_dataset_file_name_mismatch=allow_dataset_file_name_mismatch,
+            )
+        ]
+
+    if dataset_file_path is not None or dataset_file_paths is not None:
+        raise ValueError(
+            f"{path_label}_file_path(s) and {path_label}_files are mutually exclusive."
+        )
+
+    normalized_data_path = _validate_data_path(data_path=data_path)
+    resolved_specs = [
+        _resolve_dataset_file_spec(
+            dataset_name=dataset_name,
+            data_path=normalized_data_path,
+            dataset_file_spec=dataset_file_spec,
+            allow_dataset_file_name_mismatch=allow_dataset_file_name_mismatch,
+        )
+        for dataset_file_spec in normalized_dataset_files
+    ]
+    return resolved_specs
+
+
 def resolve_optional_dataset_file_paths(
     dataset_name: str,
     dataset_format: str,
@@ -159,6 +212,61 @@ def resolve_optional_dataset_file_paths(
     return resolved_paths
 
 
+def resolve_optional_dataset_file_specs(
+    dataset_name: str,
+    dataset_format: str,
+    data_path: str,
+    dataset_file_path: Optional[str],
+    dataset_file_paths: Optional[Union[List[str], ListConfig]],
+    dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
+    allow_dataset_file_name_mismatch: bool,
+    path_label: str,
+    allow_weight: bool,
+) -> Optional[List[Dict[str, Any]]]:
+    normalized_dataset_files = _normalize_optional_dataset_file_specs(
+        dataset_files=dataset_files,
+        path_label=path_label,
+        allow_weight=allow_weight,
+    )
+    if normalized_dataset_files is None:
+        resolved_paths = resolve_optional_dataset_file_paths(
+            dataset_name=dataset_name,
+            dataset_format=dataset_format,
+            data_path=data_path,
+            dataset_file_path=dataset_file_path,
+            dataset_file_paths=dataset_file_paths,
+            allow_dataset_file_name_mismatch=allow_dataset_file_name_mismatch,
+            path_label=path_label,
+        )
+        if resolved_paths is None:
+            return None
+        return [
+            {
+                "path": path,
+                "format": dataset_format,
+                "weight": None,
+            }
+            for path in resolved_paths
+        ]
+
+    if dataset_file_path is not None or dataset_file_paths is not None:
+        raise ValueError(
+            f"{path_label}_file_path(s) and {path_label}_files are mutually exclusive."
+        )
+
+    normalized_data_path = _validate_data_path(data_path=data_path)
+    resolved_specs = [
+        _resolve_dataset_file_spec(
+            dataset_name=dataset_name,
+            data_path=normalized_data_path,
+            dataset_file_spec=dataset_file_spec,
+            allow_dataset_file_name_mismatch=allow_dataset_file_name_mismatch,
+        )
+        for dataset_file_spec in normalized_dataset_files
+    ]
+    return resolved_specs
+
+
 def build_dataset_file_path_metadata(
     dataset_name: str,
     dataset_format: str,
@@ -200,44 +308,56 @@ def build_dataset_input_metadata(
     dataset_subdir: Optional[str],
     dataset_file_path: Optional[str],
     dataset_file_paths: Optional[Union[List[str], ListConfig]],
+    dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
     allow_dataset_file_name_mismatch: bool,
     val_dataset_file_path: Optional[str],
     val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
+    val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
     allow_val_dataset_file_name_mismatch: bool,
     test_dataset_subdir: Optional[str],
     test_dataset_file_path: Optional[str],
     test_dataset_file_paths: Optional[Union[List[str], ListConfig]],
+    test_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
     allow_test_dataset_file_name_mismatch: bool,
     dataset_mix_name: Optional[str],
     effective_dataset_name: str,
     use_validation: bool,
+    dataset_resampling: DictConfig,
 ) -> Dict[str, Any]:
-    train_paths = resolve_dataset_file_paths(
+    train_specs = resolve_dataset_file_specs(
         dataset_name=dataset_name,
         dataset_format=dataset_format,
         data_path=data_path,
         dataset_subdir=dataset_subdir,
         dataset_file_path=dataset_file_path,
         dataset_file_paths=dataset_file_paths,
+        dataset_files=dataset_files,
         allow_dataset_file_name_mismatch=allow_dataset_file_name_mismatch,
+        path_label="dataset",
+        allow_weight=True,
     )
-    val_paths = resolve_optional_dataset_file_paths(
+    val_specs = resolve_optional_dataset_file_specs(
         dataset_name=dataset_name,
         dataset_format=dataset_format,
         data_path=data_path,
         dataset_file_path=val_dataset_file_path,
         dataset_file_paths=val_dataset_file_paths,
+        dataset_files=val_dataset_files,
         allow_dataset_file_name_mismatch=allow_val_dataset_file_name_mismatch,
         path_label="val_dataset",
+        allow_weight=False,
     )
-    test_paths = resolve_dataset_file_paths(
+    test_specs = resolve_dataset_file_specs(
         dataset_name=dataset_name,
         dataset_format=dataset_format,
         data_path=data_path,
         dataset_subdir=test_dataset_subdir,
         dataset_file_path=test_dataset_file_path,
         dataset_file_paths=test_dataset_file_paths,
+        dataset_files=test_dataset_files,
         allow_dataset_file_name_mismatch=allow_test_dataset_file_name_mismatch,
+        path_label="test_dataset",
+        allow_weight=False,
     )
     return {
         "dataset_name": dataset_name,
@@ -245,16 +365,30 @@ def build_dataset_input_metadata(
         "effective_dataset_name": effective_dataset_name,
         "dataset_format": dataset_format,
         "data_path": os.path.normpath(str(data_path)),
-        "train_input_mode": _get_input_mode(paths=train_paths),
+        "train_input_mode": _get_train_input_mode(
+            specs=train_specs,
+            dataset_resampling=dataset_resampling,
+        ),
         "validation_input_mode": _get_validation_input_mode(
-            paths=val_paths,
+            specs=val_specs,
             use_validation=use_validation,
         ),
-        "test_input_mode": _get_input_mode(paths=test_paths),
-        "split_ratio_used": use_validation and val_paths is None,
-        "resolved_train_dataset_file_paths": train_paths,
-        "resolved_val_dataset_file_paths": val_paths,
-        "resolved_test_dataset_file_paths": test_paths,
+        "test_input_mode": _get_spec_input_mode(specs=test_specs),
+        "split_ratio_used": use_validation and val_specs is None,
+        "dataset_resampling": {
+            "enabled": dataset_resampling.enabled,
+            "strategy": dataset_resampling.strategy,
+            "replacement": dataset_resampling.replacement,
+            "target_size": dataset_resampling.target_size,
+        },
+        "resolved_train_dataset_files": train_specs,
+        "resolved_val_dataset_files": val_specs,
+        "resolved_test_dataset_files": test_specs,
+        "resolved_train_dataset_file_paths": [spec["path"] for spec in train_specs],
+        "resolved_val_dataset_file_paths": (
+            None if val_specs is None else [spec["path"] for spec in val_specs]
+        ),
+        "resolved_test_dataset_file_paths": [spec["path"] for spec in test_specs],
     }
 
 
@@ -262,18 +396,26 @@ def resolve_effective_dataset_name(
     dataset_name: str,
     dataset_mix_name: Optional[str],
     dataset_file_paths: Optional[Union[List[str], ListConfig]],
+    dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
 ) -> str:
     normalized_dataset_file_paths = _normalize_optional_path_list(
         paths=dataset_file_paths,
     )
-    if normalized_dataset_file_paths is None:
+    normalized_dataset_files = _normalize_optional_dataset_file_specs(
+        dataset_files=dataset_files,
+        path_label="dataset",
+        allow_weight=True,
+    )
+    if normalized_dataset_file_paths is None and normalized_dataset_files is None:
         return dataset_name
 
     normalized_dataset_mix_name = _normalize_optional_path(
         path=dataset_mix_name,
     )
     if normalized_dataset_mix_name is None:
-        raise ValueError("dataset_mix_name is required when dataset_file_paths is set.")
+        raise ValueError(
+            "dataset_mix_name is required when dataset_file_paths or dataset_files is set."
+        )
     return normalized_dataset_mix_name
 
 
@@ -322,6 +464,66 @@ def _normalize_optional_path_list(
     return normalized_paths
 
 
+def _normalize_optional_dataset_file_specs(
+    dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
+    path_label: str,
+    allow_weight: bool,
+) -> Optional[List[Dict[str, Any]]]:
+    if dataset_files is None:
+        return None
+    if not isinstance(dataset_files, (list, ListConfig)):
+        raise ValueError(f"{path_label}_files must be a list or null.")
+    if len(dataset_files) == 0:
+        raise ValueError(f"{path_label}_files must not be empty.")
+    return [
+        _normalize_dataset_file_spec(
+            dataset_file_spec=dataset_file_spec,
+            path_label=path_label,
+            allow_weight=allow_weight,
+        )
+        for dataset_file_spec in dataset_files
+    ]
+
+
+def _normalize_dataset_file_spec(
+    dataset_file_spec: Any,
+    path_label: str,
+    allow_weight: bool,
+) -> Dict[str, Any]:
+    if not isinstance(dataset_file_spec, (dict, DictConfig)):
+        raise ValueError(f"{path_label}_files entries must be mappings.")
+    for required_key in ["path", "format"]:
+        if required_key not in dataset_file_spec:
+            raise ValueError(f"{path_label}_files entries require {required_key}.")
+    weight = None
+    if "weight" in dataset_file_spec:
+        if dataset_file_spec["weight"] is None:
+            weight = None
+        elif not allow_weight:
+            raise ValueError(f"{path_label}_files do not support weight.")
+        else:
+            weight = _normalize_dataset_file_weight(
+                weight=dataset_file_spec["weight"],
+                path_label=path_label,
+            )
+    return {
+        "path": _normalize_required_path(path=dataset_file_spec["path"]),
+        "format": _normalize_required_path(path=dataset_file_spec["format"]),
+        "weight": weight,
+    }
+
+
+def _normalize_dataset_file_weight(
+    weight: Any,
+    path_label: str,
+) -> float:
+    if not isinstance(weight, (int, float)):
+        raise ValueError(f"{path_label}_files weight must be numeric.")
+    if weight <= 0:
+        raise ValueError(f"{path_label}_files weight must be positive.")
+    return float(weight)
+
+
 def _normalize_required_path(
     path: Any,
 ) -> str:
@@ -331,6 +533,32 @@ def _normalize_required_path(
     if normalized == "":
         raise ValueError("path list values must be non-empty strings.")
     return normalized
+
+
+def _resolve_dataset_file_spec(
+    dataset_name: str,
+    data_path: str,
+    dataset_file_spec: Dict[str, Any],
+    allow_dataset_file_name_mismatch: bool,
+) -> Dict[str, Any]:
+    expected_file_name = build_dataset_file_name(
+        dataset_name=dataset_name,
+        dataset_format=dataset_file_spec["format"],
+    )
+    resolved_path = _resolve_dataset_file_override(
+        data_path=data_path,
+        dataset_file_path=dataset_file_spec["path"],
+    )
+    _validate_dataset_file_name(
+        resolved_path=resolved_path,
+        expected_file_name=expected_file_name,
+        allow_dataset_file_name_mismatch=allow_dataset_file_name_mismatch,
+    )
+    return {
+        "path": resolved_path,
+        "format": dataset_file_spec["format"],
+        "weight": dataset_file_spec["weight"],
+    }
 
 
 def _resolve_dataset_file_override(
@@ -370,16 +598,38 @@ def _get_input_mode(
     return "multi_file"
 
 
+def _get_spec_input_mode(
+    specs: List[Dict[str, Any]],
+) -> str:
+    if len(specs) == 1:
+        return "single_file"
+    formats = {spec["format"] for spec in specs}
+    if len(formats) == 1:
+        return "multi_file"
+    return "multi_format"
+
+
+def _get_train_input_mode(
+    specs: List[Dict[str, Any]],
+    dataset_resampling: DictConfig,
+) -> str:
+    if dataset_resampling.enabled:
+        return "weighted_resampled"
+    return _get_spec_input_mode(specs=specs)
+
+
 def _get_validation_input_mode(
-    paths: Optional[List[str]],
+    specs: Optional[List[Dict[str, Any]]],
     use_validation: bool,
 ) -> str:
     if not use_validation:
         return "disabled"
-    if paths is None:
+    if specs is None:
         return "sampled_from_train"
-    if len(paths) == 1:
+    if len(specs) == 1:
         return "external_single_file"
+    if _get_spec_input_mode(specs=specs) == "multi_format":
+        return "external_multi_format"
     return "external_multi_file"
 
 
@@ -390,5 +640,7 @@ __all__ = [
     "resolve_effective_dataset_name",
     "resolve_dataset_file_path",
     "resolve_dataset_file_paths",
+    "resolve_dataset_file_specs",
     "resolve_optional_dataset_file_paths",
+    "resolve_optional_dataset_file_specs",
 ]
