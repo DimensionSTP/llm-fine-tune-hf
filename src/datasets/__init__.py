@@ -17,10 +17,17 @@ from .image_io import (
     is_vlm_content_parts,
 )
 from .dataset_loading import (
+    build_weighted_sample_counts,
     load_hf_dataset,
+    load_hf_dataset_file,
+    load_hf_dataset_specs,
     load_hf_train_val_datasets,
+    load_hf_train_val_dataset_specs,
+    load_weighted_hf_dataset_specs,
+    load_weighted_pandas_dataset_specs,
     load_pandas_dataset,
     load_pandas_dataset_file,
+    load_pandas_dataset_specs,
     resolve_hf_dataset_format,
 )
 
@@ -41,9 +48,16 @@ __all__ = [
     "collect_vllm_images",
     "collect_image_sources",
     "is_vlm_content_parts",
+    "build_weighted_sample_counts",
     "load_hf_dataset",
+    "load_hf_dataset_file",
+    "load_hf_dataset_specs",
     "load_hf_train_val_datasets",
+    "load_hf_train_val_dataset_specs",
+    "load_weighted_hf_dataset_specs",
+    "load_weighted_pandas_dataset_specs",
     "load_pandas_dataset",
     "load_pandas_dataset_file",
+    "load_pandas_dataset_specs",
     "resolve_hf_dataset_format",
 ]
