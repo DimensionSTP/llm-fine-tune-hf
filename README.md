@@ -266,10 +266,16 @@ is_preprocessed={True or False}
 data_path=${connected_dir}/data
 dataset_subdir={null or relative directory under data_path}
 dataset_file_path={null or full dataset file path}
+dataset_file_paths={null or list of dataset file paths}
+val_dataset_file_path={null or full validation dataset file path}
+val_dataset_file_paths={null or list of validation dataset file paths}
+dataset_mix_name={null or explicit multi-dataset logging name}
 allow_dataset_file_name_mismatch={False or True}
+allow_val_dataset_file_name_mismatch={False or True}
+test_dataset_file_paths={null or list of test dataset file paths}
 ```
 
-`dataset_name` remains the logical logging/project/checkpoint identifier. By default the dataset file resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, and `dataset_file_path` is an escape hatch; its basename must match `${dataset_name}.${dataset_format}` unless mismatch is explicitly allowed. Test data uses `test_dataset_subdir` and `test_dataset_file_path` with the same policy.
+`dataset_name` remains the logical dataset family. By default the train dataset resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, `dataset_file_path` is a single-file escape hatch, and `dataset_file_paths` merges multiple compatible files in order. If `dataset_file_paths` is set, `dataset_mix_name` is required and becomes `effective_dataset_name` for project, logging, and checkpoint naming. Explicit `val_dataset_file_path(s)` disables train-internal validation sampling and uses the provided validation file(s); without explicit validation files, validation is still sampled from train with `split_ratio`. Test data uses `test_dataset_subdir`, `test_dataset_file_path`, or `test_dataset_file_paths` with the same basename mismatch policy.
 
 * Left padding option
 
