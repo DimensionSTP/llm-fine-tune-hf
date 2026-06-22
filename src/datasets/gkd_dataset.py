@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import importlib
 
@@ -6,10 +6,14 @@ datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
 
 from ..helpers.dataset_paths import (
-    resolve_dataset_file_paths,
-    resolve_optional_dataset_file_paths,
+    resolve_dataset_file_specs,
+    resolve_optional_dataset_file_specs,
 )
-from .dataset_loading import load_hf_train_val_datasets
+from .dataset_loading import (
+    load_hf_dataset_specs,
+    load_hf_train_val_dataset_specs,
+    load_weighted_hf_dataset_specs,
+)
 
 
 class StructuralDataset:
@@ -29,19 +33,25 @@ class StructuralDataset:
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
         dataset_file_paths: Optional[List[str]],
+        dataset_files: Optional[List[Dict[str, Any]]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
         val_dataset_file_paths: Optional[List[str]],
+        val_dataset_files: Optional[List[Dict[str, Any]]],
         allow_val_dataset_file_name_mismatch: bool,
+        dataset_resampling: Dict[str, Any],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
         self.dataset_file_paths = dataset_file_paths
+        self.dataset_files = dataset_files
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.val_dataset_file_path = val_dataset_file_path
         self.val_dataset_file_paths = val_dataset_file_paths
+        self.val_dataset_files = val_dataset_files
         self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
+        self.dataset_resampling = dataset_resampling
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -54,31 +64,49 @@ class StructuralDataset:
         self.assistant_column_name = assistant_column_name
 
     def __call__(self) -> Dict[str, HFDataset]:
-        train_data_paths = resolve_dataset_file_paths(
+        train_data_specs = resolve_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
             dataset_file_paths=self.dataset_file_paths,
+            dataset_files=self.dataset_files,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+            path_label="dataset",
+            allow_weight=True,
         )
-        val_data_paths = resolve_optional_dataset_file_paths(
+        val_data_specs = resolve_optional_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_file_path=self.val_dataset_file_path,
             dataset_file_paths=self.val_dataset_file_paths,
+            dataset_files=self.val_dataset_files,
             allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
             path_label="val_dataset",
+            allow_weight=False,
         )
-        loaded_datasets = load_hf_train_val_datasets(
-            dataset_format=self.dataset_format,
-            train_dataset_file_paths=train_data_paths,
-            val_dataset_file_paths=val_data_paths,
-        )
-        dataset = loaded_datasets["train"]
-        val_dataset = loaded_datasets["val"]
+        if self.dataset_resampling.enabled:
+            dataset = load_weighted_hf_dataset_specs(
+                dataset_file_specs=train_data_specs,
+                dataset_resampling=self.dataset_resampling,
+                seed=self.seed,
+            )
+            val_dataset = (
+                None
+                if val_data_specs is None
+                else load_hf_dataset_specs(
+                    dataset_file_specs=val_data_specs,
+                )
+            )
+        else:
+            loaded_datasets = load_hf_train_val_dataset_specs(
+                train_dataset_file_specs=train_data_specs,
+                val_dataset_file_specs=val_data_specs,
+            )
+            dataset = loaded_datasets["train"]
+            val_dataset = loaded_datasets["val"]
 
         output_column_names = [
             "messages",
@@ -170,19 +198,25 @@ class ConversationalDataset:
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
         dataset_file_paths: Optional[List[str]],
+        dataset_files: Optional[List[Dict[str, Any]]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
         val_dataset_file_paths: Optional[List[str]],
+        val_dataset_files: Optional[List[Dict[str, Any]]],
         allow_val_dataset_file_name_mismatch: bool,
+        dataset_resampling: Dict[str, Any],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
         self.dataset_file_paths = dataset_file_paths
+        self.dataset_files = dataset_files
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.val_dataset_file_path = val_dataset_file_path
         self.val_dataset_file_paths = val_dataset_file_paths
+        self.val_dataset_files = val_dataset_files
         self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
+        self.dataset_resampling = dataset_resampling
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -191,31 +225,49 @@ class ConversationalDataset:
         self.conversation_column_name = conversation_column_name
 
     def __call__(self) -> Dict[str, HFDataset]:
-        train_data_paths = resolve_dataset_file_paths(
+        train_data_specs = resolve_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
             dataset_file_paths=self.dataset_file_paths,
+            dataset_files=self.dataset_files,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+            path_label="dataset",
+            allow_weight=True,
         )
-        val_data_paths = resolve_optional_dataset_file_paths(
+        val_data_specs = resolve_optional_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_file_path=self.val_dataset_file_path,
             dataset_file_paths=self.val_dataset_file_paths,
+            dataset_files=self.val_dataset_files,
             allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
             path_label="val_dataset",
+            allow_weight=False,
         )
-        loaded_datasets = load_hf_train_val_datasets(
-            dataset_format=self.dataset_format,
-            train_dataset_file_paths=train_data_paths,
-            val_dataset_file_paths=val_data_paths,
-        )
-        dataset = loaded_datasets["train"]
-        val_dataset = loaded_datasets["val"]
+        if self.dataset_resampling.enabled:
+            dataset = load_weighted_hf_dataset_specs(
+                dataset_file_specs=train_data_specs,
+                dataset_resampling=self.dataset_resampling,
+                seed=self.seed,
+            )
+            val_dataset = (
+                None
+                if val_data_specs is None
+                else load_hf_dataset_specs(
+                    dataset_file_specs=val_data_specs,
+                )
+            )
+        else:
+            loaded_datasets = load_hf_train_val_dataset_specs(
+                train_dataset_file_specs=train_data_specs,
+                val_dataset_file_specs=val_data_specs,
+            )
+            dataset = loaded_datasets["train"]
+            val_dataset = loaded_datasets["val"]
 
         if self.conversation_column_name != "messages":
             dataset = dataset.rename_column(

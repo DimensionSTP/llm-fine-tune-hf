@@ -11,11 +11,14 @@ from torch.utils.data import Dataset
 from transformers import AutoTokenizer, AutoProcessor
 
 from ..helpers.dataset_paths import (
-    resolve_dataset_file_paths,
-    resolve_optional_dataset_file_paths,
+    resolve_dataset_file_specs,
+    resolve_optional_dataset_file_specs,
 )
 from ..helpers import build_enable_thinking_kwargs
-from .dataset_loading import load_pandas_dataset
+from .dataset_loading import (
+    load_pandas_dataset_specs,
+    load_weighted_pandas_dataset_specs,
+)
 from .image_io import build_image_io_settings, load_image, normalize_image_source
 from .image_augmentation import _build_image_augmenter
 
@@ -55,10 +58,13 @@ class StructuralDataset(Dataset):
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
         dataset_file_paths: Optional[List[str]],
+        dataset_files: Optional[List[Dict[str, Any]]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
         val_dataset_file_paths: Optional[List[str]],
+        val_dataset_files: Optional[List[Dict[str, Any]]],
         allow_val_dataset_file_name_mismatch: bool,
+        dataset_resampling: Dict[str, Any],
         dataset_image: Optional[Dict[str, Any]],
         sft_label_mask: Optional[Dict[str, Any]],
     ) -> None:
@@ -66,10 +72,13 @@ class StructuralDataset(Dataset):
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
         self.dataset_file_paths = dataset_file_paths
+        self.dataset_files = dataset_files
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.val_dataset_file_path = val_dataset_file_path
         self.val_dataset_file_paths = val_dataset_file_paths
+        self.val_dataset_files = val_dataset_files
         self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
+        self.dataset_resampling = dataset_resampling
         self.split = split
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
@@ -223,41 +232,51 @@ class StructuralDataset(Dataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        val_data_paths = resolve_optional_dataset_file_paths(
+        val_data_specs = resolve_optional_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_file_path=self.val_dataset_file_path,
             dataset_file_paths=self.val_dataset_file_paths,
+            dataset_files=self.val_dataset_files,
             allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
             path_label="val_dataset",
+            allow_weight=False,
         )
 
-        if self.split == "val" and val_data_paths is not None:
-            data = load_pandas_dataset(
-                dataset_format=self.dataset_format,
-                dataset_file_paths=val_data_paths,
+        if self.split == "val" and val_data_specs is not None:
+            data = load_pandas_dataset_specs(
+                dataset_file_specs=val_data_specs,
             )
         elif self.split in ["train", "val"]:
-            train_data_paths = resolve_dataset_file_paths(
+            train_data_specs = resolve_dataset_file_specs(
                 dataset_name=self.dataset_name,
                 dataset_format=self.dataset_format,
                 data_path=self.data_path,
                 dataset_subdir=self.dataset_subdir,
                 dataset_file_path=self.dataset_file_path,
                 dataset_file_paths=self.dataset_file_paths,
+                dataset_files=self.dataset_files,
                 allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+                path_label="dataset",
+                allow_weight=True,
             )
-            data = load_pandas_dataset(
-                dataset_format=self.dataset_format,
-                dataset_file_paths=train_data_paths,
-            )
+            if self.dataset_resampling.enabled:
+                data = load_weighted_pandas_dataset_specs(
+                    dataset_file_specs=train_data_specs,
+                    dataset_resampling=self.dataset_resampling,
+                    seed=self.seed,
+                )
+            else:
+                data = load_pandas_dataset_specs(
+                    dataset_file_specs=train_data_specs,
+                )
         else:
             raise ValueError(f"Inavalid split: {self.split}")
 
         data = data.fillna("_")
 
-        if val_data_paths is None:
+        if val_data_specs is None:
             train_data, val_data = train_test_split(
                 data,
                 test_size=self.split_ratio,
@@ -801,10 +820,13 @@ class ConversationalDataset(StructuralDataset):
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
         dataset_file_paths: Optional[List[str]],
+        dataset_files: Optional[List[Dict[str, Any]]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
         val_dataset_file_paths: Optional[List[str]],
+        val_dataset_files: Optional[List[Dict[str, Any]]],
         allow_val_dataset_file_name_mismatch: bool,
+        dataset_resampling: Dict[str, Any],
         dataset_image: Optional[Dict[str, Any]],
         sft_label_mask: Optional[Dict[str, Any]],
     ) -> None:
@@ -812,10 +834,13 @@ class ConversationalDataset(StructuralDataset):
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
         self.dataset_file_paths = dataset_file_paths
+        self.dataset_files = dataset_files
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.val_dataset_file_path = val_dataset_file_path
         self.val_dataset_file_paths = val_dataset_file_paths
+        self.val_dataset_files = val_dataset_files
         self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
+        self.dataset_resampling = dataset_resampling
         self.split = split
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
@@ -967,41 +992,51 @@ class ConversationalDataset(StructuralDataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        val_data_paths = resolve_optional_dataset_file_paths(
+        val_data_specs = resolve_optional_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_file_path=self.val_dataset_file_path,
             dataset_file_paths=self.val_dataset_file_paths,
+            dataset_files=self.val_dataset_files,
             allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
             path_label="val_dataset",
+            allow_weight=False,
         )
 
-        if self.split == "val" and val_data_paths is not None:
-            data = load_pandas_dataset(
-                dataset_format=self.dataset_format,
-                dataset_file_paths=val_data_paths,
+        if self.split == "val" and val_data_specs is not None:
+            data = load_pandas_dataset_specs(
+                dataset_file_specs=val_data_specs,
             )
         elif self.split in ["train", "val"]:
-            train_data_paths = resolve_dataset_file_paths(
+            train_data_specs = resolve_dataset_file_specs(
                 dataset_name=self.dataset_name,
                 dataset_format=self.dataset_format,
                 data_path=self.data_path,
                 dataset_subdir=self.dataset_subdir,
                 dataset_file_path=self.dataset_file_path,
                 dataset_file_paths=self.dataset_file_paths,
+                dataset_files=self.dataset_files,
                 allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+                path_label="dataset",
+                allow_weight=True,
             )
-            data = load_pandas_dataset(
-                dataset_format=self.dataset_format,
-                dataset_file_paths=train_data_paths,
-            )
+            if self.dataset_resampling.enabled:
+                data = load_weighted_pandas_dataset_specs(
+                    dataset_file_specs=train_data_specs,
+                    dataset_resampling=self.dataset_resampling,
+                    seed=self.seed,
+                )
+            else:
+                data = load_pandas_dataset_specs(
+                    dataset_file_specs=train_data_specs,
+                )
         else:
             raise ValueError(f"Inavalid split: {self.split}")
 
         data = data.fillna("_")
 
-        if val_data_paths is None:
+        if val_data_specs is None:
             train_data, val_data = train_test_split(
                 data,
                 test_size=self.split_ratio,

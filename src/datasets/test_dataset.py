@@ -10,9 +10,9 @@ from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
 
-from ..helpers.dataset_paths import resolve_dataset_file_paths
+from ..helpers.dataset_paths import resolve_dataset_file_specs
 from ..helpers import build_enable_thinking_kwargs
-from .dataset_loading import load_pandas_dataset
+from .dataset_loading import load_pandas_dataset_specs
 from .image_io import build_image_io_settings, load_image, normalize_image_source
 
 
@@ -41,6 +41,7 @@ class StructuralDataset(Dataset):
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
         dataset_file_paths: Optional[List[str]],
+        dataset_files: Optional[List[Dict[str, Any]]],
         allow_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
@@ -48,6 +49,7 @@ class StructuralDataset(Dataset):
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
         self.dataset_file_paths = dataset_file_paths
+        self.dataset_files = dataset_files
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
@@ -161,18 +163,20 @@ class StructuralDataset(Dataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        data_paths = resolve_dataset_file_paths(
+        data_specs = resolve_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
             dataset_file_paths=self.dataset_file_paths,
+            dataset_files=self.dataset_files,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+            path_label="test_dataset",
+            allow_weight=False,
         )
-        data = load_pandas_dataset(
-            dataset_format=self.dataset_format,
-            dataset_file_paths=data_paths,
+        data = load_pandas_dataset_specs(
+            dataset_file_specs=data_specs,
         )
 
         data = data.fillna("_")
@@ -364,6 +368,7 @@ class ConversationalDataset(StructuralDataset):
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
         dataset_file_paths: Optional[List[str]],
+        dataset_files: Optional[List[Dict[str, Any]]],
         allow_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
@@ -371,6 +376,7 @@ class ConversationalDataset(StructuralDataset):
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
         self.dataset_file_paths = dataset_file_paths
+        self.dataset_files = dataset_files
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
@@ -484,18 +490,20 @@ class ConversationalDataset(StructuralDataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        data_paths = resolve_dataset_file_paths(
+        data_specs = resolve_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
             dataset_file_paths=self.dataset_file_paths,
+            dataset_files=self.dataset_files,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+            path_label="test_dataset",
+            allow_weight=False,
         )
-        data = load_pandas_dataset(
-            dataset_format=self.dataset_format,
-            dataset_file_paths=data_paths,
+        data = load_pandas_dataset_specs(
+            dataset_file_specs=data_specs,
         )
 
         data = data.fillna("_")
