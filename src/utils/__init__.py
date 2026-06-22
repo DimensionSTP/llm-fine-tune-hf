@@ -1,4 +1,8 @@
 from .setup import SetUp
+from .dataloader_runtime import (
+    resolve_dataloader_runtime,
+    validate_dataloader_runtime_config,
+)
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
 from .peft_initialization import (
     build_peft_initialization_metadata,
@@ -67,6 +71,8 @@ from .async_grpo_runtime import (
 
 __all__ = [
     "SetUp",
+    "resolve_dataloader_runtime",
+    "validate_dataloader_runtime_config",
     "ModelLoadPlan",
     "ModelLoadPlanner",
     "build_peft_initialization_metadata",
