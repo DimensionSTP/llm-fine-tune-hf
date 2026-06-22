@@ -8,7 +8,11 @@ structural:
   dataset_format: ${dataset_format}
   dataset_subdir: ${dataset_subdir}
   dataset_file_path: ${dataset_file_path}
+  dataset_file_paths: ${dataset_file_paths}
   allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
+  val_dataset_file_path: ${val_dataset_file_path}
+  val_dataset_file_paths: ${val_dataset_file_paths}
+  allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
   data_column_name: ${data_column_name}
   solution_column_name: ${solution_column_name}
   reward_categories_column_name: ${reward_categories_column_name}
@@ -31,7 +35,11 @@ conversational:
   dataset_format: ${dataset_format}
   dataset_subdir: ${dataset_subdir}
   dataset_file_path: ${dataset_file_path}
+  dataset_file_paths: ${dataset_file_paths}
   allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
+  val_dataset_file_path: ${val_dataset_file_path}
+  val_dataset_file_paths: ${val_dataset_file_paths}
+  allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
   prompt_column_name: ${prompt_column_name}
   solution_column_name: ${solution_column_name}
   reward_categories_column_name: ${reward_categories_column_name}
