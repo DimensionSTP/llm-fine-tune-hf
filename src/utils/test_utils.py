@@ -17,7 +17,7 @@ from huggingface_hub import snapshot_download
 
 from tqdm import tqdm
 
-from ..helpers.dataset_paths import resolve_dataset_file_paths
+from ..helpers.dataset_paths import resolve_dataset_file_specs
 from .collate_fns import collate_fn_vlm
 
 
@@ -246,32 +246,35 @@ def build_lora_request(
 def load_test_dataframe(
     config: DictConfig,
 ) -> pd.DataFrame:
-    data_paths = resolve_dataset_file_paths(
+    data_specs = resolve_dataset_file_specs(
         dataset_name=config.dataset_name,
         dataset_format=config.dataset_format,
         data_path=config.data_path,
         dataset_subdir=config.test_dataset_subdir,
         dataset_file_path=config.test_dataset_file_path,
         dataset_file_paths=config.test_dataset_file_paths,
+        dataset_files=config.test_dataset_files,
         allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
+        path_label="test_dataset",
+        allow_weight=False,
     )
 
     frames = []
-    for data_path in data_paths:
-        if config.dataset_format == "parquet":
-            frame = pd.read_parquet(data_path)
-        elif config.dataset_format in ["json", "jsonl"]:
+    for data_spec in data_specs:
+        if data_spec["format"] == "parquet":
+            frame = pd.read_parquet(data_spec["path"])
+        elif data_spec["format"] in ["json", "jsonl"]:
             frame = pd.read_json(
-                data_path,
-                lines=True if config.dataset_format == "jsonl" else False,
+                data_spec["path"],
+                lines=True if data_spec["format"] == "jsonl" else False,
             )
-        elif config.dataset_format in ["csv", "tsv"]:
+        elif data_spec["format"] in ["csv", "tsv"]:
             frame = pd.read_csv(
-                data_path,
-                sep="\t" if config.dataset_format == "tsv" else None,
+                data_spec["path"],
+                sep="\t" if data_spec["format"] == "tsv" else ",",
             )
         else:
-            raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
+            raise ValueError(f"Unsupported dataset format: {data_spec['format']}")
         frames.append(frame)
 
     if len(frames) == 1:
