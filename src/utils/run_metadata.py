@@ -12,6 +12,7 @@ from transformers import TrainingArguments
 
 from ..helpers.dataset_paths import build_dataset_file_path_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
+from .dataloader_runtime import resolve_dataloader_runtime
 from .peft_initialization import build_peft_initialization_metadata
 
 
@@ -398,7 +399,12 @@ def build_source_section() -> Dict[str, Any]:
 def build_runtime_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    return build_distributed_runtime_snapshot(config=config)
+    runtime_snapshot = build_distributed_runtime_snapshot(config=config)
+    runtime_snapshot["dataloader_runtime"] = resolve_dataloader_runtime(
+        config=config,
+        distributed_runtime_snapshot=runtime_snapshot,
+    )
+    return runtime_snapshot
 
 
 def build_summary_section(
@@ -438,8 +444,7 @@ def build_summary_section(
             "gradient_accumulation_steps",
             "devices",
             "distributed",
-            "workers_ratio",
-            "use_all_workers",
+            "dataloader_runtime",
             "lr",
             "weight_decay",
             "scheduler_type",
