@@ -4,13 +4,16 @@ import importlib
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
-load_dataset = datasets.load_dataset
 
 import math
 
 from PIL import Image
 
-from ..helpers.dataset_paths import resolve_dataset_file_path
+from ..helpers.dataset_paths import (
+    resolve_dataset_file_paths,
+    resolve_optional_dataset_file_paths,
+)
+from .dataset_loading import load_hf_train_val_datasets
 from .image_io import (
     build_image_io_settings,
     image_to_data_uri,
@@ -42,13 +45,21 @@ class StructuralDataset:
         decode_image_paths: bool,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
+        dataset_file_paths: Optional[List[str]],
         allow_dataset_file_name_mismatch: bool,
+        val_dataset_file_path: Optional[str],
+        val_dataset_file_paths: Optional[List[str]],
+        allow_val_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
+        self.dataset_file_paths = dataset_file_paths
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
+        self.val_dataset_file_path = val_dataset_file_path
+        self.val_dataset_file_paths = val_dataset_file_paths
+        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -72,25 +83,31 @@ class StructuralDataset:
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
-        full_data_path = resolve_dataset_file_path(
+        train_data_paths = resolve_dataset_file_paths(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
+            dataset_file_paths=self.dataset_file_paths,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
-
-        dataset_format = self.dataset_format
-        if dataset_format == "tsv":
-            dataset_format = "csv"
-        if dataset_format == "jsonl":
-            dataset_format = "json"
-
-        dataset = load_dataset(
-            dataset_format,
-            data_files=full_data_path,
-        )["train"]
+        val_data_paths = resolve_optional_dataset_file_paths(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_file_path=self.val_dataset_file_path,
+            dataset_file_paths=self.val_dataset_file_paths,
+            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
+            path_label="val_dataset",
+        )
+        loaded_datasets = load_hf_train_val_datasets(
+            dataset_format=self.dataset_format,
+            train_dataset_file_paths=train_data_paths,
+            val_dataset_file_paths=val_data_paths,
+        )
+        dataset = loaded_datasets["train"]
+        val_dataset = loaded_datasets["val"]
 
         output_column_names = [
             "prompt",
@@ -111,9 +128,17 @@ class StructuralDataset:
             batched=True,
             remove_columns=remove_columns,
         )
+        if val_dataset is not None:
+            val_dataset = val_dataset.map(
+                self.create_conversations,
+                batched=True,
+                remove_columns=remove_columns,
+            )
 
         if self.modality != "text":
             dataset = dataset.map(self._normalize_image_columns)
+            if val_dataset is not None:
+                val_dataset = val_dataset.map(self._normalize_image_columns)
 
         if (
             self._should_resize_images
@@ -121,18 +146,21 @@ class StructuralDataset:
             and not self.decode_image_paths
         ):
             dataset = dataset.map(self._resize_image_columns)
+            if val_dataset is not None:
+                val_dataset = val_dataset.map(self._resize_image_columns)
 
-        split_dataset = dataset.train_test_split(
-            test_size=self.split_ratio,
-            seed=self.seed,
-        )
-
-        if self.is_strict_split:
-            train_dataset = split_dataset["train"]
+        if val_dataset is None:
+            split_dataset = dataset.train_test_split(
+                test_size=self.split_ratio,
+                seed=self.seed,
+            )
+            if self.is_strict_split:
+                train_dataset = split_dataset["train"]
+            else:
+                train_dataset = dataset
+            val_dataset = split_dataset["test"]
         else:
             train_dataset = dataset
-
-        val_dataset = split_dataset["test"]
 
         if self.decode_image_paths or self.image_augmenter is not None:
             train_dataset = self._decode_image_paths(
@@ -439,13 +467,21 @@ class ConversationalDataset(StructuralDataset):
         decode_image_paths: bool,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
+        dataset_file_paths: Optional[List[str]],
         allow_dataset_file_name_mismatch: bool,
+        val_dataset_file_path: Optional[str],
+        val_dataset_file_paths: Optional[List[str]],
+        allow_val_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
+        self.dataset_file_paths = dataset_file_paths
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
+        self.val_dataset_file_path = val_dataset_file_path
+        self.val_dataset_file_paths = val_dataset_file_paths
+        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -467,31 +503,42 @@ class ConversationalDataset(StructuralDataset):
         )
 
     def __call__(self) -> Dict[str, HFDataset]:
-        full_data_path = resolve_dataset_file_path(
+        train_data_paths = resolve_dataset_file_paths(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
+            dataset_file_paths=self.dataset_file_paths,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
-
-        dataset_format = self.dataset_format
-        if dataset_format == "tsv":
-            dataset_format = "csv"
-        if dataset_format == "jsonl":
-            dataset_format = "json"
-
-        dataset = load_dataset(
-            dataset_format,
-            data_files=full_data_path,
-        )["train"]
+        val_data_paths = resolve_optional_dataset_file_paths(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_file_path=self.val_dataset_file_path,
+            dataset_file_paths=self.val_dataset_file_paths,
+            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
+            path_label="val_dataset",
+        )
+        loaded_datasets = load_hf_train_val_datasets(
+            dataset_format=self.dataset_format,
+            train_dataset_file_paths=train_data_paths,
+            val_dataset_file_paths=val_data_paths,
+        )
+        dataset = loaded_datasets["train"]
+        val_dataset = loaded_datasets["val"]
 
         if self.prompt_column_name != "prompt":
             dataset = dataset.rename_column(
                 self.prompt_column_name,
                 "prompt",
             )
+            if val_dataset is not None:
+                val_dataset = val_dataset.rename_column(
+                    self.prompt_column_name,
+                    "prompt",
+                )
 
         output_column_names = [
             "prompt",
@@ -508,9 +555,13 @@ class ConversationalDataset(StructuralDataset):
 
         if remove_columns:
             dataset = dataset.remove_columns(remove_columns)
+            if val_dataset is not None:
+                val_dataset = val_dataset.remove_columns(remove_columns)
 
         if self.modality != "text":
             dataset = dataset.map(self._normalize_image_columns)
+            if val_dataset is not None:
+                val_dataset = val_dataset.map(self._normalize_image_columns)
 
         if (
             self._should_resize_images
@@ -518,18 +569,21 @@ class ConversationalDataset(StructuralDataset):
             and not self.decode_image_paths
         ):
             dataset = dataset.map(self._resize_image_columns)
+            if val_dataset is not None:
+                val_dataset = val_dataset.map(self._resize_image_columns)
 
-        split_dataset = dataset.train_test_split(
-            test_size=self.split_ratio,
-            seed=self.seed,
-        )
-
-        if self.is_strict_split:
-            train_dataset = split_dataset["train"]
+        if val_dataset is None:
+            split_dataset = dataset.train_test_split(
+                test_size=self.split_ratio,
+                seed=self.seed,
+            )
+            if self.is_strict_split:
+                train_dataset = split_dataset["train"]
+            else:
+                train_dataset = dataset
+            val_dataset = split_dataset["test"]
         else:
             train_dataset = dataset
-
-        val_dataset = split_dataset["test"]
 
         if self.decode_image_paths or self.image_augmenter is not None:
             train_dataset = self._decode_image_paths(

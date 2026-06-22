@@ -17,7 +17,7 @@ from huggingface_hub import snapshot_download
 
 from tqdm import tqdm
 
-from ..helpers.dataset_paths import resolve_dataset_file_path
+from ..helpers.dataset_paths import resolve_dataset_file_paths
 from .collate_fns import collate_fn_vlm
 
 
@@ -246,29 +246,40 @@ def build_lora_request(
 def load_test_dataframe(
     config: DictConfig,
 ) -> pd.DataFrame:
-    full_data_path = resolve_dataset_file_path(
+    data_paths = resolve_dataset_file_paths(
         dataset_name=config.dataset_name,
         dataset_format=config.dataset_format,
         data_path=config.data_path,
         dataset_subdir=config.test_dataset_subdir,
         dataset_file_path=config.test_dataset_file_path,
+        dataset_file_paths=config.test_dataset_file_paths,
         allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
     )
 
-    if config.dataset_format == "parquet":
-        df = pd.read_parquet(full_data_path)
-    elif config.dataset_format in ["json", "jsonl"]:
-        df = pd.read_json(
-            full_data_path,
-            lines=True if config.dataset_format == "jsonl" else False,
-        )
-    elif config.dataset_format in ["csv", "tsv"]:
-        df = pd.read_csv(
-            full_data_path,
-            sep="\t" if config.dataset_format == "tsv" else None,
-        )
-    else:
-        raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
+    frames = []
+    for data_path in data_paths:
+        if config.dataset_format == "parquet":
+            frame = pd.read_parquet(data_path)
+        elif config.dataset_format in ["json", "jsonl"]:
+            frame = pd.read_json(
+                data_path,
+                lines=True if config.dataset_format == "jsonl" else False,
+            )
+        elif config.dataset_format in ["csv", "tsv"]:
+            frame = pd.read_csv(
+                data_path,
+                sep="\t" if config.dataset_format == "tsv" else None,
+            )
+        else:
+            raise ValueError(f"Unsupported dataset format: {config.dataset_format}")
+        frames.append(frame)
 
+    if len(frames) == 1:
+        df = frames[0]
+    else:
+        df = pd.concat(
+            frames,
+            ignore_index=True,
+        )
     df = df.fillna("_")
     return df

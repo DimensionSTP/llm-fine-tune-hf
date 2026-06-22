@@ -2,7 +2,6 @@ from typing import Dict, List, Tuple, Optional, Any
 import io
 import math
 
-import pandas as pd
 from sklearn.model_selection import train_test_split
 from PIL import Image
 
@@ -11,8 +10,12 @@ from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
 
-from ..helpers.dataset_paths import resolve_dataset_file_path
+from ..helpers.dataset_paths import (
+    resolve_dataset_file_paths,
+    resolve_optional_dataset_file_paths,
+)
 from ..helpers import build_enable_thinking_kwargs
+from .dataset_loading import load_pandas_dataset
 from .image_io import build_image_io_settings, load_image, normalize_image_source
 from .image_augmentation import _build_image_augmenter
 
@@ -51,14 +54,22 @@ class StructuralDataset(Dataset):
         response_end_template: Optional[str],
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
+        dataset_file_paths: Optional[List[str]],
         allow_dataset_file_name_mismatch: bool,
+        val_dataset_file_path: Optional[str],
+        val_dataset_file_paths: Optional[List[str]],
+        allow_val_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
         sft_label_mask: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
+        self.dataset_file_paths = dataset_file_paths
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
+        self.val_dataset_file_path = val_dataset_file_path
+        self.val_dataset_file_paths = val_dataset_file_paths
+        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
         self.split = split
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
@@ -212,45 +223,51 @@ class StructuralDataset(Dataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        if self.split in ["train", "val"]:
-            full_data_path = resolve_dataset_file_path(
+        val_data_paths = resolve_optional_dataset_file_paths(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_file_path=self.val_dataset_file_path,
+            dataset_file_paths=self.val_dataset_file_paths,
+            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
+            path_label="val_dataset",
+        )
+
+        if self.split == "val" and val_data_paths is not None:
+            data = load_pandas_dataset(
+                dataset_format=self.dataset_format,
+                dataset_file_paths=val_data_paths,
+            )
+        elif self.split in ["train", "val"]:
+            train_data_paths = resolve_dataset_file_paths(
                 dataset_name=self.dataset_name,
                 dataset_format=self.dataset_format,
                 data_path=self.data_path,
                 dataset_subdir=self.dataset_subdir,
                 dataset_file_path=self.dataset_file_path,
+                dataset_file_paths=self.dataset_file_paths,
                 allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+            )
+            data = load_pandas_dataset(
+                dataset_format=self.dataset_format,
+                dataset_file_paths=train_data_paths,
             )
         else:
             raise ValueError(f"Inavalid split: {self.split}")
 
-        if self.dataset_format == "parquet":
-            data = pd.read_parquet(full_data_path)
-        elif self.dataset_format in ["json", "jsonl"]:
-            data = pd.read_json(
-                full_data_path,
-                lines=True if self.dataset_format == "jsonl" else False,
-            )
-        elif self.dataset_format in ["csv", "tsv"]:
-            data = pd.read_csv(
-                full_data_path,
-                sep="\t" if self.dataset_format == "tsv" else None,
-            )
-        else:
-            raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
-
         data = data.fillna("_")
 
-        train_data, val_data = train_test_split(
-            data,
-            test_size=self.split_ratio,
-            random_state=self.seed,
-            shuffle=True,
-        )
-        if self.split == "train" and self.is_strict_split:
-            data = train_data
-        if self.split == "val":
-            data = val_data
+        if val_data_paths is None:
+            train_data, val_data = train_test_split(
+                data,
+                test_size=self.split_ratio,
+                random_state=self.seed,
+                shuffle=True,
+            )
+            if self.split == "train" and self.is_strict_split:
+                data = train_data
+            if self.split == "val":
+                data = val_data
 
         datas = data[self.data_column_name].tolist()
         labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
@@ -783,14 +800,22 @@ class ConversationalDataset(StructuralDataset):
         response_end_template: Optional[str],
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
+        dataset_file_paths: Optional[List[str]],
         allow_dataset_file_name_mismatch: bool,
+        val_dataset_file_path: Optional[str],
+        val_dataset_file_paths: Optional[List[str]],
+        allow_val_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
         sft_label_mask: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
+        self.dataset_file_paths = dataset_file_paths
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
+        self.val_dataset_file_path = val_dataset_file_path
+        self.val_dataset_file_paths = val_dataset_file_paths
+        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
         self.split = split
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
@@ -942,45 +967,51 @@ class ConversationalDataset(StructuralDataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        if self.split in ["train", "val"]:
-            full_data_path = resolve_dataset_file_path(
+        val_data_paths = resolve_optional_dataset_file_paths(
+            dataset_name=self.dataset_name,
+            dataset_format=self.dataset_format,
+            data_path=self.data_path,
+            dataset_file_path=self.val_dataset_file_path,
+            dataset_file_paths=self.val_dataset_file_paths,
+            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
+            path_label="val_dataset",
+        )
+
+        if self.split == "val" and val_data_paths is not None:
+            data = load_pandas_dataset(
+                dataset_format=self.dataset_format,
+                dataset_file_paths=val_data_paths,
+            )
+        elif self.split in ["train", "val"]:
+            train_data_paths = resolve_dataset_file_paths(
                 dataset_name=self.dataset_name,
                 dataset_format=self.dataset_format,
                 data_path=self.data_path,
                 dataset_subdir=self.dataset_subdir,
                 dataset_file_path=self.dataset_file_path,
+                dataset_file_paths=self.dataset_file_paths,
                 allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
+            )
+            data = load_pandas_dataset(
+                dataset_format=self.dataset_format,
+                dataset_file_paths=train_data_paths,
             )
         else:
             raise ValueError(f"Inavalid split: {self.split}")
 
-        if self.dataset_format == "parquet":
-            data = pd.read_parquet(full_data_path)
-        elif self.dataset_format in ["json", "jsonl"]:
-            data = pd.read_json(
-                full_data_path,
-                lines=True if self.dataset_format == "jsonl" else False,
-            )
-        elif self.dataset_format in ["csv", "tsv"]:
-            data = pd.read_csv(
-                full_data_path,
-                sep="\t" if self.dataset_format == "tsv" else None,
-            )
-        else:
-            raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
-
         data = data.fillna("_")
 
-        train_data, val_data = train_test_split(
-            data,
-            test_size=self.split_ratio,
-            random_state=self.seed,
-            shuffle=True,
-        )
-        if self.split == "train" and self.is_strict_split:
-            data = train_data
-        if self.split == "val":
-            data = val_data
+        if val_data_paths is None:
+            train_data, val_data = train_test_split(
+                data,
+                test_size=self.split_ratio,
+                random_state=self.seed,
+                shuffle=True,
+            )
+            if self.split == "train" and self.is_strict_split:
+                data = train_data
+            if self.split == "val":
+                data = val_data
 
         conversations = data[self.conversation_column_name].tolist()
         return {

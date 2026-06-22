@@ -3,7 +3,6 @@ from typing import Dict, List, Tuple, Optional, Any
 import io
 import math
 
-import pandas as pd
 from PIL import Image
 
 import torch
@@ -11,8 +10,9 @@ from torch.utils.data import Dataset
 
 from transformers import AutoTokenizer, AutoProcessor
 
-from ..helpers.dataset_paths import resolve_dataset_file_path
+from ..helpers.dataset_paths import resolve_dataset_file_paths
 from ..helpers import build_enable_thinking_kwargs
+from .dataset_loading import load_pandas_dataset
 from .image_io import build_image_io_settings, load_image, normalize_image_source
 
 
@@ -40,12 +40,14 @@ class StructuralDataset(Dataset):
         max_length: int,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
+        dataset_file_paths: Optional[List[str]],
         allow_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
+        self.dataset_file_paths = dataset_file_paths
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
@@ -159,29 +161,19 @@ class StructuralDataset(Dataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        full_data_path = resolve_dataset_file_path(
+        data_paths = resolve_dataset_file_paths(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
+            dataset_file_paths=self.dataset_file_paths,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
-
-        if self.dataset_format == "parquet":
-            data = pd.read_parquet(full_data_path)
-        elif self.dataset_format in ["json", "jsonl"]:
-            data = pd.read_json(
-                full_data_path,
-                lines=True if self.dataset_format == "jsonl" else False,
-            )
-        elif self.dataset_format in ["csv", "tsv"]:
-            data = pd.read_csv(
-                full_data_path,
-                sep="\t" if self.dataset_format == "tsv" else None,
-            )
-        else:
-            raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
+        data = load_pandas_dataset(
+            dataset_format=self.dataset_format,
+            dataset_file_paths=data_paths,
+        )
 
         data = data.fillna("_")
 
@@ -371,12 +363,14 @@ class ConversationalDataset(StructuralDataset):
         max_length: int,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
+        dataset_file_paths: Optional[List[str]],
         allow_dataset_file_name_mismatch: bool,
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
+        self.dataset_file_paths = dataset_file_paths
         self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
@@ -490,29 +484,19 @@ class ConversationalDataset(StructuralDataset):
         return encoded
 
     def get_dataset(self) -> Dict[str, List[Any]]:
-        full_data_path = resolve_dataset_file_path(
+        data_paths = resolve_dataset_file_paths(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
             data_path=self.data_path,
             dataset_subdir=self.dataset_subdir,
             dataset_file_path=self.dataset_file_path,
+            dataset_file_paths=self.dataset_file_paths,
             allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
         )
-
-        if self.dataset_format == "parquet":
-            data = pd.read_parquet(full_data_path)
-        elif self.dataset_format in ["json", "jsonl"]:
-            data = pd.read_json(
-                full_data_path,
-                lines=True if self.dataset_format == "jsonl" else False,
-            )
-        elif self.dataset_format in ["csv", "tsv"]:
-            data = pd.read_csv(
-                full_data_path,
-                sep="\t" if self.dataset_format == "tsv" else None,
-            )
-        else:
-            raise ValueError(f"Unsupported dataset format: {self.dataset_format}")
+        data = load_pandas_dataset(
+            dataset_format=self.dataset_format,
+            dataset_file_paths=data_paths,
+        )
 
         data = data.fillna("_")
 
