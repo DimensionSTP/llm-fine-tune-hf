@@ -10,7 +10,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from transformers import TrainingArguments
 
-from ..helpers.dataset_paths import build_dataset_file_path_metadata
+from ..helpers.dataset_paths import build_dataset_input_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import resolve_dataloader_runtime
 from .peft_initialization import build_peft_initialization_metadata
@@ -350,6 +350,8 @@ def build_run_section(
         "fine_tune_method": config.fine_tune_method,
         "model_name": config.model_name,
         "dataset_name": config.dataset_name,
+        "dataset_mix_name": config.dataset_mix_name,
+        "effective_dataset_name": config.effective_dataset_name,
         "strategy": config.strategy,
         "logging_name": config.logging_name,
         "run_name": config.run_name,
@@ -359,26 +361,38 @@ def build_run_section(
 def build_paths_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
+    dataset_metadata = build_dataset_input_metadata(
+        dataset_name=config.dataset_name,
+        dataset_format=config.dataset_format,
+        data_path=config.data_path,
+        dataset_subdir=config.dataset_subdir,
+        dataset_file_path=config.dataset_file_path,
+        dataset_file_paths=config.dataset_file_paths,
+        allow_dataset_file_name_mismatch=config.allow_dataset_file_name_mismatch,
+        val_dataset_file_path=config.val_dataset_file_path,
+        val_dataset_file_paths=config.val_dataset_file_paths,
+        allow_val_dataset_file_name_mismatch=config.allow_val_dataset_file_name_mismatch,
+        test_dataset_subdir=config.test_dataset_subdir,
+        test_dataset_file_path=config.test_dataset_file_path,
+        test_dataset_file_paths=config.test_dataset_file_paths,
+        allow_test_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
+        dataset_mix_name=config.dataset_mix_name,
+        effective_dataset_name=config.effective_dataset_name,
+        use_validation=config.use_validation,
+    )
     return {
         "output_base_dir": config.output_base_dir,
         "output_dir": config.output_dir,
         "save_detail": config.save_detail,
-        "dataset": build_dataset_file_path_metadata(
-            dataset_name=config.dataset_name,
-            dataset_format=config.dataset_format,
-            data_path=config.data_path,
-            dataset_subdir=config.dataset_subdir,
-            dataset_file_path=config.dataset_file_path,
-            allow_dataset_file_name_mismatch=config.allow_dataset_file_name_mismatch,
-        ),
-        "test_dataset": build_dataset_file_path_metadata(
-            dataset_name=config.dataset_name,
-            dataset_format=config.dataset_format,
-            data_path=config.data_path,
-            dataset_subdir=config.test_dataset_subdir,
-            dataset_file_path=config.test_dataset_file_path,
-            allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
-        ),
+        "dataset": dataset_metadata,
+        "test_dataset": {
+            "dataset_name": config.dataset_name,
+            "dataset_format": config.dataset_format,
+            "test_input_mode": dataset_metadata["test_input_mode"],
+            "resolved_test_dataset_file_paths": dataset_metadata[
+                "resolved_test_dataset_file_paths"
+            ],
+        },
     }
 
 
@@ -423,13 +437,20 @@ def build_summary_section(
             "pretrained_model_name",
             "revision",
             "dataset_name",
+            "dataset_mix_name",
+            "effective_dataset_name",
             "dataset_format",
             "data_path",
             "dataset_subdir",
             "dataset_file_path",
+            "dataset_file_paths",
             "allow_dataset_file_name_mismatch",
+            "val_dataset_file_path",
+            "val_dataset_file_paths",
+            "allow_val_dataset_file_name_mismatch",
             "test_dataset_subdir",
             "test_dataset_file_path",
+            "test_dataset_file_paths",
             "allow_test_dataset_file_name_mismatch",
             "dataset_image",
             "data_type",

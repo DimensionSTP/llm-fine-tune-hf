@@ -11,6 +11,8 @@ from .model_loading import ModelLoadPlanner
 def validate_training_arguments_config(
     config: DictConfig,
 ) -> None:
+    _validate_dataset_input_config(config=config)
+
     if config.fine_tune_method == "async_grpo" and config.strategy == "deepspeed":
         raise ValueError(
             "async_grpo does not support strategy=deepspeed yet. "
@@ -136,3 +138,41 @@ def _build_distributed_validation_messages(
         )
 
     return messages
+
+
+def _validate_dataset_input_config(
+    config: DictConfig,
+) -> None:
+    if config.dataset_file_path is not None and config.dataset_file_paths is not None:
+        raise ValueError(
+            "dataset_file_path and dataset_file_paths are mutually exclusive."
+        )
+
+    if (
+        config.val_dataset_file_path is not None
+        and config.val_dataset_file_paths is not None
+    ):
+        raise ValueError(
+            "val_dataset_file_path and val_dataset_file_paths are mutually exclusive."
+        )
+
+    if (
+        config.test_dataset_file_path is not None
+        and config.test_dataset_file_paths is not None
+    ):
+        raise ValueError(
+            "test_dataset_file_path and test_dataset_file_paths are mutually exclusive."
+        )
+
+    if config.dataset_file_paths is not None and (
+        config.dataset_mix_name is None or config.dataset_mix_name.strip() == ""
+    ):
+        raise ValueError("dataset_mix_name is required when dataset_file_paths is set.")
+
+    if config.use_validation:
+        return
+
+    if config.val_dataset_file_path is None and config.val_dataset_file_paths is None:
+        return
+
+    raise ValueError("val_dataset_file_path(s) require use_validation=true.")

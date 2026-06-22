@@ -2,6 +2,8 @@ from typing import Any
 
 from omegaconf import DictConfig, OmegaConf
 
+from ..helpers import resolve_effective_dataset_name
+
 
 def _to_float(
     value: Any,
@@ -50,5 +52,10 @@ def register_hydra_resolvers() -> None:
     OmegaConf.register_new_resolver(
         "reward_save_suffix",
         _reward_save_suffix,
+        replace=True,
+    )
+    OmegaConf.register_new_resolver(
+        "dataset_effective_name",
+        resolve_effective_dataset_name,
         replace=True,
     )
