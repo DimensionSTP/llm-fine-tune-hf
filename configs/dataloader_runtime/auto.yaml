@@ -1,0 +1,9 @@
+# @package _global_
+dataloader_runtime:
+  mode: auto
+  workload: auto
+  num_workers_per_process: null
+  max_workers_per_process: 8
+  persistent_workers: null
+  prefetch_factor: null
+  pin_memory: true
