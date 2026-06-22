@@ -35,6 +35,7 @@ beta: ${beta}
 epsilon: ${epsilon}
 epsilon_high: ${epsilon_high}
 num_generations: ${num_generations}
+steps_per_generation: ${steps_per_generation}
 temperature: ${generation_config.temperature}
 top_p: ${generation_config.top_p}
 top_k: ${generation_config.top_k}

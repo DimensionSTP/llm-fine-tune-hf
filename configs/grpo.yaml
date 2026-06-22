@@ -132,6 +132,7 @@ beta: 0.0
 epsilon: 0.2
 epsilon_high: null
 num_generations: 16
+steps_per_generation: null
 log_completions: false
 importance_sampling_level: token
 loss_type: sapo
