@@ -47,8 +47,6 @@ temperature=0.6
 top_p=0.95
 top_k=20
 eval_batch_size=16
-workers_ratio=8
-use_all_workers=False
 num_gpus=$(nvidia-smi -L | wc -l)
 
 for model_type in "${model_types[@]}"
@@ -76,8 +74,6 @@ do
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
             eval_batch_size=$eval_batch_size \
-            workers_ratio=$workers_ratio \
-            use_all_workers=$use_all_workers
     done
 done
 
@@ -130,8 +126,6 @@ temperature=0.6
 top_p=0.95
 top_k=20
 eval_batch_size=16
-workers_ratio=8
-use_all_workers=False
 num_gpus=$(nvidia-smi -L | wc -l)
 
 for model_type in "${model_types[@]}"
@@ -159,8 +153,6 @@ do
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
             eval_batch_size=$eval_batch_size \
-            workers_ratio=$workers_ratio \
-            use_all_workers=$use_all_workers
     done
 done
 
@@ -217,8 +209,6 @@ temperature=0.6
 top_p=0.95
 top_k=20
 eval_batch_size=16
-workers_ratio=8
-use_all_workers=False
 num_gpus=$(nvidia-smi -L | wc -l)
 
 for model_type in "${model_types[@]}"
@@ -255,7 +245,5 @@ do
             generation_config.top_k=$top_k \
             eval_batch_size=$eval_batch_size \
             test_output_dir=$test_output_dir \
-            workers_ratio=$workers_ratio \
-            use_all_workers=$use_all_workers
     done
 done
