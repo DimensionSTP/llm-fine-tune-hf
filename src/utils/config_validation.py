@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Any
 import os
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
 
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import validate_dataloader_runtime_config
@@ -143,36 +143,131 @@ def _build_distributed_validation_messages(
 def _validate_dataset_input_config(
     config: DictConfig,
 ) -> None:
-    if config.dataset_file_path is not None and config.dataset_file_paths is not None:
-        raise ValueError(
-            "dataset_file_path and dataset_file_paths are mutually exclusive."
-        )
+    _validate_exclusive_dataset_inputs(
+        path_label="dataset",
+        dataset_file_path=config.dataset_file_path,
+        dataset_file_paths=config.dataset_file_paths,
+        dataset_files=config.dataset_files,
+    )
+    _validate_exclusive_dataset_inputs(
+        path_label="val_dataset",
+        dataset_file_path=config.val_dataset_file_path,
+        dataset_file_paths=config.val_dataset_file_paths,
+        dataset_files=config.val_dataset_files,
+    )
+    _validate_exclusive_dataset_inputs(
+        path_label="test_dataset",
+        dataset_file_path=config.test_dataset_file_path,
+        dataset_file_paths=config.test_dataset_file_paths,
+        dataset_files=config.test_dataset_files,
+    )
 
-    if (
-        config.val_dataset_file_path is not None
-        and config.val_dataset_file_paths is not None
-    ):
-        raise ValueError(
-            "val_dataset_file_path and val_dataset_file_paths are mutually exclusive."
-        )
-
-    if (
-        config.test_dataset_file_path is not None
-        and config.test_dataset_file_paths is not None
-    ):
-        raise ValueError(
-            "test_dataset_file_path and test_dataset_file_paths are mutually exclusive."
-        )
-
-    if config.dataset_file_paths is not None and (
+    if (config.dataset_file_paths is not None or config.dataset_files is not None) and (
         config.dataset_mix_name is None or config.dataset_mix_name.strip() == ""
     ):
-        raise ValueError("dataset_mix_name is required when dataset_file_paths is set.")
+        raise ValueError(
+            "dataset_mix_name is required when dataset_file_paths or dataset_files is set."
+        )
+
+    _validate_dataset_resampling_config(config=config)
+    _validate_dataset_files_without_weight(
+        dataset_files=config.val_dataset_files,
+        path_label="val_dataset",
+    )
+    _validate_dataset_files_without_weight(
+        dataset_files=config.test_dataset_files,
+        path_label="test_dataset",
+    )
 
     if config.use_validation:
         return
 
-    if config.val_dataset_file_path is None and config.val_dataset_file_paths is None:
+    if (
+        config.val_dataset_file_path is None
+        and config.val_dataset_file_paths is None
+        and config.val_dataset_files is None
+    ):
         return
 
     raise ValueError("val_dataset_file_path(s) require use_validation=true.")
+
+
+def _validate_exclusive_dataset_inputs(
+    path_label: str,
+    dataset_file_path: Optional[str],
+    dataset_file_paths: Optional[ListConfig],
+    dataset_files: Optional[ListConfig],
+) -> None:
+    enabled_count = sum(
+        item is not None
+        for item in [
+            dataset_file_path,
+            dataset_file_paths,
+            dataset_files,
+        ]
+    )
+    if enabled_count <= 1:
+        return
+    raise ValueError(
+        f"{path_label}_file_path, {path_label}_file_paths, and {path_label}_files are mutually exclusive."
+    )
+
+
+def _validate_dataset_resampling_config(
+    config: DictConfig,
+) -> None:
+    if config.dataset_resampling.strategy != "weighted_offline":
+        raise ValueError("dataset_resampling.strategy must be weighted_offline.")
+    if config.dataset_resampling.target_size is not None:
+        if not isinstance(config.dataset_resampling.target_size, int):
+            raise ValueError(
+                "dataset_resampling.target_size must be an integer or null."
+            )
+        if config.dataset_resampling.target_size <= 0:
+            raise ValueError("dataset_resampling.target_size must be positive.")
+    if config.dataset_resampling.enabled:
+        if config.dataset_files is None:
+            raise ValueError("dataset_resampling.enabled=true requires dataset_files.")
+        _validate_dataset_files_with_weight(
+            dataset_files=config.dataset_files,
+            path_label="dataset",
+        )
+        return
+    _validate_dataset_files_without_weight(
+        dataset_files=config.dataset_files,
+        path_label="dataset",
+    )
+
+
+def _validate_dataset_files_with_weight(
+    dataset_files: Optional[ListConfig],
+    path_label: str,
+) -> None:
+    if dataset_files is None:
+        return
+    for dataset_file in dataset_files:
+        if "weight" not in dataset_file:
+            raise ValueError(
+                f"{path_label}_files weight is required when resampling is enabled."
+            )
+        if dataset_file.weight is None:
+            raise ValueError(
+                f"{path_label}_files weight is required when resampling is enabled."
+            )
+        if dataset_file.weight <= 0:
+            raise ValueError(f"{path_label}_files weight must be positive.")
+
+
+def _validate_dataset_files_without_weight(
+    dataset_files: Optional[ListConfig],
+    path_label: str,
+) -> None:
+    if dataset_files is None:
+        return
+    for dataset_file in dataset_files:
+        if "weight" in dataset_file and dataset_file.weight is not None:
+            if path_label != "dataset":
+                raise ValueError(f"{path_label}_files do not support weight.")
+            raise ValueError(
+                f"{path_label}_files weight requires dataset_resampling.enabled=true."
+            )
