@@ -9,10 +9,13 @@ structural:
   dataset_subdir: ${dataset_subdir}
   dataset_file_path: ${dataset_file_path}
   dataset_file_paths: ${dataset_file_paths}
+  dataset_files: ${dataset_files}
   allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   val_dataset_file_path: ${val_dataset_file_path}
   val_dataset_file_paths: ${val_dataset_file_paths}
+  val_dataset_files: ${val_dataset_files}
   allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
+  dataset_resampling: ${dataset_resampling}
   data_column_name: ${data_column_name}
   solution_column_name: ${solution_column_name}
   reward_categories_column_name: ${reward_categories_column_name}
@@ -36,10 +39,13 @@ conversational:
   dataset_subdir: ${dataset_subdir}
   dataset_file_path: ${dataset_file_path}
   dataset_file_paths: ${dataset_file_paths}
+  dataset_files: ${dataset_files}
   allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   val_dataset_file_path: ${val_dataset_file_path}
   val_dataset_file_paths: ${val_dataset_file_paths}
+  val_dataset_files: ${val_dataset_files}
   allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
+  dataset_resampling: ${dataset_resampling}
   prompt_column_name: ${prompt_column_name}
   solution_column_name: ${solution_column_name}
   reward_categories_column_name: ${reward_categories_column_name}

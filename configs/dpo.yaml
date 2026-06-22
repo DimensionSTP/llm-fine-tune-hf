@@ -41,15 +41,23 @@ data_path: ${connected_dir}/data
 dataset_subdir: null
 dataset_file_path: null
 dataset_file_paths: null
+dataset_files: null
 allow_dataset_file_name_mismatch: false
 val_dataset_file_path: null
 val_dataset_file_paths: null
+val_dataset_files: null
 allow_val_dataset_file_name_mismatch: false
+dataset_resampling:
+  enabled: false
+  strategy: weighted_offline
+  replacement: false
+  target_size: null
 dataset_mix_name: null
-effective_dataset_name: ${dataset_effective_name:${dataset_name},${dataset_mix_name},${dataset_file_paths}}
+effective_dataset_name: ${dataset_effective_name:${dataset_name},${dataset_mix_name},${dataset_file_paths},${dataset_files}}
 test_dataset_subdir: ${test_data_dir}
 test_dataset_file_path: null
 test_dataset_file_paths: null
+test_dataset_files: null
 allow_test_dataset_file_name_mismatch: false
 is_preprocessed: false
 data_column_name: input

@@ -10,10 +10,13 @@ structural:
   dataset_subdir: ${dataset_subdir}
   dataset_file_path: ${dataset_file_path}
   dataset_file_paths: ${dataset_file_paths}
+  dataset_files: ${dataset_files}
   allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   val_dataset_file_path: ${val_dataset_file_path}
   val_dataset_file_paths: ${val_dataset_file_paths}
+  val_dataset_files: ${val_dataset_files}
   allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
+  dataset_resampling: ${dataset_resampling}
   is_sft: ${is_sft}
   is_preprocessed: ${is_preprocessed}
   data_column_name: ${data_column_name}
@@ -51,10 +54,13 @@ conversational:
   dataset_subdir: ${dataset_subdir}
   dataset_file_path: ${dataset_file_path}
   dataset_file_paths: ${dataset_file_paths}
+  dataset_files: ${dataset_files}
   allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
   val_dataset_file_path: ${val_dataset_file_path}
   val_dataset_file_paths: ${val_dataset_file_paths}
+  val_dataset_files: ${val_dataset_files}
   allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
+  dataset_resampling: ${dataset_resampling}
   is_sft: ${is_sft}
   is_preprocessed: ${is_preprocessed}
   conversation_column_name: ${conversation_column_name}
