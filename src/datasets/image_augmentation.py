@@ -1335,7 +1335,6 @@ def _to_list(
 
 def _load_albumentations_modules() -> Tuple[Any, Any, Any]:
     try:
-        # Lazy import keeps default disabled/PIL paths free of optional dependency warnings.
         os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
         import albumentations as albumentations_module
         import cv2 as cv2_module

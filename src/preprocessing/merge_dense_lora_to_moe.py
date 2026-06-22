@@ -113,9 +113,9 @@ def _validate_list_length(
 
 @dataclass
 class LoraWeights:
-    A: torch.Tensor  # [r, in]
-    B: torch.Tensor  # [out, r]
-    scale: float  # (lora_alpha / r) from adapter config
+    A: torch.Tensor
+    B: torch.Tensor
+    scale: float
 
 
 def _load_lora_state_dict(adapter_dir: str) -> Dict[str, torch.Tensor]:
