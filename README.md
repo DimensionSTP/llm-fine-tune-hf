@@ -390,6 +390,8 @@ image_augmentation.albumentations.seasoning.probability=1.0
 
 For Qwen3-VL GRPO with colocated vLLM, small smoke runs may need an explicit `training_arguments.vllm_max_model_length` because the model advertises a very long context window and vLLM sizes KV cache from that value.
 
+GRPO and SDPO expose `steps_per_generation` as an optional generation cadence control. The default `null` preserves TRL behavior, which resolves it to `gradient_accumulation_steps`. Lower values reduce the generation batch size and can reduce peak generation/buffer VRAM, but they usually increase generation frequency and may reduce throughput. Async GRPO does not expose this option in the current TRL API, and GOLD keeps its separate `generation_batch_size` contract because TRL's GOLDConfig does not expose `steps_per_generation`.
+
 VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
 
 VLM dataset inputs use the image controls listed below where the selected dataset loader supports image fields. The default modality remains `text`.
