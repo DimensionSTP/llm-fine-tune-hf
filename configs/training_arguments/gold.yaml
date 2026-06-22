@@ -16,8 +16,6 @@ do_eval: ${use_validation}
 eval_strategy: ${eval_strategy}
 per_device_train_batch_size: ${batch_size}
 per_device_eval_batch_size: ${eval_batch_size}
-dataloader_num_workers: ${workers_ratio}
-dataloader_pin_memory: true
 num_train_epochs: ${epoch}
 bf16: ${is_bf16}
 bf16_full_eval: ${is_bf16}
