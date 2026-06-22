@@ -38,8 +38,6 @@ weight_decay=1e-1
 warmup_ratio=5e-2
 epoch=2
 step=250
-workers_ratio=8
-use_all_workers=False
 
 declare -A reward_weights=(
     ["think_format"]=0.0
@@ -113,6 +111,4 @@ accelerate launch main.py --config-name=a2po.yaml mode=train \
     weight_decay=$weight_decay \
     warmup_ratio=$warmup_ratio \
     epoch=$epoch \
-    step=$step \
-    workers_ratio=$workers_ratio \
-    use_all_workers=$use_all_workers
+    step=$step
