@@ -3609,6 +3609,24 @@ class GroundingSelectionReward(BaseReward):
         partial_match_weight: float,
         over_selection_penalty: float,
         wrong_selection_penalty: float,
+        partial_match_cap: float,
+        multi_fragment_partial_match_cap: float,
+        missing_gold_id_penalty: float,
+        single_id_partial_cap: float,
+        short_multi_id_partial_cap: float,
+        long_multi_id_partial_cap: float,
+        very_long_multi_id_partial_cap: float,
+        over_selection_cap: float,
+        wrong_occurrence_cap: float,
+        wrong_occurrence_overlap_threshold: float,
+        extra_selected_id_penalty: float,
+        schema_only_reward_cap: float,
+        empty_selection_reward_cap: float,
+        invalid_schema_reward_cap: float,
+        extra_target_reward_cap: float,
+        target_quality_aggregation: str,
+        hard_target_min_gold_ids: int,
+        hard_target_weight: float,
         min_reward: float,
         max_reward: float,
         schema_keys: Optional[Dict[str, List[str]]],
@@ -3630,9 +3648,28 @@ class GroundingSelectionReward(BaseReward):
         self.partial_match_weight = partial_match_weight
         self.over_selection_penalty = over_selection_penalty
         self.wrong_selection_penalty = wrong_selection_penalty
+        self.partial_match_cap = partial_match_cap
+        self.multi_fragment_partial_match_cap = multi_fragment_partial_match_cap
+        self.missing_gold_id_penalty = missing_gold_id_penalty
+        self.single_id_partial_cap = single_id_partial_cap
+        self.short_multi_id_partial_cap = short_multi_id_partial_cap
+        self.long_multi_id_partial_cap = long_multi_id_partial_cap
+        self.very_long_multi_id_partial_cap = very_long_multi_id_partial_cap
+        self.over_selection_cap = over_selection_cap
+        self.wrong_occurrence_cap = wrong_occurrence_cap
+        self.wrong_occurrence_overlap_threshold = wrong_occurrence_overlap_threshold
+        self.extra_selected_id_penalty = extra_selected_id_penalty
+        self.schema_only_reward_cap = schema_only_reward_cap
+        self.empty_selection_reward_cap = empty_selection_reward_cap
+        self.invalid_schema_reward_cap = invalid_schema_reward_cap
+        self.extra_target_reward_cap = extra_target_reward_cap
+        self.target_quality_aggregation = target_quality_aggregation
+        self.hard_target_min_gold_ids = hard_target_min_gold_ids
+        self.hard_target_weight = hard_target_weight
         self.min_reward = min_reward
         self.max_reward = max_reward
         self.schema_keys = self._normalize_schema_keys(schema_keys=schema_keys)
+        self._validate_target_quality_aggregation()
 
     def compute(
         self,
@@ -3715,11 +3752,21 @@ class GroundingSelectionReward(BaseReward):
             gold_item_map=gold_item_map,
         )
         reward = base_reward + max(0.0, self.max_reward - base_reward) * quality
-        reward += self._compute_extra_target_penalty(
+        reward = self._apply_schema_only_policy(
+            reward=reward,
+            quality=quality,
+            prediction_item_map=prediction_item_map,
+        )
+        reward = self._apply_extra_target_policy(
+            reward=reward,
             prediction_item_map=prediction_item_map,
             gold_item_map=gold_item_map,
         )
         reward += self.wrong_selection_penalty * prediction_invalid_count
+        reward = self._apply_invalid_schema_policy(
+            reward=reward,
+            prediction_schema_valid=prediction_schema_valid,
+        )
         return self._clip_reward(reward=reward)
 
     def _compute_target_quality(
@@ -3730,17 +3777,23 @@ class GroundingSelectionReward(BaseReward):
         if not gold_item_map:
             return 1.0 if not prediction_item_map else 0.0
 
-        total_quality = 0.0
+        target_qualities: List[Tuple[float, Dict[str, Any]]] = []
         for target_id, gold_item in gold_item_map.items():
             prediction_item = prediction_item_map.get(target_id)
             if prediction_item is None:
+                target_qualities.append((0.0, gold_item))
                 continue
-            total_quality += self._compute_item_quality(
-                prediction_item=prediction_item,
-                gold_item=gold_item,
+            target_qualities.append(
+                (
+                    self._compute_item_quality(
+                        prediction_item=prediction_item,
+                        gold_item=gold_item,
+                    ),
+                    gold_item,
+                )
             )
 
-        return total_quality / len(gold_item_map)
+        return self._aggregate_target_qualities(target_qualities=target_qualities)
 
     def _compute_item_quality(
         self,
@@ -3764,32 +3817,276 @@ class GroundingSelectionReward(BaseReward):
         if prediction_ids == gold_ids:
             return 1.0
 
+        quality = self._compute_non_exact_selection_quality(
+            prediction_ids=prediction_ids,
+            gold_ids=gold_ids,
+            max_item_score=max_item_score,
+        )
+        missing_gold_ids = gold_ids - prediction_ids
+        return self._apply_partial_selection_policy(
+            quality=quality,
+            prediction_ids=prediction_ids,
+            gold_ids=gold_ids,
+            missing_gold_count=len(missing_gold_ids),
+            extra_selected_count=len(prediction_ids - gold_ids),
+        )
+
+    def _compute_non_exact_selection_quality(
+        self,
+        prediction_ids: Set[int],
+        gold_ids: Set[int],
+        max_item_score: float,
+    ) -> float:
+        extra_selected_count = len(prediction_ids - gold_ids)
         item_score = self.partial_match_weight * self._selection_f1(
             pred_selected_ids=prediction_ids,
             gold_selected_ids=gold_ids,
         )
-        if prediction_ids - gold_ids:
+        if extra_selected_count > 0:
             item_score += self.wrong_selection_penalty
         if len(prediction_ids) > len(gold_ids):
             item_score += self.over_selection_penalty
 
-        return min(
+        quality = min(
             1.0,
             max(
                 0.0,
                 item_score / max_item_score,
             ),
         )
+        return quality
 
-    def _compute_extra_target_penalty(
+    def _apply_partial_selection_policy(
         self,
+        quality: float,
+        prediction_ids: Set[int],
+        gold_ids: Set[int],
+        missing_gold_count: int,
+        extra_selected_count: int,
+    ) -> float:
+        capped_quality = min(
+            quality,
+            self._get_partial_match_cap(gold_id_count=len(gold_ids)),
+        )
+        if missing_gold_count == 0:
+            return self._apply_extra_selection_policy(
+                quality=capped_quality,
+                extra_selected_count=extra_selected_count,
+            )
+
+        if self._is_wrong_occurrence(
+            prediction_ids=prediction_ids,
+            gold_ids=gold_ids,
+        ):
+            capped_quality = min(
+                capped_quality,
+                self.wrong_occurrence_cap,
+            )
+        capped_quality += self.missing_gold_id_penalty * missing_gold_count
+        capped_quality = self._apply_extra_selection_policy(
+            quality=capped_quality,
+            extra_selected_count=extra_selected_count,
+        )
+        return self._clip_unit_score(score=capped_quality)
+
+    def _get_partial_match_cap(
+        self,
+        gold_id_count: int,
+    ) -> float:
+        cap = self.partial_match_cap
+        if gold_id_count == 1:
+            cap = min(
+                cap,
+                self.single_id_partial_cap,
+            )
+        elif gold_id_count <= 4:
+            cap = min(
+                cap,
+                self.short_multi_id_partial_cap,
+            )
+        elif gold_id_count <= 8:
+            cap = min(
+                cap,
+                self.long_multi_id_partial_cap,
+            )
+        else:
+            cap = min(
+                cap,
+                self.very_long_multi_id_partial_cap,
+            )
+        if gold_id_count > 1:
+            cap = min(
+                cap,
+                self.multi_fragment_partial_match_cap,
+            )
+        return cap
+
+    def _apply_extra_selection_policy(
+        self,
+        quality: float,
+        extra_selected_count: int,
+    ) -> float:
+        if extra_selected_count == 0:
+            return self._clip_unit_score(score=quality)
+        quality = min(
+            quality,
+            self.over_selection_cap,
+        )
+        quality += self.extra_selected_id_penalty * extra_selected_count
+        return self._clip_unit_score(score=quality)
+
+    def _apply_schema_only_policy(
+        self,
+        reward: float,
+        quality: float,
+        prediction_item_map: Dict[str, Dict[str, Any]],
+    ) -> float:
+        if quality > 0:
+            return reward
+        reward = min(
+            reward,
+            self.schema_only_reward_cap,
+        )
+        if not self._has_any_predicted_selection(item_map=prediction_item_map):
+            reward = min(
+                reward,
+                self.empty_selection_reward_cap,
+            )
+        return reward
+
+    def _apply_invalid_schema_policy(
+        self,
+        reward: float,
+        prediction_schema_valid: bool,
+    ) -> float:
+        if prediction_schema_valid:
+            return reward
+        return min(
+            reward,
+            self.invalid_schema_reward_cap,
+        )
+
+    def _apply_extra_target_policy(
+        self,
+        reward: float,
         prediction_item_map: Dict[str, Dict[str, Any]],
         gold_item_map: Dict[str, Dict[str, Any]],
     ) -> float:
-        extra_target_count = len(
-            set(prediction_item_map.keys()) - set(gold_item_map.keys())
+        extra_target_count = self._count_extra_targets(
+            prediction_item_map=prediction_item_map,
+            gold_item_map=gold_item_map,
         )
-        return self.wrong_selection_penalty * extra_target_count
+        if extra_target_count == 0:
+            return reward
+        reward += self.wrong_selection_penalty * extra_target_count
+        return min(
+            reward,
+            self.extra_target_reward_cap,
+        )
+
+    def _has_any_predicted_selection(
+        self,
+        item_map: Dict[str, Dict[str, Any]],
+    ) -> bool:
+        for item in item_map.values():
+            selected_ids = self._normalize_selected_ids(item=item)
+            if selected_ids is None:
+                continue
+            ids, _ = selected_ids
+            if ids:
+                return True
+        return False
+
+    def _is_wrong_occurrence(
+        self,
+        prediction_ids: Set[int],
+        gold_ids: Set[int],
+    ) -> bool:
+        if not prediction_ids or not gold_ids:
+            return False
+        overlap_ratio = len(prediction_ids & gold_ids) / len(gold_ids)
+        return overlap_ratio <= self.wrong_occurrence_overlap_threshold
+
+    def _aggregate_target_qualities(
+        self,
+        target_qualities: List[Tuple[float, Dict[str, Any]]],
+    ) -> float:
+        if self.target_quality_aggregation == "mean":
+            return self._mean_target_quality(target_qualities=target_qualities)
+        if self.target_quality_aggregation == "min":
+            return min(quality for quality, _ in target_qualities)
+        if self.target_quality_aggregation == "hard_weighted_mean":
+            return self._hard_weighted_target_quality(
+                target_qualities=target_qualities,
+            )
+        raise ValueError(
+            f"Unsupported target_quality_aggregation: {self.target_quality_aggregation}"
+        )
+
+    def _mean_target_quality(
+        self,
+        target_qualities: List[Tuple[float, Dict[str, Any]]],
+    ) -> float:
+        return sum(quality for quality, _ in target_qualities) / len(target_qualities)
+
+    def _hard_weighted_target_quality(
+        self,
+        target_qualities: List[Tuple[float, Dict[str, Any]]],
+    ) -> float:
+        weighted_sum = 0.0
+        total_weight = 0.0
+        for quality, gold_item in target_qualities:
+            target_weight = self._get_target_quality_weight(gold_item=gold_item)
+            weighted_sum += quality * target_weight
+            total_weight += target_weight
+        if total_weight <= 0:
+            return 0.0
+        return weighted_sum / total_weight
+
+    def _get_target_quality_weight(
+        self,
+        gold_item: Dict[str, Any],
+    ) -> float:
+        selected_ids = self._normalize_selected_ids(item=gold_item)
+        if selected_ids is None:
+            return 1.0
+        gold_ids, _ = selected_ids
+        if len(gold_ids) >= self.hard_target_min_gold_ids:
+            return self.hard_target_weight
+        return 1.0
+
+    def _validate_target_quality_aggregation(
+        self,
+    ) -> None:
+        valid_modes = {
+            "mean",
+            "min",
+            "hard_weighted_mean",
+        }
+        if self.target_quality_aggregation not in valid_modes:
+            raise ValueError(
+                "reward.grounding_selection.target_quality_aggregation must be one of "
+                f"{sorted(valid_modes)}"
+            )
+
+    @staticmethod
+    def _clip_unit_score(
+        score: float,
+    ) -> float:
+        return min(
+            1.0,
+            max(
+                0.0,
+                score,
+            ),
+        )
+
+    def _count_extra_targets(
+        self,
+        prediction_item_map: Dict[str, Dict[str, Any]],
+        gold_item_map: Dict[str, Dict[str, Any]],
+    ) -> int:
+        return len(set(prediction_item_map.keys()) - set(gold_item_map.keys()))
 
     def _parse_label(
         self,
@@ -3841,8 +4138,8 @@ class GroundingSelectionReward(BaseReward):
             selected_ids = self._normalize_selected_ids(item=item)
             if selected_ids is None:
                 return False
-            _, has_duplicate_ids = selected_ids
-            if has_duplicate_ids:
+            ids, has_duplicate_ids = selected_ids
+            if has_duplicate_ids or not ids:
                 return False
         return True
 
@@ -3876,6 +4173,8 @@ class GroundingSelectionReward(BaseReward):
             payload=item,
             logical_key="target_id",
         )
+        if isinstance(value, bool):
+            return None
         if not isinstance(value, (str, int)):
             return None
         normalized = str(value).strip()
@@ -3897,23 +4196,34 @@ class GroundingSelectionReward(BaseReward):
     def _normalize_selected_ids(
         self,
         item: Dict[str, Any],
-    ) -> Optional[Tuple[Set[str], bool]]:
+    ) -> Optional[Tuple[Set[int], bool]]:
         value = self._get_schema_value(
             payload=item,
             logical_key="selected_ids",
         )
         if not isinstance(value, list):
-            return None
-        normalized_ids: List[str] = []
+            value = [value]
+        normalized_ids: List[int] = []
         for selected_id in value:
-            if isinstance(selected_id, (str, int)):
-                normalized_id = str(selected_id).strip()
-                if normalized_id:
-                    normalized_ids.append(normalized_id)
-                    continue
+            normalized_id = self._normalize_selected_id(selected_id=selected_id)
+            if normalized_id is not None:
+                normalized_ids.append(normalized_id)
+                continue
             return None
         selected_id_set = set(normalized_ids)
         return selected_id_set, len(selected_id_set) != len(normalized_ids)
+
+    @staticmethod
+    def _normalize_selected_id(
+        selected_id: Any,
+    ) -> Optional[int]:
+        if isinstance(selected_id, bool):
+            return None
+        if isinstance(selected_id, int):
+            return selected_id
+        if isinstance(selected_id, str) and selected_id.strip().isdigit():
+            return int(selected_id.strip())
+        return None
 
     def _normalize_schema_keys(
         self,
@@ -3936,8 +4246,8 @@ class GroundingSelectionReward(BaseReward):
 
     @staticmethod
     def _selection_f1(
-        pred_selected_ids: Set[str],
-        gold_selected_ids: Set[str],
+        pred_selected_ids: Set[int],
+        gold_selected_ids: Set[int],
     ) -> float:
         if not pred_selected_ids or not gold_selected_ids:
             return 0.0
