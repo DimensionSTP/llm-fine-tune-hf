@@ -127,6 +127,24 @@ rewards:
     kv_path_weight: ${reward.kv.kv_path_weight}
     table_value_weight: ${reward.kv.table_value_weight}
     table_structure_weight: ${reward.kv.table_structure_weight}
+    table_name_mismatch_cap: ${reward.kv.table_name_mismatch_cap}
+    table_column_mismatch_cap: ${reward.kv.table_column_mismatch_cap}
+    table_row_count_mismatch_cap: ${reward.kv.table_row_count_mismatch_cap}
+    kv_top_level_path_mismatch_cap: ${reward.kv.kv_top_level_path_mismatch_cap}
+    extra_leaf_ratio_threshold: ${reward.kv.extra_leaf_ratio_threshold}
+    extra_leaf_cap: ${reward.kv.extra_leaf_cap}
+    missing_leaf_ratio_threshold: ${reward.kv.missing_leaf_ratio_threshold}
+    missing_leaf_cap: ${reward.kv.missing_leaf_cap}
+    duplicate_value_cap: ${reward.kv.duplicate_value_cap}
+    duplicate_path_cap: ${reward.kv.duplicate_path_cap}
+    duplicate_table_row_cap: ${reward.kv.duplicate_table_row_cap}
+    use_weighted_fuzzy_f1: ${reward.kv.use_weighted_fuzzy_f1}
+    weighted_fuzzy_match_threshold: ${reward.kv.weighted_fuzzy_match_threshold}
+    normalized_match_cap: ${reward.kv.normalized_match_cap}
+    coarse_match_cap: ${reward.kv.coarse_match_cap}
+    non_exact_value_cap: ${reward.kv.non_exact_value_cap}
+    empty_value_mismatch_cap: ${reward.kv.empty_value_mismatch_cap}
+    numeric_punctuation_mismatch_cap: ${reward.kv.numeric_punctuation_mismatch_cap}
     score_threshold: ${reward.kv.score_threshold}
 
   - _target_: src.utils.GroundingBBoxReward

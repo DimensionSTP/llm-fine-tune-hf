@@ -55,10 +55,28 @@ reward:
     length_ratio_cap: 0.7
     max_leaf_count_ratio: 1.5
     leaf_count_ratio_cap: 0.7
-    kv_value_weight: 0.8
-    kv_path_weight: 0.2
-    table_value_weight: 0.85
-    table_structure_weight: 0.15
+    kv_value_weight: 0.5
+    kv_path_weight: 0.5
+    table_value_weight: 0.4
+    table_structure_weight: 0.6
+    table_name_mismatch_cap: 0.4
+    table_column_mismatch_cap: 0.5
+    table_row_count_mismatch_cap: 0.6
+    kv_top_level_path_mismatch_cap: 0.5
+    extra_leaf_ratio_threshold: 0.2
+    extra_leaf_cap: 0.6
+    missing_leaf_ratio_threshold: 0.2
+    missing_leaf_cap: 0.6
+    duplicate_value_cap: 0.6
+    duplicate_path_cap: 0.6
+    duplicate_table_row_cap: 0.6
+    use_weighted_fuzzy_f1: true
+    weighted_fuzzy_match_threshold: 0.5
+    normalized_match_cap: 0.5
+    coarse_match_cap: 0.5
+    non_exact_value_cap: 0.5
+    empty_value_mismatch_cap: 0.0
+    numeric_punctuation_mismatch_cap: 0.5
     score_threshold: 0.95
   grounding_bbox:
     category_token: bbox
