@@ -2,6 +2,18 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.4.0] - 2026-06-23
+
+- Add centralized `dataloader_runtime` configuration and resolver support so train and test loaders derive worker, prefetch, persistent-worker, and pin-memory settings from shared runtime policy instead of script-level overrides.
+- Record resolved dataloader runtime settings in run metadata, remove legacy dataloader method defaults from training arguments, and simplify train/test launcher scripts to rely on config composition.
+- Add GRPO and SDPO `steps_per_generation` controls with metadata recording and README guidance for generation cadence, VRAM, and throughput tradeoffs.
+- Add multi-dataset path resolution, multi-format dataset loading, optional weighted offline resampling, and dataset identity metadata for train, validation, and test inputs.
+- Add shared dataset-loading helpers and wire multi-dataset input support across SFT, DPO, KTO, GKD, GRPO, and test dataset classes with exported helper APIs.
+- Strengthen KV reward structure scoring with stricter defaults for malformed JSON, stop-token handling, root-shape mismatches, serialized length, leaf-count imbalance, duplicate values or paths, table structure, and non-exact value matches.
+- Harden grounding selection reward scoring with configurable caps for partial matches, over-selection, wrong candidates, duplicate selections, invalid schemas, empty selections, and extra predicted targets.
+- Expose grounding selection reward controls through `configs/reward/base.yaml` and `configs/reward/manager.yaml`, and document the selection-reward contract in the README.
+- Remove AGENTS-disallowed implementation comments while preserving the updated dataset, dataloader, reward, and metadata behavior.
+
 ## [v2.3.1] - 2026-06-19
 
 - Change the default SFT loss type from `chunked_nll` to `nll` so assistant-only SFT (`is_sft=True`) uses the supported non-chunked loss path by default.
