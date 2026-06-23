@@ -192,6 +192,24 @@ rewards:
     partial_match_weight: ${reward.grounding_selection.partial_match_weight}
     over_selection_penalty: ${reward.grounding_selection.over_selection_penalty}
     wrong_selection_penalty: ${reward.grounding_selection.wrong_selection_penalty}
+    partial_match_cap: ${reward.grounding_selection.partial_match_cap}
+    multi_fragment_partial_match_cap: ${reward.grounding_selection.multi_fragment_partial_match_cap}
+    missing_gold_id_penalty: ${reward.grounding_selection.missing_gold_id_penalty}
+    single_id_partial_cap: ${reward.grounding_selection.single_id_partial_cap}
+    short_multi_id_partial_cap: ${reward.grounding_selection.short_multi_id_partial_cap}
+    long_multi_id_partial_cap: ${reward.grounding_selection.long_multi_id_partial_cap}
+    very_long_multi_id_partial_cap: ${reward.grounding_selection.very_long_multi_id_partial_cap}
+    over_selection_cap: ${reward.grounding_selection.over_selection_cap}
+    wrong_occurrence_cap: ${reward.grounding_selection.wrong_occurrence_cap}
+    wrong_occurrence_overlap_threshold: ${reward.grounding_selection.wrong_occurrence_overlap_threshold}
+    extra_selected_id_penalty: ${reward.grounding_selection.extra_selected_id_penalty}
+    schema_only_reward_cap: ${reward.grounding_selection.schema_only_reward_cap}
+    empty_selection_reward_cap: ${reward.grounding_selection.empty_selection_reward_cap}
+    invalid_schema_reward_cap: ${reward.grounding_selection.invalid_schema_reward_cap}
+    extra_target_reward_cap: ${reward.grounding_selection.extra_target_reward_cap}
+    target_quality_aggregation: ${reward.grounding_selection.target_quality_aggregation}
+    hard_target_min_gold_ids: ${reward.grounding_selection.hard_target_min_gold_ids}
+    hard_target_weight: ${reward.grounding_selection.hard_target_weight}
     min_reward: ${reward.grounding_selection.min_reward}
     max_reward: ${reward.grounding_selection.max_reward}
     schema_keys: ${reward.grounding_selection.schema_keys}

@@ -119,6 +119,24 @@ reward:
     partial_match_weight: 0.6
     over_selection_penalty: -0.2
     wrong_selection_penalty: -0.3
+    partial_match_cap: 1.0
+    multi_fragment_partial_match_cap: 1.0
+    missing_gold_id_penalty: 0.0
+    single_id_partial_cap: 1.0
+    short_multi_id_partial_cap: 1.0
+    long_multi_id_partial_cap: 1.0
+    very_long_multi_id_partial_cap: 1.0
+    over_selection_cap: 1.0
+    wrong_occurrence_cap: 1.0
+    wrong_occurrence_overlap_threshold: 0.0
+    extra_selected_id_penalty: 0.0
+    schema_only_reward_cap: 1.0
+    empty_selection_reward_cap: 1.0
+    invalid_schema_reward_cap: 1.0
+    extra_target_reward_cap: 1.0
+    target_quality_aggregation: mean
+    hard_target_min_gold_ids: 5
+    hard_target_weight: 1.0
     min_reward: 0.0
     max_reward: 1.0
     schema_keys:
