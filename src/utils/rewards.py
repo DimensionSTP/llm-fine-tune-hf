@@ -1642,6 +1642,24 @@ class KVReward(BaseReward):
         kv_path_weight: float,
         table_value_weight: float,
         table_structure_weight: float,
+        table_name_mismatch_cap: float,
+        table_column_mismatch_cap: float,
+        table_row_count_mismatch_cap: float,
+        kv_top_level_path_mismatch_cap: float,
+        extra_leaf_ratio_threshold: float,
+        extra_leaf_cap: float,
+        missing_leaf_ratio_threshold: float,
+        missing_leaf_cap: float,
+        duplicate_value_cap: float,
+        duplicate_path_cap: float,
+        duplicate_table_row_cap: float,
+        use_weighted_fuzzy_f1: bool,
+        weighted_fuzzy_match_threshold: float,
+        normalized_match_cap: float,
+        coarse_match_cap: float,
+        non_exact_value_cap: float,
+        empty_value_mismatch_cap: float,
+        numeric_punctuation_mismatch_cap: float,
         score_threshold: float,
     ) -> None:
         BaseReward.__init__(
@@ -1671,6 +1689,24 @@ class KVReward(BaseReward):
         self.kv_path_weight = kv_path_weight
         self.table_value_weight = table_value_weight
         self.table_structure_weight = table_structure_weight
+        self.table_name_mismatch_cap = table_name_mismatch_cap
+        self.table_column_mismatch_cap = table_column_mismatch_cap
+        self.table_row_count_mismatch_cap = table_row_count_mismatch_cap
+        self.kv_top_level_path_mismatch_cap = kv_top_level_path_mismatch_cap
+        self.extra_leaf_ratio_threshold = extra_leaf_ratio_threshold
+        self.extra_leaf_cap = extra_leaf_cap
+        self.missing_leaf_ratio_threshold = missing_leaf_ratio_threshold
+        self.missing_leaf_cap = missing_leaf_cap
+        self.duplicate_value_cap = duplicate_value_cap
+        self.duplicate_path_cap = duplicate_path_cap
+        self.duplicate_table_row_cap = duplicate_table_row_cap
+        self.use_weighted_fuzzy_f1 = use_weighted_fuzzy_f1
+        self.weighted_fuzzy_match_threshold = weighted_fuzzy_match_threshold
+        self.normalized_match_cap = normalized_match_cap
+        self.coarse_match_cap = coarse_match_cap
+        self.non_exact_value_cap = non_exact_value_cap
+        self.empty_value_mismatch_cap = empty_value_mismatch_cap
+        self.numeric_punctuation_mismatch_cap = numeric_punctuation_mismatch_cap
         self.score_threshold = score_threshold
         self._validate_kv_reward_config()
 
@@ -1731,7 +1767,18 @@ class KVReward(BaseReward):
                 gt_json=gt_json,
                 root_name=root_name,
             )
-            reward = min(content_score, format_cap, root_cap, length_cap)
+            structure_cap = self._compute_structure_cap(
+                pred_json=pred_json,
+                gt_json=gt_json,
+                root_name=root_name,
+            )
+            reward = min(
+                content_score,
+                format_cap,
+                root_cap,
+                length_cap,
+                structure_cap,
+            )
             rewards.append(self._clip_unit_score(score=reward))
 
         return rewards
@@ -1743,6 +1790,8 @@ class KVReward(BaseReward):
             raise ValueError("reward.kv.category_token must be a non-empty string")
         if not isinstance(self.strict_json, bool):
             raise ValueError("reward.kv.strict_json must be a bool")
+        if not isinstance(self.use_weighted_fuzzy_f1, bool):
+            raise ValueError("reward.kv.use_weighted_fuzzy_f1 must be a bool")
         if (
             not isinstance(self.required_stop_token, str)
             or not self.required_stop_token
@@ -1760,6 +1809,26 @@ class KVReward(BaseReward):
             ("kv_path_weight", self.kv_path_weight),
             ("table_value_weight", self.table_value_weight),
             ("table_structure_weight", self.table_structure_weight),
+            ("table_name_mismatch_cap", self.table_name_mismatch_cap),
+            ("table_column_mismatch_cap", self.table_column_mismatch_cap),
+            ("table_row_count_mismatch_cap", self.table_row_count_mismatch_cap),
+            ("kv_top_level_path_mismatch_cap", self.kv_top_level_path_mismatch_cap),
+            ("extra_leaf_ratio_threshold", self.extra_leaf_ratio_threshold),
+            ("extra_leaf_cap", self.extra_leaf_cap),
+            ("missing_leaf_ratio_threshold", self.missing_leaf_ratio_threshold),
+            ("missing_leaf_cap", self.missing_leaf_cap),
+            ("duplicate_value_cap", self.duplicate_value_cap),
+            ("duplicate_path_cap", self.duplicate_path_cap),
+            ("duplicate_table_row_cap", self.duplicate_table_row_cap),
+            ("weighted_fuzzy_match_threshold", self.weighted_fuzzy_match_threshold),
+            ("normalized_match_cap", self.normalized_match_cap),
+            ("coarse_match_cap", self.coarse_match_cap),
+            ("non_exact_value_cap", self.non_exact_value_cap),
+            ("empty_value_mismatch_cap", self.empty_value_mismatch_cap),
+            (
+                "numeric_punctuation_mismatch_cap",
+                self.numeric_punctuation_mismatch_cap,
+            ),
             ("score_threshold", self.score_threshold),
         ]:
             self._validate_unit_number(
@@ -1974,6 +2043,148 @@ class KVReward(BaseReward):
             cap = min(cap, self.leaf_count_ratio_cap)
         return cap
 
+    def _compute_structure_cap(
+        self,
+        pred_json: Any,
+        gt_json: Any,
+        root_name: str,
+    ) -> float:
+        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
+        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
+        if root_name == "kv":
+            return self._compute_kv_structure_cap(
+                pred_kv=pred_root,
+                gt_kv=gt_root,
+            )
+        return self._compute_table_structure_cap(
+            pred_tables=pred_root,
+            gt_tables=gt_root,
+        )
+
+    def _compute_kv_structure_cap(
+        self,
+        pred_kv: Any,
+        gt_kv: Any,
+    ) -> float:
+        pred_items = self._flatten_kv_items(node=pred_kv)
+        gt_items = self._flatten_kv_items(node=gt_kv)
+        cap = self._compute_leaf_balance_cap(
+            pred_items=pred_items,
+            gt_items=gt_items,
+        )
+        if self._has_duplicate_paths(items=pred_items):
+            cap = min(
+                cap,
+                self.duplicate_path_cap,
+            )
+        if self._has_excess_duplicate_values(
+            pred_items=pred_items,
+            gt_items=gt_items,
+        ):
+            cap = min(
+                cap,
+                self.duplicate_value_cap,
+            )
+        if not self._has_top_level_path_overlap(
+            pred_items=pred_items,
+            gt_items=gt_items,
+        ):
+            cap = min(
+                cap,
+                self.kv_top_level_path_mismatch_cap,
+            )
+        return cap
+
+    def _compute_table_structure_cap(
+        self,
+        pred_tables: Any,
+        gt_tables: Any,
+    ) -> float:
+        pred_items = self._flatten_table_items(tables=pred_tables)
+        gt_items = self._flatten_table_items(tables=gt_tables)
+        cap = self._compute_leaf_balance_cap(
+            pred_items=pred_items,
+            gt_items=gt_items,
+        )
+        if not isinstance(pred_tables, dict) or not isinstance(gt_tables, dict):
+            return cap
+        if self._table_name_sets(tables=pred_tables) != self._table_name_sets(
+            tables=gt_tables,
+        ):
+            cap = min(
+                cap,
+                self.table_name_mismatch_cap,
+            )
+        if self._has_table_column_mismatch(
+            pred_tables=pred_tables,
+            gt_tables=gt_tables,
+        ):
+            cap = min(
+                cap,
+                self.table_column_mismatch_cap,
+            )
+        if self._has_table_row_count_mismatch(
+            pred_tables=pred_tables,
+            gt_tables=gt_tables,
+        ):
+            cap = min(
+                cap,
+                self.table_row_count_mismatch_cap,
+            )
+        if self._has_duplicate_table_rows(
+            pred_tables=pred_tables,
+            gt_tables=gt_tables,
+        ):
+            cap = min(
+                cap,
+                self.duplicate_table_row_cap,
+            )
+        if self._has_excess_duplicate_values(
+            pred_items=pred_items,
+            gt_items=gt_items,
+        ):
+            cap = min(
+                cap,
+                self.duplicate_value_cap,
+            )
+        return cap
+
+    def _compute_leaf_balance_cap(
+        self,
+        pred_items: List[Tuple[Tuple[str, ...], int, Any]],
+        gt_items: List[Tuple[Tuple[str, ...], int, Any]],
+    ) -> float:
+        cap = 1.0
+        pred_count = len(pred_items)
+        gt_count = len(gt_items)
+        if gt_count == 0:
+            return cap
+        extra_ratio = (
+            max(
+                pred_count - gt_count,
+                0,
+            )
+            / gt_count
+        )
+        missing_ratio = (
+            max(
+                gt_count - pred_count,
+                0,
+            )
+            / gt_count
+        )
+        if extra_ratio > self.extra_leaf_ratio_threshold:
+            cap = min(
+                cap,
+                self.extra_leaf_cap,
+            )
+        if missing_ratio > self.missing_leaf_ratio_threshold:
+            cap = min(
+                cap,
+                self.missing_leaf_cap,
+            )
+        return cap
+
     def _compute_root_score(
         self,
         pred_json: Any,
@@ -2160,6 +2371,256 @@ class KVReward(BaseReward):
                 seen_columns.add(column_name)
         return column_names
 
+    def _has_duplicate_paths(
+        self,
+        items: List[Tuple[Tuple[str, ...], int, Any]],
+    ) -> bool:
+        path_counts: Dict[Tuple[Tuple[str, ...], int], int] = {}
+        for path, index, _ in items:
+            key = (path, index)
+            path_counts[key] = (
+                path_counts.get(
+                    key,
+                    0,
+                )
+                + 1
+            )
+            if path_counts[key] > 1:
+                return True
+        return False
+
+    def _has_excess_duplicate_values(
+        self,
+        pred_items: List[Tuple[Tuple[str, ...], int, Any]],
+        gt_items: List[Tuple[Tuple[str, ...], int, Any]],
+    ) -> bool:
+        pred_value_counts = self._count_normalized_values(items=pred_items)
+        gt_value_counts = self._count_normalized_values(items=gt_items)
+        for value, pred_count in pred_value_counts.items():
+            allowed_count = max(
+                gt_value_counts.get(
+                    value,
+                    0,
+                ),
+                1,
+            )
+            if pred_count > allowed_count:
+                return True
+        return False
+
+    def _count_normalized_values(
+        self,
+        items: List[Tuple[Tuple[str, ...], int, Any]],
+    ) -> Dict[str, int]:
+        value_counts: Dict[str, int] = {}
+        for _, _, value in items:
+            normalized_value = self._coarse_normalize(
+                text="" if value is None else str(value),
+            )
+            if normalized_value == "":
+                continue
+            value_counts[normalized_value] = (
+                value_counts.get(
+                    normalized_value,
+                    0,
+                )
+                + 1
+            )
+        return value_counts
+
+    def _has_top_level_path_overlap(
+        self,
+        pred_items: List[Tuple[Tuple[str, ...], int, Any]],
+        gt_items: List[Tuple[Tuple[str, ...], int, Any]],
+    ) -> bool:
+        pred_roots = self._collect_top_level_path_names(items=pred_items)
+        gt_roots = self._collect_top_level_path_names(items=gt_items)
+        if not pred_roots or not gt_roots:
+            return True
+        return bool(pred_roots & gt_roots)
+
+    @staticmethod
+    def _collect_top_level_path_names(
+        items: List[Tuple[Tuple[str, ...], int, Any]],
+    ) -> Set[str]:
+        return {path[0] for path, _, _ in items if path}
+
+    def _table_name_sets(
+        self,
+        tables: Dict[Any, Any],
+    ) -> Set[str]:
+        return {str(key) for key in self._sorted_mapping_keys(mapping=tables)}
+
+    def _has_table_column_mismatch(
+        self,
+        pred_tables: Dict[Any, Any],
+        gt_tables: Dict[Any, Any],
+    ) -> bool:
+        for table_name in self._table_name_sets(
+            tables=pred_tables
+        ) & self._table_name_sets(
+            tables=gt_tables,
+        ):
+            pred_columns = self._table_column_set(
+                tables=pred_tables,
+                table_name=table_name,
+            )
+            gt_columns = self._table_column_set(
+                tables=gt_tables,
+                table_name=table_name,
+            )
+            if pred_columns != gt_columns:
+                return True
+        return False
+
+    def _table_column_set(
+        self,
+        tables: Dict[Any, Any],
+        table_name: str,
+    ) -> Set[str]:
+        table_value = self._get_table_value_by_name(
+            tables=tables,
+            table_name=table_name,
+        )
+        rows = self._normalize_table_rows(
+            rows=(
+                table_value.get(
+                    "rows",
+                    [],
+                )
+                if isinstance(table_value, dict)
+                else []
+            ),
+        )
+        return set(self._collect_table_column_names(rows=rows))
+
+    def _has_table_row_count_mismatch(
+        self,
+        pred_tables: Dict[Any, Any],
+        gt_tables: Dict[Any, Any],
+    ) -> bool:
+        for table_name in self._table_name_sets(
+            tables=pred_tables
+        ) & self._table_name_sets(
+            tables=gt_tables,
+        ):
+            if self._table_row_count(
+                tables=pred_tables,
+                table_name=table_name,
+            ) != self._table_row_count(
+                tables=gt_tables,
+                table_name=table_name,
+            ):
+                return True
+        return False
+
+    def _table_row_count(
+        self,
+        tables: Dict[Any, Any],
+        table_name: str,
+    ) -> int:
+        table_value = self._get_table_value_by_name(
+            tables=tables,
+            table_name=table_name,
+        )
+        rows = self._normalize_table_rows(
+            rows=(
+                table_value.get(
+                    "rows",
+                    [],
+                )
+                if isinstance(table_value, dict)
+                else []
+            ),
+        )
+        return len(rows)
+
+    def _has_duplicate_table_rows(
+        self,
+        pred_tables: Dict[Any, Any],
+        gt_tables: Dict[Any, Any],
+    ) -> bool:
+        for table_name in self._table_name_sets(
+            tables=pred_tables
+        ) & self._table_name_sets(
+            tables=gt_tables,
+        ):
+            pred_row_counts = self._count_table_row_signatures(
+                tables=pred_tables,
+                table_name=table_name,
+            )
+            gt_row_counts = self._count_table_row_signatures(
+                tables=gt_tables,
+                table_name=table_name,
+            )
+            for signature, pred_count in pred_row_counts.items():
+                allowed_count = max(
+                    gt_row_counts.get(
+                        signature,
+                        0,
+                    ),
+                    1,
+                )
+                if pred_count > allowed_count:
+                    return True
+        return False
+
+    def _count_table_row_signatures(
+        self,
+        tables: Dict[Any, Any],
+        table_name: str,
+    ) -> Dict[Tuple[Tuple[str, str], ...], int]:
+        table_value = self._get_table_value_by_name(
+            tables=tables,
+            table_name=table_name,
+        )
+        rows = self._normalize_table_rows(
+            rows=(
+                table_value.get(
+                    "rows",
+                    [],
+                )
+                if isinstance(table_value, dict)
+                else []
+            ),
+        )
+        signature_counts: Dict[Tuple[Tuple[str, str], ...], int] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            signature = tuple(
+                (
+                    str(key),
+                    self._coarse_normalize(
+                        text=str(
+                            row.get(
+                                key,
+                                "",
+                            )
+                        ),
+                    ),
+                )
+                for key in self._sorted_mapping_keys(mapping=row)
+            )
+            signature_counts[signature] = (
+                signature_counts.get(
+                    signature,
+                    0,
+                )
+                + 1
+            )
+        return signature_counts
+
+    @staticmethod
+    def _get_table_value_by_name(
+        tables: Dict[Any, Any],
+        table_name: str,
+    ) -> Any:
+        for key, value in tables.items():
+            if str(key) == table_name:
+                return value
+        return {}
+
     def _compute_fuzzy_f1(
         self,
         pred_items: List[Tuple[Tuple[str, ...], int, Any]],
@@ -2181,7 +2642,7 @@ class KVReward(BaseReward):
                     gt_item=gt_item,
                     match_mode=match_mode,
                 )
-                if score >= self.score_threshold:
+                if self._score_passes_match_threshold(score=score):
                     candidate_matches.append(
                         (
                             score,
@@ -2196,16 +2657,22 @@ class KVReward(BaseReward):
         )
         matched_gt = set()
         matched_pred = set()
-        true_positive = 0
-        for _, gt_index, pred_index in candidate_matches:
+        matched_score_sum = 0.0
+        match_count = 0
+        for score, gt_index, pred_index in candidate_matches:
             if gt_index in matched_gt or pred_index in matched_pred:
                 continue
             matched_gt.add(gt_index)
             matched_pred.add(pred_index)
-            true_positive += 1
+            match_count += 1
+            matched_score_sum += score
 
-        precision = true_positive / pred_count
-        recall = true_positive / gt_count
+        if self.use_weighted_fuzzy_f1:
+            precision = matched_score_sum / pred_count
+            recall = matched_score_sum / gt_count
+        else:
+            precision = match_count / pred_count
+            recall = match_count / gt_count
         if precision + recall == 0.0:
             return 0.0
         return 2.0 * precision * recall / (precision + recall)
@@ -2270,26 +2737,101 @@ class KVReward(BaseReward):
         pred_value: Any,
         gt_value: Any,
     ) -> float:
+        if (pred_value is None) != (gt_value is None):
+            return self.empty_value_mismatch_cap
+        pred_text = "" if pred_value is None else str(pred_value)
+        gt_text = "" if gt_value is None else str(gt_value)
+        pred_literal = self._literal_clean_text(text=pred_text)
+        gt_literal = self._literal_clean_text(text=gt_text)
         pred_clean = self._clean_text(
-            text="" if pred_value is None else str(pred_value)
+            text=pred_text,
         )
-        gt_clean = self._clean_text(text="" if gt_value is None else str(gt_value))
+        gt_clean = self._clean_text(text=gt_text)
         pred_coarse = self._coarse_normalize(
-            text="" if pred_value is None else str(pred_value)
+            text=pred_text,
         )
         gt_coarse = self._coarse_normalize(
-            text="" if gt_value is None else str(gt_value)
+            text=gt_text,
         )
-        if pred_clean == "" and gt_clean == "":
+        if pred_literal == "" and gt_literal == "":
             return 1.0
-        if pred_clean == "" or gt_clean == "":
+        if pred_literal == "" or gt_literal == "":
             return 0.0
-        if pred_clean == gt_clean or pred_coarse == gt_coarse:
+        if pred_literal == gt_literal:
             return 1.0
-        return SequenceMatcher(
+        if pred_clean == gt_clean:
+            return min(
+                self.normalized_match_cap,
+                self.non_exact_value_cap,
+            )
+        if pred_coarse == gt_coarse:
+            return self._coarse_match_similarity(
+                pred_text=pred_text,
+                gt_text=gt_text,
+            )
+        fuzzy_similarity = SequenceMatcher(
             a=pred_clean,
             b=gt_clean,
         ).ratio()
+        return min(
+            fuzzy_similarity,
+            self.non_exact_value_cap,
+        )
+
+    def _score_passes_match_threshold(
+        self,
+        score: float,
+    ) -> bool:
+        if self.use_weighted_fuzzy_f1:
+            return score >= self.weighted_fuzzy_match_threshold
+        return score >= self.score_threshold
+
+    @staticmethod
+    def _literal_clean_text(
+        text: str,
+    ) -> str:
+        return text.strip()
+
+    def _coarse_match_similarity(
+        self,
+        pred_text: str,
+        gt_text: str,
+    ) -> float:
+        cap = self.coarse_match_cap
+        cap = min(
+            cap,
+            self.non_exact_value_cap,
+        )
+        if self._has_numeric_punctuation_mismatch(
+            pred_text=pred_text,
+            gt_text=gt_text,
+        ):
+            cap = min(
+                cap,
+                self.numeric_punctuation_mismatch_cap,
+            )
+        return cap
+
+    @staticmethod
+    def _has_numeric_punctuation_mismatch(
+        pred_text: str,
+        gt_text: str,
+    ) -> bool:
+        if not re.search(r"\d", pred_text) or not re.search(r"\d", gt_text):
+            return False
+        pred_numeric_punctuation = set(
+            re.findall(
+                r"(?<=\d)[,.:](?=\d)",
+                pred_text,
+            )
+        )
+        gt_numeric_punctuation = set(
+            re.findall(
+                r"(?<=\d)[,.:](?=\d)",
+                gt_text,
+            )
+        )
+        return pred_numeric_punctuation != gt_numeric_punctuation
 
     def _count_leaf_values(
         self,
