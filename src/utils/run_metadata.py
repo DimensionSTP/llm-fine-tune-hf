@@ -13,6 +13,7 @@ from transformers import TrainingArguments
 from ..helpers.dataset_paths import build_dataset_input_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import resolve_dataloader_runtime
+from .memory_preflight import build_memory_preflight_metadata
 from .peft_initialization import build_peft_initialization_metadata
 
 
@@ -333,6 +334,7 @@ def build_run_manifest(
         "run": build_run_section(config=config),
         "paths": build_paths_section(config=config),
         "peft_initialization": build_peft_initialization_section(config=config),
+        "memory_preflight": build_memory_preflight_section(config=config),
         "source": build_source_section(),
         "runtime": build_runtime_section(config=config),
         "summary": build_summary_section(config=config),
@@ -406,6 +408,12 @@ def build_peft_initialization_section(
     return build_peft_initialization_metadata(config=config)
 
 
+def build_memory_preflight_section(
+    config: DictConfig,
+) -> Dict[str, Any]:
+    return build_memory_preflight_metadata(config=config)
+
+
 def build_source_section() -> Dict[str, Any]:
     return {
         "git_revision": get_git_revision(),
@@ -474,6 +482,7 @@ def build_summary_section(
             "devices",
             "distributed",
             "dataloader_runtime",
+            "memory_preflight",
             "lr",
             "weight_decay",
             "scheduler_type",

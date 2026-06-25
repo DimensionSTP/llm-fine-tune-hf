@@ -1,7 +1,7 @@
 import os
 
 from hydra.utils import get_class
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 import json
 
@@ -29,6 +29,10 @@ def train(
 ) -> None:
     rank = int(os.environ.get("RANK", 0))
     validate_peft_initialization_config(config=config)
+    run_memory_preflight_if_needed(
+        config=config,
+        rank=rank,
+    )
     prepare_train_artifact_config(
         config=config,
         rank=rank,
@@ -59,7 +63,7 @@ def train(
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(num_gpus)))
         elif isinstance(config.devices, str):
             os.environ["CUDA_VISIBLE_DEVICES"] = config.devices
-        elif isinstance(config.devices, list):
+        elif isinstance(config.devices, (list, ListConfig)):
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, config.devices))
 
     if rank == 0:
@@ -83,6 +87,14 @@ def train(
     train_datasets = setup.get_train_datasets()
     train_dataset = train_datasets["train"]
     val_dataset = train_datasets["val"]
+    write_memory_preflight_selection(
+        config=config,
+        train_dataset=train_dataset,
+    )
+    train_dataset = apply_memory_preflight_dataset(
+        config=config,
+        train_dataset=train_dataset,
+    )
 
     ds_config = setup.get_ds_config()
     training_arguments = setup.get_training_arguments(
