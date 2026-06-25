@@ -3,6 +3,7 @@ defaults:
   - dataset: kto
   - image_augmentation: base
   - dataloader_runtime: auto
+  - memory_preflight: base
   - tracking: wandb
   - training_arguments: kto
   - trainer: kto

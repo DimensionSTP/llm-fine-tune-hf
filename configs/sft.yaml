@@ -3,6 +3,7 @@ defaults:
   - dataset: sft
   - image_augmentation: base
   - dataloader_runtime: auto
+  - memory_preflight: base
   - tracking: wandb
   - training_arguments: sft
   - trainer: sft

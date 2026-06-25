@@ -2,6 +2,7 @@
 defaults:
   - dataset: gkd
   - dataloader_runtime: auto
+  - memory_preflight: base
   - tracking: wandb
   - training_arguments: gkd
   - trainer: gkd

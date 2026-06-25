@@ -3,6 +3,7 @@ defaults:
   - dataset: grpo
   - image_augmentation: base
   - dataloader_runtime: auto
+  - memory_preflight: base
   - tracking: wandb
   - training_arguments: async_grpo
   - trainer: async_grpo

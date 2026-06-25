@@ -1,0 +1,12 @@
+enabled: false
+strategy: strict_subprocess
+batch_selection: max_shape
+probe_steps: 1
+include_backward: true
+include_optimizer_step: true
+include_generation: auto
+fail_on_oom: true
+artifact_suffix: memory-preflight
+is_probe: false
+probe_id: null
+selected_indices_path: null
