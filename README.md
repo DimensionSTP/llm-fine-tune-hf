@@ -218,6 +218,14 @@ sft_padding_strategy={max_length or dynamic}
 
 `max_length` preserves the existing sample-level fixed padding path. `dynamic` keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
 
+* Memory preflight
+
+```shell
+memory_preflight.enabled={true or false}
+```
+
+`false` is the default and preserves the existing training path. When enabled, memory preflight runs a strict subprocess probe before the real training run, selects a max-shape batch, and starts the real run only if the probe succeeds. The current implementation supports direct single-process and single-node multi-GPU SFT, DPO, KTO, GKD, GOLD, GRPO, SDPO, and A2PO preflight. vLLM preflight is limited to colocate mode; multi-node, vLLM server, and async GRPO topologies fail fast instead of running an approximate probe.
+
 * DataLoader runtime policy
 
 ```shell
