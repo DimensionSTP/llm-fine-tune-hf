@@ -6,6 +6,7 @@ from .dataloader_runtime import (
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
 from .peft_initialization import (
     build_peft_initialization_metadata,
+    has_peft_target_parameters,
     initialize_peft_model,
     validate_peft_initialization_config,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "ModelLoadPlan",
     "ModelLoadPlanner",
     "build_peft_initialization_metadata",
+    "has_peft_target_parameters",
     "initialize_peft_model",
     "validate_peft_initialization_config",
     "SFTDynamicPaddingCollator",
