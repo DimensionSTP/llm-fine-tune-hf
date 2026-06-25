@@ -2,6 +2,17 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.5.0] - 2026-06-25
+
+- Add strict memory preflight support that can run a subprocess probe before training and fail fast on out-of-memory conditions before the main run starts.
+- Add `configs/memory_preflight/base.yaml` and compose the disabled-by-default `memory_preflight` policy into SFT, DPO, KTO, GKD, GRPO, Async GRPO, SDPO, A2PO, and GOLD configs.
+- Select max-shape probe samples, persist selected probe indices, isolate probe outputs under `.memory_preflight`, and record memory preflight settings in run metadata.
+- Support single-node distributed memory preflight coordination for direct launches while rejecting unsupported multi-node, vLLM server, and async topologies.
+- Add PEFT `target_parameters` handling, validation, metadata export, and public utility exports for target-parameter-aware adapter initialization.
+- Update model loading planning so ZeRO-3 loading remains compatible with PEFT target parameters by requiring `zero3_init_method=auto` or `disabled` when target parameters are configured.
+- Document memory preflight usage, failure behavior, supported topology constraints, and the relationship between probe output paths and normal training artifacts.
+- Normalize tracked shell scripts to the repository EOF policy without changing their launcher behavior.
+
 ## [v2.4.0] - 2026-06-23
 
 - Add centralized `dataloader_runtime` configuration and resolver support so train and test loaders derive worker, prefetch, persistent-worker, and pin-memory settings from shared runtime policy instead of script-level overrides.
