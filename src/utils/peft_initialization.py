@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional, Any
 import os
+from contextlib import nullcontext
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -38,9 +39,26 @@ def build_peft_initialization_metadata(
 ) -> Dict[str, Any]:
     validate_peft_initialization_config(config=config)
 
+    target_parameters = normalize_target_parameters(
+        value=OmegaConf.select(
+            config,
+            "peft_config.target_parameters",
+        ),
+    )
+    uses_target_parameters = bool(config.is_peft) and len(target_parameters) > 0
+    target_parameter_zero3_init_policy = build_target_parameter_zero3_init_policy(
+        config=config,
+        target_parameters=target_parameters if uses_target_parameters else [],
+    )
+
     metadata = {
         "mode": str(config.peft_initialization.mode),
         "is_peft": bool(config.is_peft),
+        "uses_target_parameters": uses_target_parameters,
+        "target_parameter_count": (
+            len(target_parameters) if uses_target_parameters else 0
+        ),
+        "target_parameter_zero3_init_policy": target_parameter_zero3_init_policy,
         "requested_base_model_name": str(config.pretrained_model_name),
         "resolved_base_model_name_for_continuation": None,
         "adapter_path": None,
@@ -97,6 +115,30 @@ def is_peft_continue_from_adapter(
         bool(config.is_peft)
         and str(config.peft_initialization.mode) == "continue_from_adapter"
     )
+
+
+def build_target_parameter_zero3_init_policy(
+    config: DictConfig,
+    target_parameters: List[str],
+) -> Optional[str]:
+    if len(target_parameters) == 0:
+        return None
+    if config.strategy != "deepspeed":
+        return None
+
+    deepspeed_stage = OmegaConf.select(
+        config,
+        "deepspeed.zero_optimization.stage",
+    )
+    if deepspeed_stage is None or int(deepspeed_stage) != 3:
+        return None
+
+    zero3_init = str(config.model_loading.deepspeed.zero3_init)
+    if zero3_init == "auto":
+        return "hf_zero3_init_disabled_until_after_peft_target_parameter_wrapping"
+    if zero3_init == "disabled":
+        return "hf_zero3_init_disabled_by_config"
+    return "unsupported_force_enabled"
 
 
 def validate_peft_continuation_base_resolution(
@@ -168,11 +210,24 @@ def initialize_fresh_peft_model(
     config: DictConfig,
 ) -> PreTrainedModel:
     peft_config_dict = build_peft_config_dict(config=config)
-    peft_config = LoraConfig(**peft_config_dict)
-    return get_peft_model(
-        model=model,
-        peft_config=peft_config,
+    target_parameters = normalize_target_parameters(
+        value=peft_config_dict.get("target_parameters"),
     )
+    with build_peft_target_parameter_wrapping_context(
+        model=model,
+        target_parameters=target_parameters,
+    ):
+        validate_peft_target_parameter_shapes(
+            model=model,
+            target_parameters=target_parameters,
+        )
+        peft_config = LoraConfig(**peft_config_dict)
+        peft_model = get_peft_model(
+            model=model,
+            peft_config=peft_config,
+        )
+    validate_trainable_lora_parameters(model=peft_model)
+    return peft_model
 
 
 def continue_peft_model_from_adapter(
@@ -194,13 +249,23 @@ def continue_peft_model_from_adapter(
         adapter_config=adapter_config,
         peft_config_dict=peft_config_dict,
     )
-
-    peft_model = PeftModel.from_pretrained(
-        model=model,
-        model_id=adapter_path,
-        adapter_name=str(config.peft_initialization.adapter_name),
-        is_trainable=bool(config.peft_initialization.is_trainable),
+    target_parameters = normalize_target_parameters(
+        value=peft_config_dict.get("target_parameters"),
     )
+    with build_peft_target_parameter_wrapping_context(
+        model=model,
+        target_parameters=target_parameters,
+    ):
+        validate_peft_target_parameter_shapes(
+            model=model,
+            target_parameters=target_parameters,
+        )
+        peft_model = PeftModel.from_pretrained(
+            model=model,
+            model_id=adapter_path,
+            adapter_name=str(config.peft_initialization.adapter_name),
+            is_trainable=bool(config.peft_initialization.is_trainable),
+        )
     validate_trainable_lora_parameters(model=peft_model)
     return peft_model
 
@@ -247,6 +312,9 @@ def build_adapter_config_fingerprint(
         "target_modules": normalize_config_value(
             getattr(adapter_config, "target_modules", None)
         ),
+        "target_parameters": normalize_config_value(
+            getattr(adapter_config, "target_parameters", None)
+        ),
         "modules_to_save": normalize_config_value(
             getattr(adapter_config, "modules_to_save", None)
         ),
@@ -267,6 +335,9 @@ def build_peft_config_fingerprint(
         "r": normalize_config_value(peft_config.get("r")),
         "lora_alpha": normalize_config_value(peft_config.get("lora_alpha")),
         "target_modules": normalize_config_value(peft_config.get("target_modules")),
+        "target_parameters": normalize_config_value(
+            peft_config.get("target_parameters")
+        ),
         "modules_to_save": normalize_config_value(peft_config.get("modules_to_save")),
         "bias": normalize_config_value(peft_config.get("bias")),
         "inference_mode": normalize_config_value(peft_config.get("inference_mode")),
@@ -368,6 +439,10 @@ def validate_adapter_lora_config(
         adapter_value=getattr(adapter_config, "target_modules", None),
         expected_value=peft_config_dict.get("target_modules"),
     )
+    validate_target_parameters(
+        adapter_value=getattr(adapter_config, "target_parameters", None),
+        expected_value=peft_config_dict.get("target_parameters"),
+    )
     validate_equal_config(
         name="bias",
         adapter_value=getattr(adapter_config, "bias", None),
@@ -437,6 +512,123 @@ def normalize_target_modules(
     if isinstance(value, (list, tuple, set)):
         return sorted(str(item) for item in value)
     raise TypeError(f"Unsupported target_modules type: {type(value).__name__}")
+
+
+def has_peft_target_parameters(
+    config: DictConfig,
+) -> bool:
+    if not config.is_peft:
+        return False
+
+    target_parameters = OmegaConf.select(
+        config,
+        "peft_config.target_parameters",
+    )
+    return len(normalize_target_parameters(value=target_parameters)) > 0
+
+
+def validate_target_parameters(
+    adapter_value: Any,
+    expected_value: Any,
+) -> None:
+    adapter_target_parameters = normalize_target_parameters(value=adapter_value)
+    expected_target_parameters = normalize_target_parameters(value=expected_value)
+
+    if adapter_target_parameters != expected_target_parameters:
+        raise ValueError(
+            "Adapter target_parameters mismatch: "
+            f"adapter={adapter_target_parameters}, expected={expected_target_parameters}"
+        )
+
+
+def normalize_target_parameters(
+    value: Any,
+) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple, set, ListConfig)):
+        return sorted(str(item) for item in value)
+    raise TypeError(f"Unsupported target_parameters type: {type(value).__name__}")
+
+
+def build_peft_target_parameter_wrapping_context(
+    model: PreTrainedModel,
+    target_parameters: List[str],
+) -> Any:
+    if len(target_parameters) == 0:
+        return nullcontext()
+
+    named_target_parameters = resolve_peft_target_parameter_objects(
+        model=model,
+        target_parameters=target_parameters,
+    )
+    if not has_zero3_partitioned_target_parameters(
+        named_target_parameters=named_target_parameters,
+    ):
+        return nullcontext()
+
+    from deepspeed import zero
+
+    return zero.GatheredParameters(
+        list(named_target_parameters.values()),
+        modifier_rank=None,
+    )
+
+
+def resolve_peft_target_parameter_objects(
+    model: PreTrainedModel,
+    target_parameters: List[str],
+) -> Dict[str, Any]:
+    named_parameters = dict(model.named_parameters())
+    missing_parameters = [
+        target_parameter
+        for target_parameter in target_parameters
+        if target_parameter not in named_parameters
+    ]
+    if len(missing_parameters) > 0:
+        raise ValueError(
+            "PEFT target_parameters were not found in model.named_parameters(): "
+            f"{missing_parameters[:10]}"
+        )
+
+    return {
+        target_parameter: named_parameters[target_parameter]
+        for target_parameter in target_parameters
+    }
+
+
+def has_zero3_partitioned_target_parameters(
+    named_target_parameters: Dict[str, Any],
+) -> bool:
+    return any(
+        parameter.ndim == 1 and tuple(parameter.shape) == (0,)
+        for parameter in named_target_parameters.values()
+    )
+
+
+def validate_peft_target_parameter_shapes(
+    model: PreTrainedModel,
+    target_parameters: List[str],
+) -> None:
+    if len(target_parameters) == 0:
+        return
+
+    named_target_parameters = resolve_peft_target_parameter_objects(
+        model=model,
+        target_parameters=target_parameters,
+    )
+    invalid_shapes = {
+        target_parameter: tuple(parameter.shape)
+        for target_parameter, parameter in named_target_parameters.items()
+        if parameter.ndim not in [2, 3]
+    }
+    if len(invalid_shapes) > 0:
+        raise ValueError(
+            "PEFT target_parameters must resolve to full 2D or 3D tensors before "
+            f"LoRA wrapping. Invalid shapes: {invalid_shapes}"
+        )
 
 
 def normalize_config_value(

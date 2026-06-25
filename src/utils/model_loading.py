@@ -10,6 +10,7 @@ from transformers import AutoConfig, BitsAndBytesConfig, PretrainedConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
 from .peft_initialization import (
+    has_peft_target_parameters,
     is_peft_continue_from_adapter,
     validate_peft_continuation_base_resolution,
 )
@@ -179,6 +180,9 @@ class ModelLoadPlanner:
         if zero3_init == "disabled":
             return False
 
+        if self.has_peft_target_parameters():
+            return False
+
         if self.config.is_quantized:
             return self.should_use_qlora_deepspeed_zero3()
 
@@ -189,6 +193,9 @@ class ModelLoadPlanner:
             return False
 
         return self.config.model_loading.qlora.deepspeed_zero3_enabled
+
+    def has_peft_target_parameters(self) -> bool:
+        return has_peft_target_parameters(config=self.config)
 
     def validate_deepspeed_stage(self) -> None:
         if self.config.strategy != "deepspeed":
@@ -211,6 +218,13 @@ class ModelLoadPlanner:
 
         if zero3_init != "enabled":
             return
+
+        if self.has_peft_target_parameters():
+            raise ValueError(
+                "model_loading.deepspeed.zero3_init=enabled is not supported with "
+                "PEFT target_parameters. Use auto or disabled so target parameters "
+                "keep full shapes until PEFT wrapping."
+            )
 
         if self.config.strategy == "deepspeed" and self.get_deepspeed_stage() == 3:
             return
