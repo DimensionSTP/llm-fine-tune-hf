@@ -3,6 +3,13 @@ from .dataloader_runtime import (
     resolve_dataloader_runtime,
     validate_dataloader_runtime_config,
 )
+from .memory_preflight import (
+    apply_memory_preflight_dataset,
+    build_memory_preflight_metadata,
+    run_memory_preflight_if_needed,
+    validate_memory_preflight_config,
+    write_memory_preflight_selection,
+)
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
 from .peft_initialization import (
     build_peft_initialization_metadata,
@@ -74,6 +81,11 @@ __all__ = [
     "SetUp",
     "resolve_dataloader_runtime",
     "validate_dataloader_runtime_config",
+    "apply_memory_preflight_dataset",
+    "build_memory_preflight_metadata",
+    "run_memory_preflight_if_needed",
+    "validate_memory_preflight_config",
+    "write_memory_preflight_selection",
     "ModelLoadPlan",
     "ModelLoadPlanner",
     "build_peft_initialization_metadata",
