@@ -2,6 +2,14 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.5.1] - 2026-07-03
+
+- Add `KVReward` support for top-level `results` solution roots so grounded Auto-KV rows can score extracted text by `target_id`.
+- Allow solution JSON with the configured KV stop token to be parsed before reward scoring, matching grounded Auto-KV labels that serialize as JSON followed by the stop marker.
+- Score `results[].text` while ignoring `results[].selected_ids` in the KV reward path so evidence ids can be evaluated separately by the grounding selection reward.
+- Preserve existing `kv` and `tables` root scoring behavior while adding results-specific root, length, structure, and content scoring helpers.
+- Document the grounded Auto-KV reward contract in the README and reward reference, including the `kv_evidence` category, `reward.weight.kv`, `reward.weight.grounding_selection`, and `reward.grounding_selection.schema_keys.items=[results]` setup.
+
 ## [v2.5.0] - 2026-06-25
 
 - Add strict memory preflight support that can run a subprocess probe before training and fail fast on out-of-memory conditions before the main run starts.
