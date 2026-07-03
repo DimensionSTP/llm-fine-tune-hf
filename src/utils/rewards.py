@@ -1743,7 +1743,7 @@ class KVReward(BaseReward):
                 rewards.append(self.invalid_json_reward)
                 continue
 
-            gt_json = self._try_parse_strict_json(text=sol)
+            gt_json = self._parse_solution_json(text=sol)
             if gt_json is None:
                 rewards.append(None)
                 continue
@@ -1941,6 +1941,19 @@ class KVReward(BaseReward):
             return self._try_parse_strict_json(text=text)
         return self._try_parse_json(text=text)
 
+    def _parse_solution_json(
+        self,
+        text: str,
+    ) -> Optional[Any]:
+        parsed = self._try_parse_strict_json(text=text)
+        if parsed is not None:
+            return parsed
+        stop_split = self._find_parseable_stop_split(text=text.strip())
+        if stop_split is None:
+            return None
+        json_text, _ = stop_split
+        return self._try_parse_strict_json(text=json_text)
+
     @staticmethod
     def _try_parse_strict_json(text: str) -> Optional[Any]:
         stripped_text = text.strip()
@@ -1998,6 +2011,8 @@ class KVReward(BaseReward):
             return "kv"
         if isinstance(gt_json.get("tables"), dict):
             return "tables"
+        if isinstance(gt_json.get("results"), list):
+            return "results"
         return None
 
     def _compute_root_cap(
@@ -2005,6 +2020,13 @@ class KVReward(BaseReward):
         pred_json: Any,
         root_name: str,
     ) -> float:
+        if root_name == "results":
+            if isinstance(pred_json, dict) and isinstance(
+                pred_json.get(root_name),
+                list,
+            ):
+                return 1.0
+            return self.root_mismatch_cap
         if isinstance(pred_json, dict) and isinstance(pred_json.get(root_name), dict):
             return 1.0
         return self.root_mismatch_cap
@@ -2034,8 +2056,12 @@ class KVReward(BaseReward):
 
         pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
         gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
-        pred_leaf_count = self._count_leaf_values(node=pred_root)
-        gt_leaf_count = self._count_leaf_values(node=gt_root)
+        if root_name == "results":
+            pred_leaf_count = self._count_results_leaf_values(results=pred_root)
+            gt_leaf_count = self._count_results_leaf_values(results=gt_root)
+        else:
+            pred_leaf_count = self._count_leaf_values(node=pred_root)
+            gt_leaf_count = self._count_leaf_values(node=gt_root)
         if (
             gt_leaf_count > 0
             and pred_leaf_count / gt_leaf_count > self.max_leaf_count_ratio
@@ -2055,6 +2081,11 @@ class KVReward(BaseReward):
             return self._compute_kv_structure_cap(
                 pred_kv=pred_root,
                 gt_kv=gt_root,
+            )
+        if root_name == "results":
+            return self._compute_results_structure_cap(
+                pred_results=pred_root,
+                gt_results=gt_root,
             )
         return self._compute_table_structure_cap(
             pred_tables=pred_root,
@@ -2198,6 +2229,11 @@ class KVReward(BaseReward):
                 pred_kv=pred_root,
                 gt_kv=gt_root,
             )
+        if root_name == "results":
+            return self._compute_results_root_score(
+                pred_results=pred_root,
+                gt_results=gt_root,
+            )
         return self._compute_table_root_score(
             pred_tables=pred_root,
             gt_tables=gt_root,
@@ -2245,6 +2281,106 @@ class KVReward(BaseReward):
             score=self.table_value_weight * value_score
             + self.table_structure_weight * structure_score
         )
+
+    def _compute_results_structure_cap(
+        self,
+        pred_results: Any,
+        gt_results: Any,
+    ) -> float:
+        pred_facts = self._normalize_results_items(results=pred_results)
+        gt_facts = self._normalize_results_items(results=gt_results)
+        cap = self._compute_leaf_balance_cap(
+            pred_items=pred_facts["items"],
+            gt_items=gt_facts["items"],
+        )
+        if pred_facts["invalid_count"] > 0 or gt_facts["invalid_count"] > 0:
+            cap = min(
+                cap,
+                self.root_mismatch_cap,
+            )
+        if pred_facts["duplicate_count"] > 0 or gt_facts["duplicate_count"] > 0:
+            cap = min(
+                cap,
+                self.duplicate_path_cap,
+            )
+        return cap
+
+    def _compute_results_root_score(
+        self,
+        pred_results: Any,
+        gt_results: Any,
+    ) -> float:
+        pred_items = self._normalize_results_items(results=pred_results)["items"]
+        gt_items = self._normalize_results_items(results=gt_results)["items"]
+        return self._compute_fuzzy_f1(
+            pred_items=pred_items,
+            gt_items=gt_items,
+            match_mode="path_value",
+        )
+
+    def _count_results_leaf_values(
+        self,
+        results: Any,
+    ) -> int:
+        return len(self._normalize_results_items(results=results)["items"])
+
+    def _normalize_results_items(
+        self,
+        results: Any,
+    ) -> Dict[str, Any]:
+        facts = {
+            "items": [],
+            "invalid_count": 0,
+            "duplicate_count": 0,
+        }
+        if not isinstance(results, list):
+            facts["invalid_count"] = 1
+            return facts
+
+        seen_target_ids: Set[str] = set()
+        for item in results:
+            normalized_item = self._normalize_result_item(item=item)
+            if normalized_item is None:
+                facts["invalid_count"] += 1
+                continue
+            target_id, text = normalized_item
+            if target_id in seen_target_ids:
+                facts["duplicate_count"] += 1
+                continue
+            seen_target_ids.add(target_id)
+            facts["items"].append(
+                (
+                    (target_id,),
+                    0,
+                    text,
+                )
+            )
+        return facts
+
+    def _normalize_result_item(
+        self,
+        item: Any,
+    ) -> Optional[Tuple[str, str]]:
+        if not isinstance(item, dict):
+            return None
+
+        target_id = item.get("target_id")
+        if isinstance(target_id, bool) or not isinstance(target_id, (str, int)):
+            return None
+        normalized_target_id = str(target_id).strip()
+        if not normalized_target_id:
+            return None
+
+        text = item.get("text")
+        if text is None:
+            normalized_text = ""
+        elif isinstance(text, bool):
+            return None
+        elif isinstance(text, (str, int, float)):
+            normalized_text = str(text)
+        else:
+            return None
+        return normalized_target_id, normalized_text
 
     def _flatten_kv_items(
         self,
