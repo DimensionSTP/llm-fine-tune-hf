@@ -133,9 +133,12 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - Logic: Extracts the answer text, enforces the configured terminal stop token,
   parses strict JSON, then scores the ground-truth root. For `kv` roots it
   scores value matches and path/value matches. For `tables` roots it scores row
-  values and table/column/row structure. The final unit score is capped by
-  content quality, stop-token format, root-shape validity, serialized length,
-  and leaf-count growth, then scaled by `reward.weight.kv`.
+  values and table/column/row structure. For `results` roots it matches items by
+  `target_id` and scores `results[].text`; `results[].selected_ids` is ignored
+  by `KVReward` and should be scored by `GroundingSelectionReward` when needed.
+  The final unit score is capped by content quality, stop-token format,
+  root-shape validity, serialized length, and leaf-count growth, then scaled by
+  `reward.weight.kv`.
 - reward_categories: any category containing `reward.kv.category_token`
   (default: `kv`). Default examples: `single_kv`, `multi_kv`.
 - Extra options:
@@ -207,20 +210,23 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - Purpose: Select the correct grounding candidate ids when the task provides a
   candidate list instead of requiring generated boxes.
 - Logic: Parses JSON from the extracted answer. The prediction and solution are
-  top-level objects with a `grounding` list. Items are matched by `target_id`,
-  and each gold target must have a prediction item. The reward compares each
-  item's `selected_ids` with the gold `selected_ids`, supports empty selections,
+  top-level objects with a list selected by `reward.grounding_selection.schema_keys.items`;
+  the default list key is `grounding`. Items are matched by `target_id`, and
+  each gold target must have a prediction item. The reward compares each item's
+  `selected_ids` with the gold `selected_ids`, rejects empty gold selections,
   penalizes wrong, over-selected, duplicate, missing, and extra target ids, and
   does not crash on malformed JSON. It does not use `grounding_status`; value
   targets are expected to provide evidence candidate ids through `selected_ids`.
 - reward_categories: any category containing
   `reward.grounding_selection.category_token` (default: `evidence`).
 - Expected label schema in `solution`:
-  - top-level `grounding`: list of target selection items.
+  - top-level list key from `schema_keys.items`; default is `grounding`.
+    `results` can be used for schemas that combine extracted text and evidence
+    ids in the same item.
   - item `target_id`: unique target id.
   - item `selected_ids`: correct candidate ids for that target.
 - Expected prediction schema:
-  - top-level `grounding`: list of predicted selection items.
+  - top-level list key from `schema_keys.items`; default is `grounding`.
   - item `target_id`: target id to match against the solution.
   - item `selected_ids`: predicted candidate ids. The
     `selected_candidate_ids` alias is also supported by default.
@@ -246,8 +252,8 @@ Current matching rules in `src/utils/rewards.py`:
   when category contains token `retrieval`.
   Examples: `retrieval`, `retrieval_hit`, `retrieval_ndcg`.
 - `KVReward` runs when category contains token `kv`.
-  Examples: `single_kv`, `multi_kv`.
+  Examples: `single_kv`, `multi_kv`, `kv_evidence`.
 - Grounding rewards run when category contains their configured category token:
   `reward.grounding_bbox.category_token` or
   `reward.grounding_selection.category_token`.
-  Examples: `bbox`, `evidence`.
+  Examples: `bbox`, `evidence`, `kv_evidence`.
