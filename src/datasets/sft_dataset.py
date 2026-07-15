@@ -171,6 +171,7 @@ class StructuralDataset(Dataset):
         self.datas = dataset["datas"]
         self.labels = dataset["labels"]
         self.max_length = max_length
+        self.column_names = ["input_ids", "attention_mask", "labels"]
 
         self.response_start_tokens = self.data_encoder(
             text=response_start_template,
@@ -930,6 +931,7 @@ class ConversationalDataset(StructuralDataset):
         dataset = self.get_dataset()
         self.conversations = dataset["conversations"]
         self.max_length = max_length
+        self.column_names = ["input_ids", "attention_mask", "labels"]
 
         self.response_start_tokens = self.data_encoder(
             text=response_start_template,
