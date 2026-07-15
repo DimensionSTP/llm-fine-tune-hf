@@ -1,4 +1,4 @@
-_target_: src.utils.FaissIndex
+_target_: src.rewards.FaissIndex
 data_path: ${connected_dir}/data/retrieval
 embedding_model_detail: Qwen3-Embedding-0.6B-base
 indices_name: ${dataset_name}_candidates.faiss

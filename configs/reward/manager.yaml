@@ -1,6 +1,6 @@
-_target_: src.utils.RewardManager
+_target_: src.rewards.RewardManager
 rewards:
-  - _target_: src.utils.ThinkFormatReward
+  - _target_: src.rewards.ThinkFormatReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -11,7 +11,7 @@ rewards:
     weight: ${reward.weight.think_format}
     is_enable_thinking: ${is_enable_thinking}
 
-  - _target_: src.utils.AnswerFormatReward
+  - _target_: src.rewards.AnswerFormatReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -21,7 +21,7 @@ rewards:
     extraction_profile: ${reward.extraction_profile}
     weight: ${reward.weight.answer_format}
 
-  - _target_: src.utils.MatchReward
+  - _target_: src.rewards.MatchReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -32,7 +32,7 @@ rewards:
     weight: ${reward.weight.match}
     incorrect_penalty: ${reward.match.incorrect_penalty}
 
-  - _target_: src.utils.CodeExecutionReward
+  - _target_: src.rewards.CodeExecutionReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -45,7 +45,7 @@ rewards:
     wrong_output_penalty: ${reward.code_execution.wrong_output_penalty}
     non_executable_penalty: ${reward.code_execution.non_executable_penalty}
 
-  - _target_: src.utils.RougeReward
+  - _target_: src.rewards.RougeReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -56,7 +56,7 @@ rewards:
     weight: ${reward.weight.rouge}
     rouge_type: ${reward.rouge.type}
 
-  - _target_: src.utils.EquationReward
+  - _target_: src.rewards.EquationReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -68,7 +68,7 @@ rewards:
     equation_target_column_name: ${reward.equation.target_column_name}
     equation_numbers_column_name: ${reward.equation.numbers_column_name}
 
-  - _target_: src.utils.RetrievalHitReward
+  - _target_: src.rewards.RetrievalHitReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -84,7 +84,7 @@ rewards:
     rank_margin: ${reward.retrieval.hit.rank_margin}
     stages: ${reward.retrieval.hit.stages}
 
-  - _target_: src.utils.RetrievalnDCGReward
+  - _target_: src.rewards.RetrievalnDCGReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -102,7 +102,7 @@ rewards:
     weighting_mode: ${reward.retrieval.ndcg.weighting_mode}
     epsilon: ${reward.retrieval.ndcg.epsilon}
 
-  - _target_: src.utils.KVReward
+  - _target_: src.rewards.KVReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -147,7 +147,7 @@ rewards:
     numeric_punctuation_mismatch_cap: ${reward.kv.numeric_punctuation_mismatch_cap}
     score_threshold: ${reward.kv.score_threshold}
 
-  - _target_: src.utils.GroundingBBoxReward
+  - _target_: src.rewards.GroundingBBoxReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}
@@ -176,7 +176,7 @@ rewards:
     schema_keys: ${reward.grounding_bbox.schema_keys}
     status_values: ${reward.grounding_bbox.status_values}
 
-  - _target_: src.utils.GroundingSelectionReward
+  - _target_: src.rewards.GroundingSelectionReward
     is_answer_tag: ${reward.is_answer_tag}
     think_start_token: ${reward.think_start_token}
     think_end_token: ${reward.think_end_token}

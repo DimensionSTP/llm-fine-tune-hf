@@ -1,4 +1,4 @@
-_target_: src.utils.VllmEmbedding
+_target_: src.rewards.VllmEmbedding
 model_path: ${connected_dir}/models
 model_base: Qwen3-Embedding-0.6B
 model_ft_data: base
