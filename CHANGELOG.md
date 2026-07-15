@@ -2,6 +2,16 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.6.0] - 2026-07-15
+
+- Update Hugging Face training dependency pins for the current runtime stack, including `transformers==5.13.1`, `trl==1.8.0`, `vllm==0.19.1`, `safetensors==0.8.0`, and `compressed-tensors==0.15.0.1` across dependency files.
+- Fix KTO configuration targets for the current TRL public export layout and expose SFT dataset column names required by the updated TRL trainer path.
+- Repair command continuations in the small and large test launcher scripts so chained smoke commands preserve the intended shell structure.
+- Introduce the `src.rewards` package with shared base utilities and a package-level reward manager, then split format, text, retrieval, KV, grounding, embedding, vector-store, and vLLM runtime reward logic out of the legacy monolithic rewards module.
+- Move reward Hydra targets to the exported `src.rewards.*` API and remove reward exports from `src.utils`, keeping config paths aligned with the new package boundary.
+- Add grounded KV reward support for allowed sibling payload fields so `KVReward` can score configured KV fields while tolerating grounding-side evidence fields such as selected ids in the same result objects.
+- Wire the allowed-sibling KV controls through `configs/reward/base.yaml` and `configs/reward/manager.yaml`, and document the grounded KV compatibility contract in the README and reward reference.
+
 ## [v2.5.1] - 2026-07-03
 
 - Add `KVReward` support for top-level `results` solution roots so grounded Auto-KV rows can score extracted text by `target_id`.

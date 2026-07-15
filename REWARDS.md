@@ -1,8 +1,9 @@
 # Rewards
 
-This document summarizes the reward implementations in `src/utils/rewards.py`,
-the category keywords they expect, and the configurable options exposed by
-`configs/grpo.yaml` and `configs/reward/*.yaml`.
+This document summarizes the reward implementations exported from the
+`src/rewards/` package, the category keywords they expect, and the
+configurable options exposed by `configs/grpo.yaml` and
+`configs/reward/*.yaml`.
 
 ## Common Configuration (applies to all rewards)
 
@@ -248,7 +249,8 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 
 ## reward_categories Quick Reference
 
-Current matching rules in `src/utils/rewards.py`:
+Current matching rules implemented by reward classes exported from
+`src/rewards/`:
 
 - `math`
 - `choice`
