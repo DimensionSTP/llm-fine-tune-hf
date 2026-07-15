@@ -33,7 +33,7 @@ from .config_validation import validate_training_arguments_config
 from .peft_initialization import initialize_peft_model
 from .collate_fns import SFTDynamicPaddingCollator
 from ..helpers import filter_chat_template_kwargs
-from .rewards import RewardManager
+from ..rewards import RewardManager
 
 
 class DatasetBuilder(Protocol):
