@@ -5,6 +5,8 @@ import math
 import re
 import unicodedata
 
+from omegaconf import ListConfig
+
 from .base import BaseReward
 
 
@@ -54,6 +56,7 @@ class KVReward(BaseReward):
         empty_value_mismatch_cap: float,
         numeric_punctuation_mismatch_cap: float,
         score_threshold: float,
+        allowed_sibling_keys: List[str],
     ) -> None:
         BaseReward.__init__(
             self,
@@ -101,6 +104,9 @@ class KVReward(BaseReward):
         self.empty_value_mismatch_cap = empty_value_mismatch_cap
         self.numeric_punctuation_mismatch_cap = numeric_punctuation_mismatch_cap
         self.score_threshold = score_threshold
+        self.allowed_sibling_keys = self._normalize_allowed_sibling_keys(
+            allowed_sibling_keys=allowed_sibling_keys,
+        )
         self._validate_kv_reward_config()
 
     @property
@@ -185,6 +191,13 @@ class KVReward(BaseReward):
             raise ValueError("reward.kv.strict_json must be a bool")
         if not isinstance(self.use_weighted_fuzzy_f1, bool):
             raise ValueError("reward.kv.use_weighted_fuzzy_f1 must be a bool")
+        if not all(
+            isinstance(key, str) and key and key == key.strip()
+            for key in self.allowed_sibling_keys
+        ):
+            raise ValueError(
+                "reward.kv.allowed_sibling_keys must contain stripped non-empty strings"
+            )
         if (
             not isinstance(self.required_stop_token, str)
             or not self.required_stop_token
@@ -283,6 +296,20 @@ class KVReward(BaseReward):
             abs_tol=1.0e-6,
         ):
             raise ValueError(f"reward.kv.{first_name} + {second_name} must equal 1.0")
+
+    @staticmethod
+    def _normalize_allowed_sibling_keys(
+        allowed_sibling_keys: List[str],
+    ) -> Set[str]:
+        if isinstance(allowed_sibling_keys, (str, bytes)):
+            raise ValueError(
+                "reward.kv.allowed_sibling_keys must contain stripped non-empty strings"
+            )
+        if not isinstance(allowed_sibling_keys, (list, tuple, set, ListConfig)):
+            raise ValueError(
+                "reward.kv.allowed_sibling_keys must contain stripped non-empty strings"
+            )
+        return set(allowed_sibling_keys)
 
     def _extract_json_text_and_format_cap(
         self,
@@ -413,14 +440,16 @@ class KVReward(BaseReward):
         pred_json: Any,
         root_name: str,
     ) -> float:
+        if not isinstance(pred_json, dict):
+            return self.root_mismatch_cap
+        allowed_keys = {root_name} | self.allowed_sibling_keys
+        if set(pred_json.keys()) - allowed_keys:
+            return self.root_mismatch_cap
         if root_name == "results":
-            if isinstance(pred_json, dict) and isinstance(
-                pred_json.get(root_name),
-                list,
-            ):
+            if isinstance(pred_json.get(root_name), list):
                 return 1.0
             return self.root_mismatch_cap
-        if isinstance(pred_json, dict) and isinstance(pred_json.get(root_name), dict):
+        if isinstance(pred_json.get(root_name), dict):
             return 1.0
         return self.root_mismatch_cap
 
@@ -431,13 +460,15 @@ class KVReward(BaseReward):
         root_name: str,
     ) -> float:
         cap = 1.0
+        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
+        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
         pred_serialized = json.dumps(
-            pred_json,
+            pred_root,
             ensure_ascii=False,
             sort_keys=True,
         )
         gt_serialized = json.dumps(
-            gt_json,
+            gt_root,
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -447,8 +478,6 @@ class KVReward(BaseReward):
         ):
             cap = min(cap, self.length_ratio_cap)
 
-        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
-        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
         if root_name == "results":
             pred_leaf_count = self._count_results_leaf_values(results=pred_root)
             gt_leaf_count = self._count_results_leaf_values(results=gt_root)

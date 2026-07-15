@@ -1268,10 +1268,28 @@ class GroundingSelectionReward(BaseReward):
             payload=payload,
             logical_key="items",
         )
-        if not isinstance(items, list):
-            return None
-        if not all(isinstance(item, dict) for item in items):
-            return None
+        if isinstance(items, list):
+            if not all(isinstance(item, dict) for item in items):
+                return None
+            return items
+        if isinstance(items, dict):
+            return self._build_items_from_path_mapping(path_mapping=items)
+        return None
+
+    @staticmethod
+    def _build_items_from_path_mapping(
+        path_mapping: Dict[str, Any],
+    ) -> Optional[List[Dict[str, Any]]]:
+        items: List[Dict[str, Any]] = []
+        for target_id, selected_ids in path_mapping.items():
+            if not isinstance(target_id, str) or not target_id.strip():
+                return None
+            items.append(
+                {
+                    "target_id": target_id,
+                    "selected_ids": selected_ids,
+                }
+            )
         return items
 
     def _build_item_map(
