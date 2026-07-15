@@ -72,7 +72,7 @@ do
             generation_config.temperature=$temperature \
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
-            eval_batch_size=$eval_batch_size \
+            eval_batch_size=$eval_batch_size
     done
 done
 
@@ -150,7 +150,7 @@ do
             generation_config.temperature=$temperature \
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
-            eval_batch_size=$eval_batch_size \
+            eval_batch_size=$eval_batch_size
     done
 done
 
@@ -241,6 +241,6 @@ do
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
             eval_batch_size=$eval_batch_size \
-            test_output_dir=$test_output_dir \
+            test_output_dir=$test_output_dir
     done
 done
