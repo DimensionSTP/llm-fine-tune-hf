@@ -7,6 +7,7 @@ from .vector_store import FaissIndex
 from .retrieval import RetrievalBaseReward, RetrievalHitReward, RetrievalnDCGReward
 from .kv import KVReward
 from .grounding import GroundingBBoxReward, GroundingSelectionReward
+from .vllm_runtime import prepare_colocated_vllm_models, recapture_vllm_cuda_graphs
 
 __all__ = [
     "BaseReward",
@@ -28,4 +29,6 @@ __all__ = [
     "KVReward",
     "GroundingBBoxReward",
     "GroundingSelectionReward",
+    "prepare_colocated_vllm_models",
+    "recapture_vllm_cuda_graphs",
 ]

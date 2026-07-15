@@ -21,6 +21,7 @@ from ..datasets import (
     collect_vllm_images,
     is_vlm_content_parts,
 )
+from ..rewards import prepare_colocated_vllm_models
 from ..utils import *
 
 

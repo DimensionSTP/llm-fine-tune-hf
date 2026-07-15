@@ -2,7 +2,7 @@ from typing import List, Protocol, Any
 
 from vllm import LLM
 
-from src.utils.reward_embedding import VllmEmbedding
+from .embedding import VllmEmbedding
 
 
 class _RewardManagerLike(Protocol):
