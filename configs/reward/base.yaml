@@ -78,6 +78,7 @@ reward:
     empty_value_mismatch_cap: 0.0
     numeric_punctuation_mismatch_cap: 0.5
     score_threshold: 0.95
+    allowed_sibling_keys: [grounding]
   grounding_bbox:
     category_token: bbox
     format_reward: 0.1

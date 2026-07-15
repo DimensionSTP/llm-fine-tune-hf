@@ -146,6 +146,7 @@ rewards:
     empty_value_mismatch_cap: ${reward.kv.empty_value_mismatch_cap}
     numeric_punctuation_mismatch_cap: ${reward.kv.numeric_punctuation_mismatch_cap}
     score_threshold: ${reward.kv.score_threshold}
+    allowed_sibling_keys: ${reward.kv.allowed_sibling_keys}
 
   - _target_: src.rewards.GroundingBBoxReward
     is_answer_tag: ${reward.is_answer_tag}
