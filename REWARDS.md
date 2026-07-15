@@ -147,7 +147,8 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
     JSON answer.
   - `reward.kv.invalid_json_reward`: score for invalid prediction JSON.
   - `reward.kv.root_mismatch_cap`: max unit score when the prediction uses the
-    wrong root shape.
+    wrong root shape or top-level keys outside the expected root and
+    `reward.kv.allowed_sibling_keys`.
   - `reward.kv.missing_stop_cap`: max unit score when the terminal stop token is
     missing.
   - `reward.kv.middle_or_multiple_stop_cap`: max unit score when the stop token
@@ -155,9 +156,12 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
   - `reward.kv.trailing_text_cap`: max unit score when text remains after the
     terminal stop token.
   - `reward.kv.max_serialized_length_ratio` and `reward.kv.length_ratio_cap`:
-    cap overlong predictions.
+    cap overlong root payloads.
   - `reward.kv.max_leaf_count_ratio` and `reward.kv.leaf_count_ratio_cap`: cap
     predictions with too many extracted leaves.
+  - `reward.kv.allowed_sibling_keys`: top-level sibling keys ignored by KV
+    scoring; default `grounding` lets Auto-KV grounding rows combine KV and
+    grounding selection rewards without allowing arbitrary extra keys.
   - `reward.kv.kv_value_weight` and `reward.kv.kv_path_weight`: value/path
     balance for `kv` roots.
   - `reward.kv.table_value_weight` and `reward.kv.table_structure_weight`:
@@ -210,8 +214,9 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - Purpose: Select the correct grounding candidate ids when the task provides a
   candidate list instead of requiring generated boxes.
 - Logic: Parses JSON from the extracted answer. The prediction and solution are
-  top-level objects with a list selected by `reward.grounding_selection.schema_keys.items`;
-  the default list key is `grounding`. Items are matched by `target_id`, and
+  top-level objects with a list or compact `target_id -> selected_ids` mapping
+  selected by `reward.grounding_selection.schema_keys.items`; the default key is
+  `grounding`. Items are matched by `target_id`, and
   each gold target must have a prediction item. The reward compares each item's
   `selected_ids` with the gold `selected_ids`, rejects empty gold selections,
   penalizes wrong, over-selected, duplicate, missing, and extra target ids, and
@@ -220,13 +225,15 @@ These fields are wired in `configs/reward/manager.yaml` for every reward:
 - reward_categories: any category containing
   `reward.grounding_selection.category_token` (default: `evidence`).
 - Expected label schema in `solution`:
-  - top-level list key from `schema_keys.items`; default is `grounding`.
+  - top-level list or compact mapping key from `schema_keys.items`; default is
+    `grounding`.
     `results` can be used for schemas that combine extracted text and evidence
     ids in the same item.
   - item `target_id`: unique target id.
   - item `selected_ids`: correct candidate ids for that target.
 - Expected prediction schema:
-  - top-level list key from `schema_keys.items`; default is `grounding`.
+  - top-level list or compact mapping key from `schema_keys.items`; default is
+    `grounding`.
   - item `target_id`: target id to match against the solution.
   - item `selected_ids`: predicted candidate ids. The
     `selected_candidate_ids` alias is also supported by default.

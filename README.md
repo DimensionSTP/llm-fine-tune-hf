@@ -459,7 +459,7 @@ Reward default hyperparameters and weights are centralized in `configs/reward/ba
 reward.weight.kv={0.0 or positive float}
 ```
 
-`kv` is the only KV reward class for samples whose reward category contains the `kv` token, such as `single_kv` and `multi_kv`. It scores each sample once, so use `reward.weight.kv`. Supported solution roots are `kv`, `tables`, and `results`; `results` is matched by `target_id` and scores `results[].text` while ignoring `results[].selected_ids`.
+`kv` is the only KV reward class for samples whose reward category contains the `kv` token, such as `single_kv` and `multi_kv`. It scores each sample once, so use `reward.weight.kv`. Supported solution roots are `kv`, `tables`, and `results`; predictions may include only the expected top-level root plus keys listed in `reward.kv.allowed_sibling_keys` (`grounding` by default). `results` is matched by `target_id` and scores `results[].text` while ignoring `results[].selected_ids`.
 
 * Grounding bbox reward
 
@@ -476,7 +476,7 @@ The label in `solution` should be a JSON object with `grounding_status`, optiona
 
 For labels whose `grounding_status` is not `found`, the reward treats an answer with non-`found` status and empty `evidence_occurrences` as the correct negative grounding result.
 
-`grounding_selection` is a separate candidate-selection reward for labels that expect top-level `grounding` lists rather than generated boxes. Each solution and prediction item is matched by `target_id`; item `selected_ids` are compared against the gold item, with the `selected_candidate_ids` alias supported for predictions. It does not use `grounding_status`; value targets are expected to provide evidence candidate ids through `selected_ids`. Missing gold targets, extra predicted targets, duplicate selected ids, wrong candidates, and over-selection are penalized without crashing malformed generations.
+`grounding_selection` is a separate candidate-selection reward for labels that expect top-level `grounding` lists or compact `target_id -> selected_ids` mappings rather than generated boxes. Each solution and prediction item is matched by `target_id`; item `selected_ids` are compared against the gold item, with the `selected_candidate_ids` alias supported for predictions. It does not use `grounding_status`; value targets are expected to provide evidence candidate ids through `selected_ids`. Missing gold targets, extra predicted targets, duplicate selected ids, wrong candidates, and over-selection are penalized without crashing malformed generations.
 
 For OCR-dependent precise grounding, `selected_ids` follows the inference hook contract: numeric ids and numeric strings are normalized to OCR item ids, boolean ids are invalid, and empty gold selections are skipped as invalid labels. The default cap values preserve the legacy reward shape. Hard grounding runs can lower `partial_match_cap`, `single_id_partial_cap`, `short_multi_id_partial_cap`, `long_multi_id_partial_cap`, `very_long_multi_id_partial_cap`, `over_selection_cap`, `wrong_occurrence_cap`, `schema_only_reward_cap`, `empty_selection_reward_cap`, `invalid_schema_reward_cap`, and `extra_target_reward_cap` so malformed, empty, extra-target, over-selected, or partial outputs cannot keep high reward.
 
