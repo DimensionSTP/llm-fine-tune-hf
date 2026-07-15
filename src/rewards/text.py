@@ -1,0 +1,475 @@
+from typing import Dict, List, Optional, Any
+import contextlib
+import io
+import multiprocessing as mp
+import queue
+import re
+
+from rouge_score import rouge_scorer
+
+from .base import BaseReward, format_reward_name_float
+
+
+class MatchReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        extraction_profile: str,
+        weight: float,
+        incorrect_penalty: float,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            extraction_profile=extraction_profile,
+            weight=weight,
+        )
+        self.incorrect_penalty = incorrect_penalty
+
+    @property
+    def name(self) -> str:
+        if self.incorrect_penalty <= 0.0:
+            return super().name
+        penalty = format_reward_name_float(value=self.incorrect_penalty)
+        return f"{super().name}_neg{penalty}"
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category not in ["math", "choice"]:
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+            if extracted_answer == sol:
+                rewards.append(1.0)
+                continue
+
+            clean_answer = self.strip_wrappers(text=extracted_answer)
+            if clean_answer == sol:
+                rewards.append(1.0)
+                continue
+
+            if self.normalize_text(text=clean_answer) == self.normalize_text(text=sol):
+                rewards.append(1.0)
+                continue
+
+            answer_choice = self.extract_choice(text=clean_answer)
+            solution_choice = self.extract_choice(text=sol)
+            if answer_choice and solution_choice:
+                if answer_choice == solution_choice:
+                    rewards.append(1.0)
+                    continue
+
+            answer_number = self.extract_number(text=clean_answer)
+            solution_number = self.extract_number(text=sol)
+            if answer_number and solution_number:
+                if answer_number == solution_number:
+                    rewards.append(1.0)
+                    continue
+
+            rewards.append(-self.incorrect_penalty)
+
+        return rewards
+
+    @staticmethod
+    def extract_choice(text: str) -> str:
+        if not text:
+            return ""
+        match = re.match(
+            r"^[\s:=\-\(\[\{]*([A-Ea-e])[\)\]\}\s\.,;:!?]*$",
+            text,
+        )
+        if match:
+            return match.group(1).upper()
+        match = re.search(
+            r"\b([A-Ea-e])\b",
+            text,
+        )
+        return match.group(1).upper() if match else ""
+
+    @staticmethod
+    def extract_number(text: str) -> str:
+        if not text:
+            return ""
+        match = re.search(
+            r"-?\d+(?:\.\d+)?",
+            text,
+        )
+        if not match:
+            return ""
+        number = match.group(0)
+        if re.fullmatch(r"-?\d+", number):
+            sign = "-" if number.startswith("-") else ""
+            digits = number[1:] if sign else number
+            digits = digits.lstrip("0") or "0"
+            return f"{sign}{digits}"
+        return number
+
+
+class CodeExecutionReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        extraction_profile: str,
+        weight: float,
+        timeout: int,
+        wrong_output_penalty: float,
+        non_executable_penalty: float,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            extraction_profile=extraction_profile,
+            weight=weight,
+        )
+        self.timeout = timeout
+        self.wrong_output_penalty = wrong_output_penalty
+        self.non_executable_penalty = non_executable_penalty
+
+    @property
+    def name(self) -> str:
+        if self.wrong_output_penalty <= 0.0 and self.non_executable_penalty <= 0.0:
+            return super().name
+
+        wrong_penalty = format_reward_name_float(value=self.wrong_output_penalty)
+        non_executable_penalty = format_reward_name_float(
+            value=self.non_executable_penalty,
+        )
+        return f"{super().name}_negw{wrong_penalty}_negx{non_executable_penalty}"
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "code":
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            answer_code = self.parse_python_code(text=extracted_answer)
+            if not answer_code:
+                rewards.append(-self.non_executable_penalty)
+                continue
+
+            answer_result = self.execute_python_code(
+                code=answer_code,
+                timeout=self.timeout,
+            )
+            if answer_result["status"] != "success":
+                rewards.append(-self.non_executable_penalty)
+                continue
+
+            solution_code = self.parse_python_code(text=sol)
+            if not solution_code:
+                rewards.append(None)
+                continue
+
+            solution_result = self.execute_python_code(
+                code=solution_code,
+                timeout=self.timeout,
+            )
+            if solution_result["status"] != "success":
+                rewards.append(None)
+                continue
+
+            if answer_result["output"] == solution_result["output"]:
+                rewards.append(1.0)
+            else:
+                rewards.append(0.5 - self.wrong_output_penalty)
+
+        return rewards
+
+    @staticmethod
+    def parse_python_code(text: str) -> str:
+        if not isinstance(text, str):
+            return ""
+        match = re.search(
+            r"```python\s*(.*?)\s*```",
+            text,
+            flags=re.DOTALL,
+        )
+        if match:
+            return match.group(1).strip()
+        return ""
+
+    def execute_python_code(
+        self,
+        code: str,
+        timeout: int,
+    ) -> Dict[str, str]:
+        if timeout <= 0:
+            raise ValueError("timeout must be a positive integer")
+
+        if not isinstance(code, str) or not code.strip():
+            return {
+                "status": "no_code",
+                "output": "",
+                "error": "Empty or invalid python snippet",
+            }
+
+        result_queue: mp.Queue = mp.Queue()
+        process = mp.Process(
+            target=self._execute_code_worker,
+            args=(
+                code,
+                result_queue,
+            ),
+        )
+        process.start()
+        process.join(timeout)
+
+        if process.is_alive():
+            process.terminate()
+            process.join()
+            result = {
+                "status": "timeout",
+                "output": "",
+                "error": f"Execution exceeded {timeout} seconds",
+            }
+        else:
+            try:
+                result = result_queue.get_nowait()
+            except queue.Empty:
+                result = {
+                    "status": "error",
+                    "output": "",
+                    "error": "Execution finished without returning a result",
+                }
+
+        result_queue.close()
+        result_queue.join_thread()
+        return result
+
+    @staticmethod
+    def _execute_code_worker(
+        code: str,
+        result_queue: mp.Queue,
+    ) -> None:
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                exec(
+                    code,
+                    {
+                        "__name__": "__main__",
+                    },
+                )
+            result_queue.put(
+                {
+                    "status": "success",
+                    "output": buffer.getvalue().strip(),
+                    "error": "",
+                }
+            )
+        except Exception as exc:
+            result_queue.put(
+                {
+                    "status": "error",
+                    "output": buffer.getvalue().strip(),
+                    "error": str(exc),
+                }
+            )
+
+
+class RougeReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        extraction_profile: str,
+        weight: float,
+        rouge_type: str,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            extraction_profile=extraction_profile,
+            weight=weight,
+        )
+        self.rouge_type = rouge_type
+
+        if self.rouge_type not in ["1", "2", "l"]:
+            raise ValueError("rouge_type must be '1', '2', or 'l'")
+
+        self.scorer = rouge_scorer.RougeScorer(
+            [f"rouge{self.rouge_type.upper()}"],
+            use_stemmer=True,
+        )
+
+    @property
+    def name(self) -> str:
+        return f"rouge_{self.rouge_type}_reward"
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[str],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "rouge":
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            clean_answer = self.strip_wrappers(text=extracted_answer)
+
+            score = self.calculate_rouge_score(
+                prediction=clean_answer,
+                reference=sol,
+            )
+            rewards.append(score)
+        return rewards
+
+    def calculate_rouge_score(
+        self,
+        prediction: str,
+        reference: str,
+    ) -> float:
+        scores = self.scorer.score(
+            prediction=prediction,
+            target=reference,
+        )
+        return scores[f"rouge{self.rouge_type.upper()}"].fmeasure
+
+
+class EquationReward(BaseReward):
+    def __init__(
+        self,
+        is_answer_tag: bool,
+        think_start_token: str,
+        think_end_token: str,
+        answer_start_token: str,
+        answer_end_token: str,
+        eos_token: str,
+        extraction_profile: str,
+        weight: float,
+        equation_target_column_name: str,
+        equation_numbers_column_name: str,
+    ) -> None:
+        super().__init__(
+            is_answer_tag=is_answer_tag,
+            think_start_token=think_start_token,
+            think_end_token=think_end_token,
+            answer_start_token=answer_start_token,
+            answer_end_token=answer_end_token,
+            eos_token=eos_token,
+            extraction_profile=extraction_profile,
+            weight=weight,
+        )
+        self.equation_target_column_name = equation_target_column_name
+        self.equation_numbers_column_name = equation_numbers_column_name
+
+    def compute(
+        self,
+        completions: List[List[Dict[str, str]]],
+        solution: List[Dict[str, Any]],
+        reward_categories: List[str],
+        **kwargs,
+    ) -> List[Optional[float]]:
+        rewards = []
+        contents = self.get_contents_from_completions(completions=completions)
+        for content, sol, category in zip(contents, solution, reward_categories):
+            if category != "equation":
+                rewards.append(None)
+                continue
+
+            if not sol:
+                rewards.append(None)
+                continue
+
+            extracted_answer = self.extract_answer_from_generation(generation=content)
+            extracted_answer = self.split_on_keywords(text=extracted_answer)
+
+            clean_answer = self.strip_wrappers(text=extracted_answer)
+
+            reward = self.calculate_equation_reward(
+                equation=clean_answer,
+                solution=sol,
+            )
+            rewards.append(reward)
+        return rewards
+
+    def calculate_equation_reward(
+        self,
+        equation: str,
+        solution: Dict[str, Any],
+    ) -> float:
+        target = solution[self.equation_target_column_name]
+        numbers = solution[self.equation_numbers_column_name]
+        try:
+            used_numbers = [int(n) for n in re.findall(r"\d+", equation)]
+            if sorted(used_numbers) != sorted(numbers):
+                return 0.0
+
+            allowed_pattern = r"^[\d+\-*/().\s]+$"
+            if not re.match(allowed_pattern, equation):
+                return 0.0
+
+            result = eval(equation, {"__builtins__": None}, {})
+            if abs(float(result) - float(target)) < 1e-5:
+                return 1.0
+            else:
+                return 0.0
+        except Exception:
+            return 0.0
