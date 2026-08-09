@@ -375,11 +375,11 @@ class StructuralDataset(Dataset):
             self.ignore_index,
         )
 
-        start_indices = self.find_pattern_indices(
+        start_indices = self._find_pattern_indices(
             input_ids=input_ids,
             pattern=self.response_start_tokens,
         )
-        end_indices = self.find_pattern_indices(
+        end_indices = self._find_pattern_indices(
             input_ids=input_ids,
             pattern=self.response_end_tokens,
         )
@@ -438,11 +438,11 @@ class StructuralDataset(Dataset):
                     input_ids=input_ids[sample_idx],
                     labels=labels[sample_idx],
                     attention_mask=sample_attention_mask,
-                    start_indices=self.find_pattern_indices(
+                    start_indices=self._find_pattern_indices(
                         input_ids=input_ids[sample_idx],
                         pattern=self.response_start_tokens,
                     ),
-                    end_indices=self.find_pattern_indices(
+                    end_indices=self._find_pattern_indices(
                         input_ids=input_ids[sample_idx],
                         pattern=self.response_end_tokens,
                     ),
@@ -586,7 +586,7 @@ class StructuralDataset(Dataset):
             return input_ids.size(0) >= self.max_length
         return int(attention_mask.sum().item()) >= self.max_length
 
-    def find_pattern_indices(
+    def _find_pattern_indices(
         self,
         input_ids: torch.Tensor,
         pattern: torch.Tensor,
