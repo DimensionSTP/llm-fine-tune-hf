@@ -45,6 +45,7 @@ from .test_utils import (
     load_test_dataframe,
 )
 from .vllm_sync import (
+    resolve_lora_streaming_name_remap_config,
     patch_qwen_packed_moe_vllm_sync,
     patch_sparse_decoder_moe_vllm_sync,
     patch_lora_streaming_vllm_sync,
@@ -95,6 +96,7 @@ __all__ = [
     "build_sampling_params",
     "build_lora_request",
     "load_test_dataframe",
+    "resolve_lora_streaming_name_remap_config",
     "patch_qwen_packed_moe_vllm_sync",
     "patch_sparse_decoder_moe_vllm_sync",
     "patch_lora_streaming_vllm_sync",
