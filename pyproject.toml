@@ -27,6 +27,7 @@ dependencies = [
     "numpy==2.4.4",
     "omegaconf==2.3.0",
     "opencv-python-headless==4.13.0.92",
+    "packaging==26.2",
     "pandas==3.0.1",
     "peft==0.18.1",
     "pillow==12.1.1",
