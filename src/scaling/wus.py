@@ -104,7 +104,10 @@ def width_upscale(
     state_dict = model.state_dict()
     new_state_dict = {}
 
-    for key, tensor in tqdm(state_dict.items(), desc="Scaling weights"):
+    for key, tensor in tqdm(
+        state_dict.items(),
+        desc="Scaling weights",
+    ):
         if "embed_tokens" in key or "lm_head" in key:
             if tensor.dim() == 2:
                 new_tensor = torch.zeros(
@@ -214,7 +217,14 @@ def width_upscale(
         new_state_dict[key] = new_tensor
 
     keys = list(new_state_dict.keys())
-    num_splits = config.num_safetensors if hasattr(config, "num_safetensors") else 1
+    num_splits = (
+        config.num_safetensors
+        if hasattr(
+            config,
+            "num_safetensors",
+        )
+        else 1
+    )
     split_size = len(keys) // num_splits
     total_size = sum(
         param.numel() * param.element_size() for param in new_state_dict.values()
@@ -226,7 +236,10 @@ def width_upscale(
         "weight_map": {},
     }
 
-    for i in tqdm(range(num_splits), desc="Saving model"):
+    for i in tqdm(
+        range(num_splits),
+        desc="Saving model",
+    ):
         start_idx = i * split_size
         end_idx = (i + 1) * split_size if i < num_splits - 1 else len(keys)
         safe_tensors_name = f"model-{i+1:05d}-of-{num_splits:05d}.safetensors"
@@ -244,7 +257,10 @@ def width_upscale(
                 "format": "pt",
             },
         )
-    with open(f"{save_dir}/model.safetensors.index.json", "w") as f:
+    with open(
+        f"{save_dir}/model.safetensors.index.json",
+        "w",
+    ) as f:
         json.dump(
             index_dict,
             f,

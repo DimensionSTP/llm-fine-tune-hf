@@ -70,15 +70,28 @@ def depth_upscale(
     model = AutoModelForCausalLM.from_pretrained(config.pretrained_model_name)
 
     difference = dus_hiddens - original_hidden_layers
-    lower_arrangement = list(range(0, (original_hidden_layers + difference) // 2))
+    lower_arrangement = list(
+        range(
+            0,
+            (original_hidden_layers + difference) // 2,
+        )
+    )
     upper_arrangement = list(
-        range((original_hidden_layers - difference) // 2, original_hidden_layers)
+        range(
+            (original_hidden_layers - difference) // 2,
+            original_hidden_layers,
+        )
     )
     layer_arrangement = lower_arrangement + upper_arrangement
 
     state_dict = model.state_dict().copy()
     layer_keys_template = [
-        key.replace(".0.", ".{}.") for key in model.state_dict() if ".0." in key
+        key.replace(
+            ".0.",
+            ".{}.",
+        )
+        for key in model.state_dict()
+        if ".0." in key
     ]
 
     for dus_layer, original_layer in enumerate(layer_arrangement):
@@ -88,7 +101,14 @@ def depth_upscale(
             ]
 
     keys = list(state_dict.keys())
-    num_splits = config.num_safetensors if hasattr(config, "num_safetensors") else 1
+    num_splits = (
+        config.num_safetensors
+        if hasattr(
+            config,
+            "num_safetensors",
+        )
+        else 1
+    )
     split_size = len(keys) // num_splits
     total_size = sum(
         param.numel() * param.element_size() for param in state_dict.values()
@@ -118,7 +138,10 @@ def depth_upscale(
                 "format": "pt",
             },
         )
-    with open(f"{save_dir}/model.safetensors.index.json", "w") as f:
+    with open(
+        f"{save_dir}/model.safetensors.index.json",
+        "w",
+    ) as f:
         json.dump(
             index_dict,
             f,
