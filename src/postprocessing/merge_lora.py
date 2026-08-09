@@ -36,7 +36,124 @@ from omegaconf import DictConfig, OmegaConf
 from .artifacts import resolve_existing_artifact_output_dir
 
 
-def torch_dtype_from_precision(
+@hydra.main(
+    config_path="../../configs/",
+    config_name="sft.yaml",
+)
+def merge_lora(
+    config: DictConfig,
+) -> None:
+    resolve_existing_artifact_output_dir(
+        config=config,
+    )
+
+    base_model_name_or_path = config.pretrained_model_name
+    adapter_path = config.peft_test.adapter_path
+    merged_output_path = os.path.join(
+        config.merge_path,
+        config.save_detail,
+    )
+
+    if not os.path.isdir(adapter_path):
+        raise FileNotFoundError(
+            f"Adapter checkpoint directory not found: {adapter_path}"
+        )
+
+    os.makedirs(
+        merged_output_path,
+        exist_ok=True,
+    )
+
+    torch_dtype = _torch_dtype_from_precision(
+        precision=config.precision,
+    )
+
+    if config.modality == "text":
+        data_encoder = AutoTokenizer.from_pretrained(
+            pretrained_model_name_or_path=base_model_name_or_path,
+            revision=str(config.revision),
+        )
+    else:
+        data_encoder = AutoProcessor.from_pretrained(
+            pretrained_model_name_or_path=base_model_name_or_path,
+            revision=str(config.revision),
+        )
+
+    if config.modality == "text":
+        base_model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=base_model_name_or_path,
+            torch_dtype=torch_dtype,
+            device_map=None,
+            revision=str(config.revision),
+        )
+    else:
+        base_model = AutoModelForImageTextToText.from_pretrained(
+            pretrained_model_name_or_path=base_model_name_or_path,
+            torch_dtype=torch_dtype,
+            device_map=None,
+            revision=str(config.revision),
+        )
+    base_model.eval()
+
+    peft_model = PeftModel.from_pretrained(
+        model=base_model,
+        model_id=adapter_path,
+        is_trainable=False,
+    )
+    peft_model.eval()
+
+    merged_model = peft_model.merge_and_unload()
+    merged_model.eval()
+
+    data_encoder.save_pretrained(
+        merged_output_path,
+    )
+    save_pretrained_kwargs = {
+        "safe_serialization": True,
+    }
+    merge_max_shard_size = OmegaConf.select(
+        config,
+        "merge_max_shard_size",
+        default=None,
+    )
+    if merge_max_shard_size is not None:
+        save_pretrained_kwargs["max_shard_size"] = _normalize_hf_max_shard_size(
+            merge_max_shard_size
+        )
+
+    pack_qwen_moe_experts = _config_as_bool(
+        OmegaConf.select(
+            config,
+            "merge_pack_qwen_moe_experts",
+            default=False,
+        )
+    )
+    packed_expert_groups = 0
+
+    merged_model.save_pretrained(
+        merged_output_path,
+        **save_pretrained_kwargs,
+    )
+    if pack_qwen_moe_experts:
+        packed_expert_groups = _pack_qwen_moe_experts_checkpoint(
+            checkpoint_dir=merged_output_path,
+            max_shard_size=save_pretrained_kwargs.get(
+                "max_shard_size",
+                "5GB",
+            ),
+        )
+
+    print("[OK] Merged LoRA (and modules_to_save if present) into base model.")
+    print(f"[OK] Base model: {base_model_name_or_path}")
+    print(f"[OK] Adapter checkpoint: {adapter_path}")
+    print(f"[OK] Saved merged model to: {merged_output_path}")
+    if merge_max_shard_size is not None:
+        print(f"[OK] max_shard_size: {merge_max_shard_size}")
+    if pack_qwen_moe_experts:
+        print(f"[OK] packed Qwen MoE expert groups: {packed_expert_groups}")
+
+
+def _torch_dtype_from_precision(
     precision: object,
 ) -> torch.dtype:
     if precision in [32, "32"]:
@@ -48,7 +165,7 @@ def torch_dtype_from_precision(
     return torch.float32
 
 
-def config_as_bool(
+def _config_as_bool(
     value: object,
 ) -> bool:
     if isinstance(
@@ -67,7 +184,7 @@ def config_as_bool(
     }
 
 
-def normalize_hf_max_shard_size(
+def _normalize_hf_max_shard_size(
     value: object,
 ) -> str:
     shard_size = str(value)
@@ -82,7 +199,7 @@ def normalize_hf_max_shard_size(
     return shard_size
 
 
-def parse_size_to_bytes(
+def _parse_size_to_bytes(
     value: object,
 ) -> int:
     match = re.match(
@@ -119,7 +236,7 @@ def parse_size_to_bytes(
     )
 
 
-def load_safetensors_index(
+def _load_safetensors_index(
     checkpoint_dir: str,
 ) -> Dict[str, Any]:
     index_path = os.path.join(
@@ -132,7 +249,7 @@ def load_safetensors_index(
         return json.load(f)
 
 
-def copy_non_weight_files(
+def _copy_non_weight_files(
     input_dir: str,
     output_dir: str,
 ) -> None:
@@ -174,7 +291,7 @@ def _match_qwen_moe_expert_key(
     )
 
 
-def group_qwen_moe_expert_keys(
+def _group_qwen_moe_expert_keys(
     weight_map: Dict[str, str],
 ) -> Dict[str, Dict[int, Dict[str, str]]]:
     grouped_keys: Dict[str, Dict[int, Dict[str, str]]] = defaultdict(
@@ -433,23 +550,23 @@ def _pack_qwen_moe_expert_group(
     shard_writer.flush()
 
 
-def pack_qwen_moe_experts_checkpoint(
+def _pack_qwen_moe_experts_checkpoint(
     checkpoint_dir: str,
     max_shard_size: object,
 ) -> int:
     """Rewrite a saved Qwen MoE checkpoint with fused expert tensors."""
     source_dir = os.path.normpath(checkpoint_dir)
-    index = load_safetensors_index(
+    index = _load_safetensors_index(
         checkpoint_dir=source_dir,
     )
     old_weight_map: Dict[str, str] = index["weight_map"]
-    expert_groups = group_qwen_moe_expert_keys(
+    expert_groups = _group_qwen_moe_expert_keys(
         weight_map=old_weight_map,
     )
     if not expert_groups:
         return 0
 
-    max_shard_size_bytes = parse_size_to_bytes(
+    max_shard_size_bytes = _parse_size_to_bytes(
         max_shard_size,
     )
     temp_dir = os.path.join(
@@ -468,7 +585,7 @@ def pack_qwen_moe_experts_checkpoint(
         temp_dir,
         exist_ok=False,
     )
-    copy_non_weight_files(
+    _copy_non_weight_files(
         input_dir=source_dir,
         output_dir=temp_dir,
     )
@@ -566,123 +683,6 @@ def pack_qwen_moe_experts_checkpoint(
     shutil.rmtree(backup_dir)
 
     return len(expert_groups)
-
-
-@hydra.main(
-    config_path="../../configs/",
-    config_name="sft.yaml",
-)
-def merge_lora(
-    config: DictConfig,
-) -> None:
-    resolve_existing_artifact_output_dir(
-        config=config,
-    )
-
-    base_model_name_or_path = config.pretrained_model_name
-    adapter_path = config.peft_test.adapter_path
-    merged_output_path = os.path.join(
-        config.merge_path,
-        config.save_detail,
-    )
-
-    if not os.path.isdir(adapter_path):
-        raise FileNotFoundError(
-            f"Adapter checkpoint directory not found: {adapter_path}"
-        )
-
-    os.makedirs(
-        merged_output_path,
-        exist_ok=True,
-    )
-
-    torch_dtype = torch_dtype_from_precision(
-        precision=config.precision,
-    )
-
-    if config.modality == "text":
-        data_encoder = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=base_model_name_or_path,
-            revision=str(config.revision),
-        )
-    else:
-        data_encoder = AutoProcessor.from_pretrained(
-            pretrained_model_name_or_path=base_model_name_or_path,
-            revision=str(config.revision),
-        )
-
-    if config.modality == "text":
-        base_model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_name_or_path=base_model_name_or_path,
-            torch_dtype=torch_dtype,
-            device_map=None,
-            revision=str(config.revision),
-        )
-    else:
-        base_model = AutoModelForImageTextToText.from_pretrained(
-            pretrained_model_name_or_path=base_model_name_or_path,
-            torch_dtype=torch_dtype,
-            device_map=None,
-            revision=str(config.revision),
-        )
-    base_model.eval()
-
-    peft_model = PeftModel.from_pretrained(
-        model=base_model,
-        model_id=adapter_path,
-        is_trainable=False,
-    )
-    peft_model.eval()
-
-    merged_model = peft_model.merge_and_unload()
-    merged_model.eval()
-
-    data_encoder.save_pretrained(
-        merged_output_path,
-    )
-    save_pretrained_kwargs = {
-        "safe_serialization": True,
-    }
-    merge_max_shard_size = OmegaConf.select(
-        config,
-        "merge_max_shard_size",
-        default=None,
-    )
-    if merge_max_shard_size is not None:
-        save_pretrained_kwargs["max_shard_size"] = normalize_hf_max_shard_size(
-            merge_max_shard_size
-        )
-
-    pack_qwen_moe_experts = config_as_bool(
-        OmegaConf.select(
-            config,
-            "merge_pack_qwen_moe_experts",
-            default=False,
-        )
-    )
-    packed_expert_groups = 0
-
-    merged_model.save_pretrained(
-        merged_output_path,
-        **save_pretrained_kwargs,
-    )
-    if pack_qwen_moe_experts:
-        packed_expert_groups = pack_qwen_moe_experts_checkpoint(
-            checkpoint_dir=merged_output_path,
-            max_shard_size=save_pretrained_kwargs.get(
-                "max_shard_size",
-                "5GB",
-            ),
-        )
-
-    print("[OK] Merged LoRA (and modules_to_save if present) into base model.")
-    print(f"[OK] Base model: {base_model_name_or_path}")
-    print(f"[OK] Adapter checkpoint: {adapter_path}")
-    print(f"[OK] Saved merged model to: {merged_output_path}")
-    if merge_max_shard_size is not None:
-        print(f"[OK] max_shard_size: {merge_max_shard_size}")
-    if pack_qwen_moe_experts:
-        print(f"[OK] packed Qwen MoE expert groups: {packed_expert_groups}")
 
 
 if __name__ == "__main__":
