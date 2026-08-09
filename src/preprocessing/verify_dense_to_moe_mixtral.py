@@ -23,86 +23,6 @@ import hydra
 from omegaconf import DictConfig
 
 
-def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
-    dtype_str = str(dtype_str).lower()
-    if dtype_str in ("bf16", "bfloat16"):
-        return torch.bfloat16
-    if dtype_str in ("fp16", "float16"):
-        return torch.float16
-    if dtype_str in ("fp32", "float32"):
-        return torch.float32
-    raise ValueError(f"Unknown dtype: {dtype_str}")
-
-
-def _infer_num_layers(model: torch.nn.Module) -> int:
-    return len(model.model.layers)
-
-
-def _max_abs_diff(
-    a: torch.Tensor,
-    b: torch.Tensor,
-) -> float:
-    return float((a - b).abs().max().item())
-
-
-def _mean_abs_diff(
-    a: torch.Tensor,
-    b: torch.Tensor,
-) -> float:
-    return float((a - b).abs().mean().item())
-
-
-def _cosine_sim(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    eps: float,
-) -> float:
-    a = a.flatten().float()
-    b = b.flatten().float()
-    return float(
-        torch.dot(
-            a,
-            b,
-        )
-        / (a.norm() * b.norm() + eps)
-    )
-
-
-def _gate_key_candidates(layer: int) -> List[str]:
-    return [
-        f"model.layers.{layer}.mlp.gate.weight",
-        f"model.layers.{layer}.mlp.router.weight",
-    ]
-
-
-def _get_expert_proj_tensor(
-    state_dict: Dict[str, torch.Tensor],
-    layer: int,
-    expert: int,
-    proj: str,
-) -> torch.Tensor:
-    if proj in [
-        "gate_proj",
-        "up_proj",
-    ]:
-        gate_up_key = f"model.layers.{layer}.mlp.experts.gate_up_proj"
-        if gate_up_key not in state_dict:
-            raise KeyError(f"Missing expected Mixtral key: {gate_up_key}")
-        gate_up = state_dict[gate_up_key][expert]
-        intermediate_size = gate_up.shape[0] // 2
-        if proj == "gate_proj":
-            return gate_up[:intermediate_size]
-        return gate_up[intermediate_size:]
-
-    if proj == "down_proj":
-        down_key = f"model.layers.{layer}.mlp.experts.down_proj"
-        if down_key not in state_dict:
-            raise KeyError(f"Missing expected Mixtral key: {down_key}")
-        return state_dict[down_key][expert]
-
-    raise ValueError(f"Unknown proj={proj}")
-
-
 @hydra.main(
     config_path="../../configs/",
     config_name="sft.yaml",
@@ -115,7 +35,7 @@ def verify_dense_to_moe(
     moe_dir = str(d2m_cfg.moe_model_dir)
     dense_id = str(config.pretrained_model_name)
 
-    dtype = torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
@@ -286,6 +206,86 @@ def verify_dense_to_moe(
             ensure_ascii=False,
         )
     print(f"[OK] Dense-to-MoE verification report saved to: {out_path}")
+
+
+def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+    dtype_str = str(dtype_str).lower()
+    if dtype_str in ("bf16", "bfloat16"):
+        return torch.bfloat16
+    if dtype_str in ("fp16", "float16"):
+        return torch.float16
+    if dtype_str in ("fp32", "float32"):
+        return torch.float32
+    raise ValueError(f"Unknown dtype: {dtype_str}")
+
+
+def _infer_num_layers(model: torch.nn.Module) -> int:
+    return len(model.model.layers)
+
+
+def _max_abs_diff(
+    a: torch.Tensor,
+    b: torch.Tensor,
+) -> float:
+    return float((a - b).abs().max().item())
+
+
+def _mean_abs_diff(
+    a: torch.Tensor,
+    b: torch.Tensor,
+) -> float:
+    return float((a - b).abs().mean().item())
+
+
+def _cosine_sim(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    eps: float,
+) -> float:
+    a = a.flatten().float()
+    b = b.flatten().float()
+    return float(
+        torch.dot(
+            a,
+            b,
+        )
+        / (a.norm() * b.norm() + eps)
+    )
+
+
+def _gate_key_candidates(layer: int) -> List[str]:
+    return [
+        f"model.layers.{layer}.mlp.gate.weight",
+        f"model.layers.{layer}.mlp.router.weight",
+    ]
+
+
+def _get_expert_proj_tensor(
+    state_dict: Dict[str, torch.Tensor],
+    layer: int,
+    expert: int,
+    proj: str,
+) -> torch.Tensor:
+    if proj in [
+        "gate_proj",
+        "up_proj",
+    ]:
+        gate_up_key = f"model.layers.{layer}.mlp.experts.gate_up_proj"
+        if gate_up_key not in state_dict:
+            raise KeyError(f"Missing expected Mixtral key: {gate_up_key}")
+        gate_up = state_dict[gate_up_key][expert]
+        intermediate_size = gate_up.shape[0] // 2
+        if proj == "gate_proj":
+            return gate_up[:intermediate_size]
+        return gate_up[intermediate_size:]
+
+    if proj == "down_proj":
+        down_key = f"model.layers.{layer}.mlp.experts.down_proj"
+        if down_key not in state_dict:
+            raise KeyError(f"Missing expected Mixtral key: {down_key}")
+        return state_dict[down_key][expert]
+
+    raise ValueError(f"Unknown proj={proj}")
 
 
 if __name__ == "__main__":

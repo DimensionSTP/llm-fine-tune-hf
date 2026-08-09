@@ -24,7 +24,364 @@ import hydra
 from omegaconf import DictConfig
 
 
-def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+@hydra.main(
+    config_path="../../configs/",
+    config_name="sft.yaml",
+)
+def verify_lora_merge(
+    config: DictConfig,
+) -> None:
+    d2m_cfg = config.dense_to_moe
+
+    base_moe_dir = str(d2m_cfg.moe_model_dir)
+    merged_dir = str(d2m_cfg.merged_moe_model_dir)
+
+    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    device = torch.device(str(d2m_cfg.runtime.device))
+    trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_moe_dir,
+        torch_dtype=dtype,
+        device_map=None,
+        trust_remote_code=trust_remote_code,
+    ).to(device)
+    base_model.eval()
+    base_state_dict = {k: v.detach().cpu() for k, v in base_model.state_dict().items()}
+
+    merged_model = AutoModelForCausalLM.from_pretrained(
+        merged_dir,
+        torch_dtype=dtype,
+        device_map=None,
+        trust_remote_code=trust_remote_code,
+    ).to(device)
+    merged_model.eval()
+    merged_state_dict = {
+        k: v.detach().cpu() for k, v in merged_model.state_dict().items()
+    }
+    moe_layout = _detect_moe_layout(state_dict=base_state_dict)
+
+    attn_projs = [str(x) for x in list(d2m_cfg.targets.attn_projs)]
+    merge_attn = bool(d2m_cfg.targets.merge_attention)
+
+    changed = []
+    unchanged = []
+    for k in base_state_dict.keys():
+        if k not in merged_state_dict:
+            continue
+        if torch.equal(base_state_dict[k], merged_state_dict[k]):
+            unchanged.append(k)
+        else:
+            changed.append(k)
+
+    if len(changed) == 0:
+        raise RuntimeError(
+            "No weights changed between base_moe_dir and merged_dir. Merge likely failed."
+        )
+
+    allowed_changed = []
+    forbidden_changed = []
+    for k in changed:
+        ok = _is_expert_ffn_key(key=k)
+        if merge_attn:
+            ok = ok or _is_attn_key(
+                key=k,
+                attn_projs=attn_projs,
+            )
+        if ok:
+            allowed_changed.append(k)
+        else:
+            forbidden_changed.append(k)
+
+    if len(forbidden_changed) > 0:
+        sample = forbidden_changed[:50]
+        raise RuntimeError(
+            f"Found {len(forbidden_changed)} forbidden changed keys. Sample:\n"
+            + "\n".join(sample)
+        )
+
+    print(
+        f"[diff] changed={len(changed)} allowed_changed={len(allowed_changed)} forbidden_changed=0"
+    )
+
+    num_experts = int(d2m_cfg.moe.num_experts)
+    mode = str(d2m_cfg.merge_mode)
+
+    vcfg = getattr(d2m_cfg, "verify_merge", None)
+    if vcfg is None:
+        sample_experts = [0, num_experts - 1]
+        max_module_samples = 8
+        strict_targets = False
+        prefer_projs = ["up_proj", "gate_proj", "down_proj"]
+    else:
+        sample_experts = list(vcfg.experts)
+        max_module_samples = int(getattr(vcfg, "max_module_samples", 8))
+        strict_targets = bool(getattr(vcfg, "strict_targets", False))
+        prefer_projs = list(
+            getattr(vcfg, "projs", ["up_proj", "gate_proj", "down_proj"])
+        )
+
+    adapter_cache: Dict[str, Tuple[Dict, Dict[str, torch.Tensor]]] = {}
+
+    tol = float(getattr(d2m_cfg, "verify_merge", {}).get("delta_tol", 5e-3))
+    tol_attn = float(getattr(d2m_cfg, "verify_merge", {}).get("attn_delta_tol", 5e-3))
+
+    representative_adapter_dir, _ = _resolve_adapter_for_expert(
+        d2m_cfg=d2m_cfg,
+        merge_mode=mode,
+        expert=0,
+        num_experts=num_experts,
+    )
+    _, representative_lora_state_dict = _get_adapter(
+        adapter_cache=adapter_cache,
+        adapter_dir=representative_adapter_dir,
+    )
+
+    ffn_targets_in_adapter = _list_ffn_lora_targets_from_adapter(
+        lora_state_dict=representative_lora_state_dict,
+    )
+    if len(ffn_targets_in_adapter) == 0:
+        adapter_key_preview_all = list(representative_lora_state_dict.keys())[:50]
+        adapter_key_preview_mlp = [
+            k
+            for k in representative_lora_state_dict.keys()
+            if ("mlp" in k or "feed_forward" in k)
+        ][:50]
+        raise RuntimeError(
+            "No FFN LoRA targets found inside adapter: "
+            + f"{representative_adapter_dir}. "
+            + "Check PEFT target_modules and adapter contents.\n"
+            + "Adapter key preview (first 50 keys):\n"
+            + "\n".join(adapter_key_preview_all)
+            + "\n\n"
+            + "Adapter key preview containing 'mlp' or 'feed_forward' (up to 50):\n"
+            + "\n".join(adapter_key_preview_mlp)
+        )
+
+    proj_rank = {proj_name: i for i, proj_name in enumerate(prefer_projs)}
+    ffn_targets_in_adapter.sort(
+        key=lambda x: (
+            proj_rank.get(x[1], 999),
+            x[0],
+        )
+    )
+
+    sample_layer_proj_pairs = ffn_targets_in_adapter[:max_module_samples]
+    sample_layers = sorted(list(set([layer for layer, _ in sample_layer_proj_pairs])))
+
+    if strict_targets:
+        num_hidden_layers = int(getattr(base_model.config, "num_hidden_layers", 0))
+        if num_hidden_layers <= 0:
+            raise RuntimeError(
+                "Could not determine num_hidden_layers from base model config."
+            )
+        expected_pairs = set(
+            (layer_index, proj_name)
+            for layer_index in range(num_hidden_layers)
+            for proj_name in ["up_proj", "gate_proj", "down_proj"]
+        )
+        actual_pairs = set(ffn_targets_in_adapter)
+        missing_pairs = sorted(list(expected_pairs - actual_pairs))
+        if len(missing_pairs) > 0:
+            missing_preview = missing_pairs[:50]
+            raise RuntimeError(
+                "Strict mode: adapter does not contain FFN LoRA targets for all layers/projections. "
+                f"Missing sample (up to 50): {missing_preview}"
+            )
+
+    delta_checks = []
+    for layer, proj in sample_layer_proj_pairs:
+        for expert in sample_experts:
+            adapter_dir, alpha_override = _resolve_adapter_for_expert(
+                d2m_cfg=d2m_cfg,
+                merge_mode=mode,
+                expert=int(expert),
+                num_experts=num_experts,
+            )
+            lora_cfg, lora_state_dict = _get_adapter(
+                adapter_cache=adapter_cache,
+                adapter_dir=adapter_dir,
+            )
+            r = int(lora_cfg["r"])
+            lora_alpha = float(lora_cfg["lora_alpha"])
+
+            dense_key = f"model.layers.{int(layer)}.mlp.{proj}.weight"
+
+            A_B = _collect_lora_A_B(
+                lora_state_dict=lora_state_dict,
+                target_weight_key=dense_key,
+            )
+            if A_B is None:
+                target_module_path = dense_key[: -len(".weight")]
+                target_module_path_tail = target_module_path
+                if "model." in target_module_path_tail:
+                    target_module_path_tail = target_module_path_tail[
+                        target_module_path_tail.find("model.") :
+                    ]
+                candidate_keys = [
+                    k
+                    for k in lora_state_dict.keys()
+                    if (target_module_path in k or target_module_path_tail in k)
+                    and ("lora_" in k)
+                ]
+                candidate_preview = candidate_keys[:30]
+                raise RuntimeError(
+                    "LoRA A/B not found for target "
+                    + f"{dense_key} in adapter {adapter_dir}\n"
+                    + "Candidate LoRA keys for this target (up to 30):\n"
+                    + "\n".join(candidate_preview)
+                )
+
+            A, B = A_B
+
+            expected = _expected_delta(
+                A=A,
+                B=B,
+                lora_alpha=lora_alpha,
+                r=r,
+                alpha_override=alpha_override,
+                weight_coef=1.0,
+            )
+
+            actual = _get_ffn_weight_delta(
+                base_state_dict=base_state_dict,
+                merged_state_dict=merged_state_dict,
+                moe_layout=moe_layout,
+                layer=int(layer),
+                expert=int(expert),
+                proj=proj,
+            )
+
+            max_abs_diff = _max_abs_diff(
+                actual=actual,
+                expected=expected,
+            )
+            passed = bool(max_abs_diff <= tol)
+            delta_checks.append(
+                {
+                    "layer": int(layer),
+                    "expert": int(expert),
+                    "proj": proj,
+                    "adapter": adapter_dir,
+                    "alpha_override": float(alpha_override),
+                    "max_abs_diff(actual_vs_expected)": float(max_abs_diff),
+                    "pass": passed,
+                }
+            )
+            if not passed:
+                raise RuntimeError(
+                    f"[FFN delta mismatch] layer={layer} expert={expert} proj={proj} "
+                    f"max_abs_diff={max_abs_diff} (tol={tol})"
+                )
+
+    print(
+        f"[verify_merge] FFN delta checks passed for samples (tol={tol}, samples={len(delta_checks)})."
+    )
+
+    if merge_attn:
+        attn_alpha = float(d2m_cfg.targets.attn_alpha)
+
+        if mode == "one2n":
+            attn_adapters = [
+                _resolve_adapter_for_expert(
+                    d2m_cfg=d2m_cfg,
+                    merge_mode=mode,
+                    expert=0,
+                    num_experts=num_experts,
+                )[0]
+            ]
+            coefs = [1.0]
+        else:
+            uniq = sorted(
+                set(
+                    [
+                        _resolve_adapter_for_expert(
+                            d2m_cfg=d2m_cfg,
+                            merge_mode=mode,
+                            expert=expert,
+                            num_experts=num_experts,
+                        )[0]
+                        for expert in range(num_experts)
+                    ]
+                )
+            )
+            k = len(uniq)
+            attn_adapters = uniq
+            coefs = [1.0 / float(k) for _ in range(k)]
+
+        attn_layer = int(sample_layers[0]) if len(sample_layers) > 0 else 0
+        attn_proj = str(attn_projs[0])
+        base_k = f"model.layers.{attn_layer}.self_attn.{attn_proj}.weight"
+        if base_k not in base_state_dict:
+            attn_layer = 0
+            base_k = f"model.layers.{attn_layer}.self_attn.{attn_proj}.weight"
+        if base_k not in base_state_dict:
+            raise RuntimeError(f"Attention key not found in model state_dict: {base_k}")
+
+        expected_sum = None
+        for adapter_dir, coef in zip(attn_adapters, coefs):
+            lora_cfg, lora_state_dict = _get_adapter(
+                adapter_cache=adapter_cache,
+                adapter_dir=adapter_dir,
+            )
+            r = int(lora_cfg["r"])
+            lora_alpha = float(lora_cfg["lora_alpha"])
+            A_B = _collect_lora_A_B(
+                lora_state_dict=lora_state_dict,
+                target_weight_key=base_k,
+            )
+            if A_B is None:
+                raise RuntimeError(
+                    f"LoRA A/B not found for attention target {base_k} in adapter {adapter_dir}"
+                )
+            A, B = A_B
+            d = _expected_delta(
+                A=A,
+                B=B,
+                lora_alpha=lora_alpha,
+                r=r,
+                alpha_override=attn_alpha,
+                weight_coef=coef,
+            )
+            expected_sum = d if expected_sum is None else (expected_sum + d)
+
+        actual = merged_state_dict[base_k].float() - base_state_dict[base_k].float()
+        max_abs_diff = _max_abs_diff(
+            actual=actual,
+            expected=expected_sum,
+        )
+        if max_abs_diff > tol_attn:
+            raise RuntimeError(
+                f"[ATTN delta mismatch] key={base_k} max_abs_diff={max_abs_diff} (tol={tol_attn})"
+            )
+
+        print(
+            f"[verify_merge] Attention averaging delta check passed (key={base_k}, tol={tol_attn})."
+        )
+
+    out_path = os.path.join(merged_dir, "verify_lora_merge_report.json")
+    report = {
+        "base_moe_dir": base_moe_dir,
+        "merged_dir": merged_dir,
+        "moe_layout": moe_layout,
+        "changed_keys": len(changed),
+        "allowed_changed_keys": len(allowed_changed),
+        "merge_attention": merge_attn,
+        "attn_projs": attn_projs,
+        "sample_layer_proj_pairs": sample_layer_proj_pairs,
+        "delta_checks": delta_checks,
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(
+            report,
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+    print(f"[OK] LoRA merge verification report saved to: {out_path}")
+
+
+def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
     dtype_str = str(dtype_str).lower()
     if dtype_str in ("fp16", "float16"):
         return torch.float16
@@ -427,363 +784,6 @@ def _get_ffn_weight_delta(
             )
 
     raise ValueError(f"Unsupported layout/proj combination: {moe_layout}, {proj}")
-
-
-@hydra.main(
-    config_path="../../configs/",
-    config_name="sft.yaml",
-)
-def verify_lora_merge(
-    config: DictConfig,
-) -> None:
-    d2m_cfg = config.dense_to_moe
-
-    base_moe_dir = str(d2m_cfg.moe_model_dir)
-    merged_dir = str(d2m_cfg.merged_moe_model_dir)
-
-    dtype = torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
-    device = torch.device(str(d2m_cfg.runtime.device))
-    trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
-
-    base_model = AutoModelForCausalLM.from_pretrained(
-        base_moe_dir,
-        torch_dtype=dtype,
-        device_map=None,
-        trust_remote_code=trust_remote_code,
-    ).to(device)
-    base_model.eval()
-    base_state_dict = {k: v.detach().cpu() for k, v in base_model.state_dict().items()}
-
-    merged_model = AutoModelForCausalLM.from_pretrained(
-        merged_dir,
-        torch_dtype=dtype,
-        device_map=None,
-        trust_remote_code=trust_remote_code,
-    ).to(device)
-    merged_model.eval()
-    merged_state_dict = {
-        k: v.detach().cpu() for k, v in merged_model.state_dict().items()
-    }
-    moe_layout = _detect_moe_layout(state_dict=base_state_dict)
-
-    attn_projs = [str(x) for x in list(d2m_cfg.targets.attn_projs)]
-    merge_attn = bool(d2m_cfg.targets.merge_attention)
-
-    changed = []
-    unchanged = []
-    for k in base_state_dict.keys():
-        if k not in merged_state_dict:
-            continue
-        if torch.equal(base_state_dict[k], merged_state_dict[k]):
-            unchanged.append(k)
-        else:
-            changed.append(k)
-
-    if len(changed) == 0:
-        raise RuntimeError(
-            "No weights changed between base_moe_dir and merged_dir. Merge likely failed."
-        )
-
-    allowed_changed = []
-    forbidden_changed = []
-    for k in changed:
-        ok = _is_expert_ffn_key(key=k)
-        if merge_attn:
-            ok = ok or _is_attn_key(
-                key=k,
-                attn_projs=attn_projs,
-            )
-        if ok:
-            allowed_changed.append(k)
-        else:
-            forbidden_changed.append(k)
-
-    if len(forbidden_changed) > 0:
-        sample = forbidden_changed[:50]
-        raise RuntimeError(
-            f"Found {len(forbidden_changed)} forbidden changed keys. Sample:\n"
-            + "\n".join(sample)
-        )
-
-    print(
-        f"[diff] changed={len(changed)} allowed_changed={len(allowed_changed)} forbidden_changed=0"
-    )
-
-    num_experts = int(d2m_cfg.moe.num_experts)
-    mode = str(d2m_cfg.merge_mode)
-
-    vcfg = getattr(d2m_cfg, "verify_merge", None)
-    if vcfg is None:
-        sample_experts = [0, num_experts - 1]
-        max_module_samples = 8
-        strict_targets = False
-        prefer_projs = ["up_proj", "gate_proj", "down_proj"]
-    else:
-        sample_experts = list(vcfg.experts)
-        max_module_samples = int(getattr(vcfg, "max_module_samples", 8))
-        strict_targets = bool(getattr(vcfg, "strict_targets", False))
-        prefer_projs = list(
-            getattr(vcfg, "projs", ["up_proj", "gate_proj", "down_proj"])
-        )
-
-    adapter_cache: Dict[str, Tuple[Dict, Dict[str, torch.Tensor]]] = {}
-
-    tol = float(getattr(d2m_cfg, "verify_merge", {}).get("delta_tol", 5e-3))
-    tol_attn = float(getattr(d2m_cfg, "verify_merge", {}).get("attn_delta_tol", 5e-3))
-
-    representative_adapter_dir, _ = _resolve_adapter_for_expert(
-        d2m_cfg=d2m_cfg,
-        merge_mode=mode,
-        expert=0,
-        num_experts=num_experts,
-    )
-    _, representative_lora_state_dict = _get_adapter(
-        adapter_cache=adapter_cache,
-        adapter_dir=representative_adapter_dir,
-    )
-
-    ffn_targets_in_adapter = _list_ffn_lora_targets_from_adapter(
-        lora_state_dict=representative_lora_state_dict,
-    )
-    if len(ffn_targets_in_adapter) == 0:
-        adapter_key_preview_all = list(representative_lora_state_dict.keys())[:50]
-        adapter_key_preview_mlp = [
-            k
-            for k in representative_lora_state_dict.keys()
-            if ("mlp" in k or "feed_forward" in k)
-        ][:50]
-        raise RuntimeError(
-            "No FFN LoRA targets found inside adapter: "
-            + f"{representative_adapter_dir}. "
-            + "Check PEFT target_modules and adapter contents.\n"
-            + "Adapter key preview (first 50 keys):\n"
-            + "\n".join(adapter_key_preview_all)
-            + "\n\n"
-            + "Adapter key preview containing 'mlp' or 'feed_forward' (up to 50):\n"
-            + "\n".join(adapter_key_preview_mlp)
-        )
-
-    proj_rank = {proj_name: i for i, proj_name in enumerate(prefer_projs)}
-    ffn_targets_in_adapter.sort(
-        key=lambda x: (
-            proj_rank.get(x[1], 999),
-            x[0],
-        )
-    )
-
-    sample_layer_proj_pairs = ffn_targets_in_adapter[:max_module_samples]
-    sample_layers = sorted(list(set([layer for layer, _ in sample_layer_proj_pairs])))
-
-    if strict_targets:
-        num_hidden_layers = int(getattr(base_model.config, "num_hidden_layers", 0))
-        if num_hidden_layers <= 0:
-            raise RuntimeError(
-                "Could not determine num_hidden_layers from base model config."
-            )
-        expected_pairs = set(
-            (layer_index, proj_name)
-            for layer_index in range(num_hidden_layers)
-            for proj_name in ["up_proj", "gate_proj", "down_proj"]
-        )
-        actual_pairs = set(ffn_targets_in_adapter)
-        missing_pairs = sorted(list(expected_pairs - actual_pairs))
-        if len(missing_pairs) > 0:
-            missing_preview = missing_pairs[:50]
-            raise RuntimeError(
-                "Strict mode: adapter does not contain FFN LoRA targets for all layers/projections. "
-                f"Missing sample (up to 50): {missing_preview}"
-            )
-
-    delta_checks = []
-    for layer, proj in sample_layer_proj_pairs:
-        for expert in sample_experts:
-            adapter_dir, alpha_override = _resolve_adapter_for_expert(
-                d2m_cfg=d2m_cfg,
-                merge_mode=mode,
-                expert=int(expert),
-                num_experts=num_experts,
-            )
-            lora_cfg, lora_state_dict = _get_adapter(
-                adapter_cache=adapter_cache,
-                adapter_dir=adapter_dir,
-            )
-            r = int(lora_cfg["r"])
-            lora_alpha = float(lora_cfg["lora_alpha"])
-
-            dense_key = f"model.layers.{int(layer)}.mlp.{proj}.weight"
-
-            A_B = _collect_lora_A_B(
-                lora_state_dict=lora_state_dict,
-                target_weight_key=dense_key,
-            )
-            if A_B is None:
-                target_module_path = dense_key[: -len(".weight")]
-                target_module_path_tail = target_module_path
-                if "model." in target_module_path_tail:
-                    target_module_path_tail = target_module_path_tail[
-                        target_module_path_tail.find("model.") :
-                    ]
-                candidate_keys = [
-                    k
-                    for k in lora_state_dict.keys()
-                    if (target_module_path in k or target_module_path_tail in k)
-                    and ("lora_" in k)
-                ]
-                candidate_preview = candidate_keys[:30]
-                raise RuntimeError(
-                    "LoRA A/B not found for target "
-                    + f"{dense_key} in adapter {adapter_dir}\n"
-                    + "Candidate LoRA keys for this target (up to 30):\n"
-                    + "\n".join(candidate_preview)
-                )
-
-            A, B = A_B
-
-            expected = _expected_delta(
-                A=A,
-                B=B,
-                lora_alpha=lora_alpha,
-                r=r,
-                alpha_override=alpha_override,
-                weight_coef=1.0,
-            )
-
-            actual = _get_ffn_weight_delta(
-                base_state_dict=base_state_dict,
-                merged_state_dict=merged_state_dict,
-                moe_layout=moe_layout,
-                layer=int(layer),
-                expert=int(expert),
-                proj=proj,
-            )
-
-            max_abs_diff = _max_abs_diff(
-                actual=actual,
-                expected=expected,
-            )
-            passed = bool(max_abs_diff <= tol)
-            delta_checks.append(
-                {
-                    "layer": int(layer),
-                    "expert": int(expert),
-                    "proj": proj,
-                    "adapter": adapter_dir,
-                    "alpha_override": float(alpha_override),
-                    "max_abs_diff(actual_vs_expected)": float(max_abs_diff),
-                    "pass": passed,
-                }
-            )
-            if not passed:
-                raise RuntimeError(
-                    f"[FFN delta mismatch] layer={layer} expert={expert} proj={proj} "
-                    f"max_abs_diff={max_abs_diff} (tol={tol})"
-                )
-
-    print(
-        f"[verify_merge] FFN delta checks passed for samples (tol={tol}, samples={len(delta_checks)})."
-    )
-
-    if merge_attn:
-        attn_alpha = float(d2m_cfg.targets.attn_alpha)
-
-        if mode == "one2n":
-            attn_adapters = [
-                _resolve_adapter_for_expert(
-                    d2m_cfg=d2m_cfg,
-                    merge_mode=mode,
-                    expert=0,
-                    num_experts=num_experts,
-                )[0]
-            ]
-            coefs = [1.0]
-        else:
-            uniq = sorted(
-                set(
-                    [
-                        _resolve_adapter_for_expert(
-                            d2m_cfg=d2m_cfg,
-                            merge_mode=mode,
-                            expert=expert,
-                            num_experts=num_experts,
-                        )[0]
-                        for expert in range(num_experts)
-                    ]
-                )
-            )
-            k = len(uniq)
-            attn_adapters = uniq
-            coefs = [1.0 / float(k) for _ in range(k)]
-
-        attn_layer = int(sample_layers[0]) if len(sample_layers) > 0 else 0
-        attn_proj = str(attn_projs[0])
-        base_k = f"model.layers.{attn_layer}.self_attn.{attn_proj}.weight"
-        if base_k not in base_state_dict:
-            attn_layer = 0
-            base_k = f"model.layers.{attn_layer}.self_attn.{attn_proj}.weight"
-        if base_k not in base_state_dict:
-            raise RuntimeError(f"Attention key not found in model state_dict: {base_k}")
-
-        expected_sum = None
-        for adapter_dir, coef in zip(attn_adapters, coefs):
-            lora_cfg, lora_state_dict = _get_adapter(
-                adapter_cache=adapter_cache,
-                adapter_dir=adapter_dir,
-            )
-            r = int(lora_cfg["r"])
-            lora_alpha = float(lora_cfg["lora_alpha"])
-            A_B = _collect_lora_A_B(
-                lora_state_dict=lora_state_dict,
-                target_weight_key=base_k,
-            )
-            if A_B is None:
-                raise RuntimeError(
-                    f"LoRA A/B not found for attention target {base_k} in adapter {adapter_dir}"
-                )
-            A, B = A_B
-            d = _expected_delta(
-                A=A,
-                B=B,
-                lora_alpha=lora_alpha,
-                r=r,
-                alpha_override=attn_alpha,
-                weight_coef=coef,
-            )
-            expected_sum = d if expected_sum is None else (expected_sum + d)
-
-        actual = merged_state_dict[base_k].float() - base_state_dict[base_k].float()
-        max_abs_diff = _max_abs_diff(
-            actual=actual,
-            expected=expected_sum,
-        )
-        if max_abs_diff > tol_attn:
-            raise RuntimeError(
-                f"[ATTN delta mismatch] key={base_k} max_abs_diff={max_abs_diff} (tol={tol_attn})"
-            )
-
-        print(
-            f"[verify_merge] Attention averaging delta check passed (key={base_k}, tol={tol_attn})."
-        )
-
-    out_path = os.path.join(merged_dir, "verify_lora_merge_report.json")
-    report = {
-        "base_moe_dir": base_moe_dir,
-        "merged_dir": merged_dir,
-        "moe_layout": moe_layout,
-        "changed_keys": len(changed),
-        "allowed_changed_keys": len(allowed_changed),
-        "merge_attention": merge_attn,
-        "attn_projs": attn_projs,
-        "sample_layer_proj_pairs": sample_layer_proj_pairs,
-        "delta_checks": delta_checks,
-    }
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(
-            report,
-            f,
-            indent=2,
-            ensure_ascii=False,
-        )
-    print(f"[OK] LoRA merge verification report saved to: {out_path}")
 
 
 if __name__ == "__main__":

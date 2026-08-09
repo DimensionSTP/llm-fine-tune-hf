@@ -23,104 +23,6 @@ import hydra
 from omegaconf import DictConfig
 
 
-def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
-    dtype_str = str(dtype_str).lower()
-    if dtype_str in ("bf16", "bfloat16"):
-        return torch.bfloat16
-    if dtype_str in ("fp16", "float16"):
-        return torch.float16
-    if dtype_str in ("fp32", "float32"):
-        return torch.float32
-    raise ValueError(f"Unknown dtype: {dtype_str}")
-
-
-def _infer_num_layers(model: torch.nn.Module) -> int:
-    return len(model.model.layers)
-
-
-def _find_dense_mlp_weight_key(
-    layer: int,
-    proj: str,
-) -> str:
-    return f"model.layers.{layer}.mlp.{proj}.weight"
-
-
-def _find_expert_weight_key(
-    state_dict: Dict[str, torch.Tensor],
-    layer: int,
-    expert: int,
-    proj: str,
-) -> str:
-    k = f"model.layers.{layer}.mlp.experts.{expert}.{proj}.weight"
-    if k not in state_dict:
-        raise KeyError(f"Missing expected expert weight key: {k}")
-    return k
-
-
-def _get_packed_expert_weight(
-    state_dict: Dict[str, torch.Tensor],
-    layer: int,
-    expert: int,
-    proj: str,
-) -> torch.Tensor:
-    gate_up_key = f"model.layers.{layer}.mlp.experts.gate_up_proj"
-    down_key = f"model.layers.{layer}.mlp.experts.down_proj"
-
-    if gate_up_key not in state_dict or down_key not in state_dict:
-        raise KeyError(
-            f"Missing packed expert keys for layer {layer}: {gate_up_key}, {down_key}"
-        )
-
-    gate_up = state_dict[gate_up_key]
-    down = state_dict[down_key]
-    intermediate_size = gate_up.shape[1] // 2
-
-    if proj == "gate_proj":
-        return gate_up[expert, :intermediate_size, :]
-    if proj == "up_proj":
-        return gate_up[expert, intermediate_size:, :]
-    if proj == "down_proj":
-        return down[expert]
-    raise ValueError(f"Unsupported proj: {proj}")
-
-
-def _max_abs_diff(
-    a: torch.Tensor,
-    b: torch.Tensor,
-) -> float:
-    return float((a - b).abs().max().item())
-
-
-def _mean_abs_diff(
-    a: torch.Tensor,
-    b: torch.Tensor,
-) -> float:
-    return float((a - b).abs().mean().item())
-
-
-def _cosine_sim(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    eps: float,
-) -> float:
-    a = a.flatten().float()
-    b = b.flatten().float()
-    return float(
-        torch.dot(
-            a,
-            b,
-        )
-        / (a.norm() * b.norm() + eps)
-    )
-
-
-def _gate_key_candidates(layer: int) -> List[str]:
-    return [
-        f"model.layers.{layer}.mlp.gate.weight",
-        f"model.layers.{layer}.mlp.router.weight",
-    ]
-
-
 @hydra.main(
     config_path="../../configs/",
     config_name="sft.yaml",
@@ -133,7 +35,7 @@ def verify_dense_to_moe(
     moe_dir = str(d2m_cfg.moe_model_dir)
     dense_id = str(config.pretrained_model_name)
 
-    dtype = torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
@@ -378,6 +280,104 @@ def verify_dense_to_moe(
             ensure_ascii=False,
         )
     print(f"[OK] Verification report saved to: {out_path}")
+
+
+def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+    dtype_str = str(dtype_str).lower()
+    if dtype_str in ("bf16", "bfloat16"):
+        return torch.bfloat16
+    if dtype_str in ("fp16", "float16"):
+        return torch.float16
+    if dtype_str in ("fp32", "float32"):
+        return torch.float32
+    raise ValueError(f"Unknown dtype: {dtype_str}")
+
+
+def _infer_num_layers(model: torch.nn.Module) -> int:
+    return len(model.model.layers)
+
+
+def _find_dense_mlp_weight_key(
+    layer: int,
+    proj: str,
+) -> str:
+    return f"model.layers.{layer}.mlp.{proj}.weight"
+
+
+def _find_expert_weight_key(
+    state_dict: Dict[str, torch.Tensor],
+    layer: int,
+    expert: int,
+    proj: str,
+) -> str:
+    k = f"model.layers.{layer}.mlp.experts.{expert}.{proj}.weight"
+    if k not in state_dict:
+        raise KeyError(f"Missing expected expert weight key: {k}")
+    return k
+
+
+def _get_packed_expert_weight(
+    state_dict: Dict[str, torch.Tensor],
+    layer: int,
+    expert: int,
+    proj: str,
+) -> torch.Tensor:
+    gate_up_key = f"model.layers.{layer}.mlp.experts.gate_up_proj"
+    down_key = f"model.layers.{layer}.mlp.experts.down_proj"
+
+    if gate_up_key not in state_dict or down_key not in state_dict:
+        raise KeyError(
+            f"Missing packed expert keys for layer {layer}: {gate_up_key}, {down_key}"
+        )
+
+    gate_up = state_dict[gate_up_key]
+    down = state_dict[down_key]
+    intermediate_size = gate_up.shape[1] // 2
+
+    if proj == "gate_proj":
+        return gate_up[expert, :intermediate_size, :]
+    if proj == "up_proj":
+        return gate_up[expert, intermediate_size:, :]
+    if proj == "down_proj":
+        return down[expert]
+    raise ValueError(f"Unsupported proj: {proj}")
+
+
+def _max_abs_diff(
+    a: torch.Tensor,
+    b: torch.Tensor,
+) -> float:
+    return float((a - b).abs().max().item())
+
+
+def _mean_abs_diff(
+    a: torch.Tensor,
+    b: torch.Tensor,
+) -> float:
+    return float((a - b).abs().mean().item())
+
+
+def _cosine_sim(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    eps: float,
+) -> float:
+    a = a.flatten().float()
+    b = b.flatten().float()
+    return float(
+        torch.dot(
+            a,
+            b,
+        )
+        / (a.norm() * b.norm() + eps)
+    )
+
+
+def _gate_key_candidates(layer: int) -> List[str]:
+    return [
+        f"model.layers.{layer}.mlp.gate.weight",
+        f"model.layers.{layer}.mlp.router.weight",
+    ]
 
 
 if __name__ == "__main__":
