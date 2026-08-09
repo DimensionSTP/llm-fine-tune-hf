@@ -25,7 +25,7 @@ from .image_io import (
     normalize_image_payloads,
     normalize_image_source,
 )
-from .image_augmentation import _build_image_augmenter
+from .image_augmentation import build_image_augmenter
 
 
 class StructuralDataset:
@@ -87,7 +87,7 @@ class StructuralDataset:
             max_pixels=max_pixels,
             do_resize=do_resize,
         )
-        self.image_augmenter = _build_image_augmenter(
+        self.image_augmenter = build_image_augmenter(
             config=image_augmentation,
             seed=seed,
         )
@@ -531,7 +531,7 @@ class ConversationalDataset(StructuralDataset):
             max_pixels=max_pixels,
             do_resize=do_resize,
         )
-        self.image_augmenter = _build_image_augmenter(
+        self.image_augmenter = build_image_augmenter(
             config=image_augmentation,
             seed=seed,
         )

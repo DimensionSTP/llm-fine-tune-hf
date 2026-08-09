@@ -8,6 +8,38 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 
+def build_image_augmenter(
+    config: Dict[str, Any],
+    seed: int,
+) -> Optional["_ImageAugmenterProtocol"]:
+    _validate_required_keys(
+        config=config,
+        keys=[
+            "enabled",
+            "seed_offset",
+            "backend",
+            "probability",
+        ],
+        prefix="image_augmentation",
+    )
+    enabled = bool(config["enabled"])
+    if not enabled:
+        return None
+
+    backend = str(config["backend"])
+    if backend == "pil":
+        return _PILImageAugmenter(
+            config=_build_pil_config(config=config),
+            seed=seed,
+        )
+    if backend == "albumentations":
+        return _AlbumentationsImageAugmenter(
+            config=_build_albumentations_config(config=config),
+            seed=seed,
+        )
+    raise ValueError("image_augmentation.backend must be one of: pil, albumentations.")
+
+
 class _ImageAugmenterProtocol(Protocol):
     def __call__(
         self,
@@ -1048,38 +1080,6 @@ class _AlbumentationsImageAugmenter:
         self,
     ) -> int:
         return self.rng.randint(0, 2**32 - 1)
-
-
-def _build_image_augmenter(
-    config: Dict[str, Any],
-    seed: int,
-) -> Optional[_ImageAugmenterProtocol]:
-    _validate_required_keys(
-        config=config,
-        keys=[
-            "enabled",
-            "seed_offset",
-            "backend",
-            "probability",
-        ],
-        prefix="image_augmentation",
-    )
-    enabled = bool(config["enabled"])
-    if not enabled:
-        return None
-
-    backend = str(config["backend"])
-    if backend == "pil":
-        return _PILImageAugmenter(
-            config=_build_pil_config(config=config),
-            seed=seed,
-        )
-    if backend == "albumentations":
-        return _AlbumentationsImageAugmenter(
-            config=_build_albumentations_config(config=config),
-            seed=seed,
-        )
-    raise ValueError("image_augmentation.backend must be one of: pil, albumentations.")
 
 
 def _build_pil_config(

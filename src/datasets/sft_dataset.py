@@ -20,7 +20,7 @@ from .dataset_loading import (
     load_weighted_pandas_dataset_specs,
 )
 from .image_io import build_image_io_settings, load_image, normalize_image_source
-from .image_augmentation import _build_image_augmenter
+from .image_augmentation import build_image_augmenter
 
 
 class StructuralDataset(Dataset):
@@ -103,7 +103,7 @@ class StructuralDataset(Dataset):
         )
         self.image_augmenter = None
         if split == "train":
-            self.image_augmenter = _build_image_augmenter(
+            self.image_augmenter = build_image_augmenter(
                 config=image_augmentation,
                 seed=seed,
             )
@@ -864,7 +864,7 @@ class ConversationalDataset(StructuralDataset):
         )
         self.image_augmenter = None
         if split == "train":
-            self.image_augmenter = _build_image_augmenter(
+            self.image_augmenter = build_image_augmenter(
                 config=image_augmentation,
                 seed=seed,
             )
