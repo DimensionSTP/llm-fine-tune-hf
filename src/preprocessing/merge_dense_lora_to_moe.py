@@ -26,406 +26,6 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 
-def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
-    dtype_str = str(dtype_str).lower()
-    if dtype_str in ("fp16", "float16"):
-        return torch.float16
-    if dtype_str in ("bf16", "bfloat16"):
-        return torch.bfloat16
-    if dtype_str in ("fp32", "float32"):
-        return torch.float32
-    raise ValueError(f"Unknown dtype: {dtype_str}")
-
-
-def _list_explicit_expert_ffn_weight_keys(
-    state_dict: Dict[str, torch.Tensor],
-) -> List[str]:
-    pat = re.compile(
-        r"^model\.layers\.(\d+)\.mlp\.(?:experts|expert)\.(\d+)\.(up_proj|gate_proj|down_proj)\.weight$"
-    )
-    return [k for k in state_dict.keys() if pat.match(k)]
-
-
-def _infer_num_layers_and_experts_from_keys(keys: List[str]) -> Tuple[int, int]:
-    layer_max = -1
-    expert_max = -1
-    pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.(?:experts|expert)\.(\d+)\.")
-    for k in keys:
-        m = pat.match(k)
-        if not m:
-            continue
-        layer_max = max(layer_max, int(m.group(1)))
-        expert_max = max(expert_max, int(m.group(2)))
-    if layer_max < 0 or expert_max < 0:
-        raise RuntimeError("Could not infer layers/experts from expert FFN keys.")
-    return layer_max + 1, expert_max + 1
-
-
-def _detect_moe_layout(
-    state_dict: Dict[str, torch.Tensor],
-) -> str:
-    explicit_keys = _list_explicit_expert_ffn_weight_keys(state_dict=state_dict)
-    if len(explicit_keys) > 0:
-        return "explicit"
-
-    packed_gate_up_pat = re.compile(
-        r"^model\.layers\.(\d+)\.mlp\.experts\.gate_up_proj$"
-    )
-    packed_down_pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts\.down_proj$")
-    if any(packed_gate_up_pat.match(k) for k in state_dict) and any(
-        packed_down_pat.match(k) for k in state_dict
-    ):
-        return "mixtral_packed"
-
-    raise RuntimeError(
-        "No supported expert FFN layout found. Expected explicit expert weights or Mixtral packed expert tensors."
-    )
-
-
-def _infer_moe_shape(
-    model: torch.nn.Module,
-    state_dict: Dict[str, torch.Tensor],
-) -> Tuple[str, int, int]:
-    layout = _detect_moe_layout(state_dict=state_dict)
-    num_layers = len(model.model.layers)
-
-    if layout == "explicit":
-        _, num_experts = _infer_num_layers_and_experts_from_keys(
-            keys=_list_explicit_expert_ffn_weight_keys(state_dict=state_dict)
-        )
-        return layout, num_layers, num_experts
-
-    gate_up_key = "model.layers.0.mlp.experts.gate_up_proj"
-    if gate_up_key not in state_dict:
-        raise RuntimeError(f"Missing Mixtral packed key: {gate_up_key}")
-    num_experts = int(state_dict[gate_up_key].shape[0])
-    return layout, num_layers, num_experts
-
-
-def _validate_list_length(
-    name: str,
-    xs: List[Any],
-    expected: int,
-) -> None:
-    if len(xs) != expected:
-        raise ValueError(f"{name} must have length {expected}, got {len(xs)}")
-
-
-@dataclass
-class LoraWeights:
-    A: torch.Tensor
-    B: torch.Tensor
-    scale: float
-
-
-def _load_lora_state_dict(adapter_dir: str) -> Dict[str, torch.Tensor]:
-    safepath = os.path.join(
-        adapter_dir,
-        "adapter_model.safetensors",
-    )
-    binpath = os.path.join(
-        adapter_dir,
-        "adapter_model.bin",
-    )
-
-    if os.path.exists(safepath):
-        from safetensors.torch import load_file
-
-        return load_file(safepath)
-    if os.path.exists(binpath):
-        return torch.load(
-            binpath,
-            map_location="cpu",
-        )
-    raise FileNotFoundError(
-        f"Cannot find adapter_model.safetensors or adapter_model.bin under: {adapter_dir}"
-    )
-
-
-def _load_lora_config(adapter_dir: str) -> Dict:
-    cfg_path = os.path.join(
-        adapter_dir,
-        "adapter_config.json",
-    )
-    if not os.path.exists(cfg_path):
-        raise FileNotFoundError(f"Missing adapter_config.json under: {adapter_dir}")
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _collect_lora_for_target(
-    lora_state_dict: Dict[str, torch.Tensor],
-    adapter_cfg: Dict,
-    target_weight_key: str,
-) -> Optional[LoraWeights]:
-    """
-    target_weight_key example:
-        model.layers.0.mlp.up_proj.weight
-        model.layers.0.self_attn.q_proj.weight
-    """
-    r = adapter_cfg.get(
-        "r",
-        None,
-    )
-    lora_alpha = adapter_cfg.get(
-        "lora_alpha",
-        None,
-    )
-    if r is None or lora_alpha is None:
-        raise ValueError("adapter_config.json missing 'r' or 'lora_alpha' (top-level).")
-
-    scale = float(lora_alpha) / float(r)
-    target_path = target_weight_key[: -len(".weight")]
-
-    a_suffix = f"{target_path}.lora_A.weight"
-    b_suffix = f"{target_path}.lora_B.weight"
-
-    A_key = None
-    B_key = None
-    for k in lora_state_dict.keys():
-        if k.endswith(a_suffix):
-            A_key = k
-        elif k.endswith(b_suffix):
-            B_key = k
-
-    if A_key is None or B_key is None:
-        return None
-
-    A = lora_state_dict[A_key].to(torch.float32)
-    B = lora_state_dict[B_key].to(torch.float32)
-    return LoraWeights(
-        A=A,
-        B=B,
-        scale=scale,
-    )
-
-
-def _apply_lora_delta_inplace(
-    base_weight: torch.Tensor,
-    lora: LoraWeights,
-    alpha_override: float,
-    weight_coef: float,
-) -> None:
-    """
-    base_weight += weight_coef * alpha_override * (B @ A) * (lora.scale)
-    - alpha_override: your experiment-level scaling (per-expert for FFN, optional for attention)
-    - weight_coef: used for equal-weight averaging across multiple adapters (e.g., 1/4, 1/8).
-    """
-    delta = (lora.B @ lora.A) * (
-        lora.scale * float(alpha_override) * float(weight_coef)
-    )
-    with torch.no_grad():
-        base_weight.add_(
-            delta.to(
-                dtype=base_weight.dtype,
-                device=base_weight.device,
-            )
-        )
-
-
-def _apply_lora_delta_to_mixtral_expert_inplace(
-    gate_up_weight: torch.Tensor,
-    down_weight: torch.Tensor,
-    proj: str,
-    lora: LoraWeights,
-    alpha_override: float,
-    weight_coef: float,
-) -> None:
-    delta = (lora.B @ lora.A) * (
-        lora.scale * float(alpha_override) * float(weight_coef)
-    )
-    delta = delta.to(
-        dtype=(
-            gate_up_weight.dtype
-            if proj in ["gate_proj", "up_proj"]
-            else down_weight.dtype
-        ),
-        device=(
-            gate_up_weight.device
-            if proj in ["gate_proj", "up_proj"]
-            else down_weight.device
-        ),
-    )
-
-    with torch.no_grad():
-        if proj in [
-            "gate_proj",
-            "up_proj",
-        ]:
-            intermediate_size = gate_up_weight.shape[0] // 2
-            if proj == "gate_proj":
-                gate_up_weight[:intermediate_size].add_(delta)
-                return
-            gate_up_weight[intermediate_size:].add_(delta)
-            return
-
-        if proj == "down_proj":
-            down_weight.add_(delta)
-            return
-
-    raise ValueError(f"Unsupported proj for Mixtral packed experts: {proj}")
-
-
-def _resolve_adapter_plan(
-    config: DictConfig,
-) -> Tuple[
-    List[str],
-    List[float],
-    Dict[str, Dict],
-    Dict[str, Dict[str, torch.Tensor]],
-    List[str],
-]:
-    """
-    Returns:
-        adapter_for_expert: length n, adapter path per expert (for FFN)
-        alpha_for_expert: length n, alpha per expert (for FFN)
-        lora_cfg_for_adapter: dict adapter_path -> adapter_config
-        lora_state_dict_for_adapter: dict adapter_path -> adapter_state_dict
-        all_adapter_paths: list of unique adapter paths involved (for attention averaging)
-    """
-    num_experts = int(config.moe.num_experts)
-    mode = str(config.merge_mode)
-
-    if mode == "one2n":
-        base_adapter = os.path.join(
-            config.base_adapter_dir,
-            str(config.one2n.base_adapter),
-        )
-        alphas = [float(x) for x in list(config.one2n.alphas)]
-        _validate_list_length(
-            name="one2n.alphas",
-            xs=alphas,
-            expected=num_experts,
-        )
-
-        adapter_for_expert = [base_adapter for _ in range(num_experts)]
-        alpha_for_expert = alphas
-
-        lora_cfg = _load_lora_config(adapter_dir=base_adapter)
-        lora_state_dict = _load_lora_state_dict(adapter_dir=base_adapter)
-
-        lora_cfg_for_adapter = {base_adapter: lora_cfg}
-        lora_state_dict_for_adapter = {base_adapter: lora_state_dict}
-        all_adapter_paths = [base_adapter]
-
-    elif mode == "n2n":
-        adapter_paths = [str(p) for p in list(config.n2n.adapter_paths)]
-        _validate_list_length(
-            name="n2n.adapter_paths",
-            xs=adapter_paths,
-            expected=num_experts,
-        )
-        full_adapter_paths = [
-            os.path.join(
-                config.base_adapter_dir,
-                adapter_path,
-            )
-            for adapter_path in adapter_paths
-        ]
-        adapter_for_expert = full_adapter_paths
-
-        if config.n2n.get("alphas", None) is None:
-            alpha_for_expert = [1.0 for _ in range(num_experts)]
-        else:
-            alphas = [float(x) for x in list(config.n2n.alphas)]
-            _validate_list_length(
-                name="n2n.alphas",
-                xs=alphas,
-                expected=num_experts,
-            )
-            alpha_for_expert = alphas
-
-        uniq = sorted(set(adapter_for_expert))
-        lora_cfg_for_adapter = {
-            adapter_dir: _load_lora_config(adapter_dir) for adapter_dir in uniq
-        }
-        lora_state_dict_for_adapter = {
-            adapter_dir: _load_lora_state_dict(adapter_dir) for adapter_dir in uniq
-        }
-        all_adapter_paths = uniq
-
-    elif mode == "m2n":
-        adapter_paths = [str(p) for p in list(config.m2n.adapter_paths)]
-        m = len(adapter_paths)
-        if m <= 0:
-            raise ValueError("m2n requires m2n.adapter_paths (length m > 0).")
-
-        expert_to_adapter = [int(x) for x in list(config.m2n.expert_to_adapter)]
-        _validate_list_length(
-            name="m2n.expert_to_adapter",
-            xs=expert_to_adapter,
-            expected=num_experts,
-        )
-        if any(x < 0 or x >= m for x in expert_to_adapter):
-            raise ValueError(f"m2n.expert_to_adapter must be in [0, {m-1}]")
-
-        full_adapter_paths = [
-            os.path.join(
-                config.base_adapter_dir,
-                adapter_path,
-            )
-            for adapter_path in adapter_paths
-        ]
-        adapter_for_expert = [full_adapter_paths[idx] for idx in expert_to_adapter]
-
-        if config.m2n.get("per_expert_alphas", None) is not None:
-            per_expert_alphas = [float(x) for x in list(config.m2n.per_expert_alphas)]
-            _validate_list_length(
-                name="m2n.per_expert_alphas",
-                xs=per_expert_alphas,
-                expected=num_experts,
-            )
-            alpha_for_expert = per_expert_alphas
-        else:
-            group_alphas = [float(x) for x in list(config.m2n.group_alphas)]
-            num_groups = len(group_alphas)
-            if num_groups <= 0:
-                raise ValueError(
-                    "m2n requires either lora.per_expert_alphas or lora.group_alphas (len>0)."
-                )
-
-            if config.m2n.get("expert_to_group", None) is not None:
-                expert_to_group = [int(x) for x in list(config.m2n.expert_to_group)]
-                _validate_list_length(
-                    name="m2n.expert_to_group",
-                    xs=expert_to_group,
-                    expected=num_experts,
-                )
-                if any(x < 0 or x >= num_groups for x in expert_to_group):
-                    raise ValueError(
-                        f"m2n.expert_to_group must be in [0, {num_groups-1}]"
-                    )
-            else:
-                expert_to_group = [
-                    min((expert * num_groups) // num_experts, num_groups - 1)
-                    for expert in range(num_experts)
-                ]
-
-            alpha_for_expert = [
-                group_alphas[expert_to_group[expert]] for expert in range(num_experts)
-            ]
-
-        uniq = sorted(set(adapter_for_expert))
-        lora_cfg_for_adapter = {
-            adapter_dir: _load_lora_config(adapter_dir) for adapter_dir in uniq
-        }
-        lora_state_dict_for_adapter = {
-            adapter_dir: _load_lora_state_dict(adapter_dir) for adapter_dir in uniq
-        }
-        all_adapter_paths = uniq
-
-    else:
-        raise ValueError("mode must be one of: one2n | n2n | m2n")
-
-    return (
-        adapter_for_expert,
-        alpha_for_expert,
-        lora_cfg_for_adapter,
-        lora_state_dict_for_adapter,
-        all_adapter_paths,
-    )
-
-
 @hydra.main(
     config_path="../../configs/",
     config_name="sft.yaml",
@@ -442,7 +42,7 @@ def merge_dense_lora_to_moe(
         exist_ok=True,
     )
 
-    dtype = torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
@@ -655,6 +255,406 @@ def merge_dense_lora_to_moe(
             indent=2,
             ensure_ascii=False,
         )
+    )
+
+
+def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+    dtype_str = str(dtype_str).lower()
+    if dtype_str in ("fp16", "float16"):
+        return torch.float16
+    if dtype_str in ("bf16", "bfloat16"):
+        return torch.bfloat16
+    if dtype_str in ("fp32", "float32"):
+        return torch.float32
+    raise ValueError(f"Unknown dtype: {dtype_str}")
+
+
+def _list_explicit_expert_ffn_weight_keys(
+    state_dict: Dict[str, torch.Tensor],
+) -> List[str]:
+    pat = re.compile(
+        r"^model\.layers\.(\d+)\.mlp\.(?:experts|expert)\.(\d+)\.(up_proj|gate_proj|down_proj)\.weight$"
+    )
+    return [k for k in state_dict.keys() if pat.match(k)]
+
+
+def _infer_num_layers_and_experts_from_keys(keys: List[str]) -> Tuple[int, int]:
+    layer_max = -1
+    expert_max = -1
+    pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.(?:experts|expert)\.(\d+)\.")
+    for k in keys:
+        m = pat.match(k)
+        if not m:
+            continue
+        layer_max = max(layer_max, int(m.group(1)))
+        expert_max = max(expert_max, int(m.group(2)))
+    if layer_max < 0 or expert_max < 0:
+        raise RuntimeError("Could not infer layers/experts from expert FFN keys.")
+    return layer_max + 1, expert_max + 1
+
+
+def _detect_moe_layout(
+    state_dict: Dict[str, torch.Tensor],
+) -> str:
+    explicit_keys = _list_explicit_expert_ffn_weight_keys(state_dict=state_dict)
+    if len(explicit_keys) > 0:
+        return "explicit"
+
+    packed_gate_up_pat = re.compile(
+        r"^model\.layers\.(\d+)\.mlp\.experts\.gate_up_proj$"
+    )
+    packed_down_pat = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts\.down_proj$")
+    if any(packed_gate_up_pat.match(k) for k in state_dict) and any(
+        packed_down_pat.match(k) for k in state_dict
+    ):
+        return "mixtral_packed"
+
+    raise RuntimeError(
+        "No supported expert FFN layout found. Expected explicit expert weights or Mixtral packed expert tensors."
+    )
+
+
+def _infer_moe_shape(
+    model: torch.nn.Module,
+    state_dict: Dict[str, torch.Tensor],
+) -> Tuple[str, int, int]:
+    layout = _detect_moe_layout(state_dict=state_dict)
+    num_layers = len(model.model.layers)
+
+    if layout == "explicit":
+        _, num_experts = _infer_num_layers_and_experts_from_keys(
+            keys=_list_explicit_expert_ffn_weight_keys(state_dict=state_dict)
+        )
+        return layout, num_layers, num_experts
+
+    gate_up_key = "model.layers.0.mlp.experts.gate_up_proj"
+    if gate_up_key not in state_dict:
+        raise RuntimeError(f"Missing Mixtral packed key: {gate_up_key}")
+    num_experts = int(state_dict[gate_up_key].shape[0])
+    return layout, num_layers, num_experts
+
+
+def _validate_list_length(
+    name: str,
+    xs: List[Any],
+    expected: int,
+) -> None:
+    if len(xs) != expected:
+        raise ValueError(f"{name} must have length {expected}, got {len(xs)}")
+
+
+@dataclass
+class _LoraWeights:
+    A: torch.Tensor
+    B: torch.Tensor
+    scale: float
+
+
+def _load_lora_state_dict(adapter_dir: str) -> Dict[str, torch.Tensor]:
+    safepath = os.path.join(
+        adapter_dir,
+        "adapter_model.safetensors",
+    )
+    binpath = os.path.join(
+        adapter_dir,
+        "adapter_model.bin",
+    )
+
+    if os.path.exists(safepath):
+        from safetensors.torch import load_file
+
+        return load_file(safepath)
+    if os.path.exists(binpath):
+        return torch.load(
+            binpath,
+            map_location="cpu",
+        )
+    raise FileNotFoundError(
+        f"Cannot find adapter_model.safetensors or adapter_model.bin under: {adapter_dir}"
+    )
+
+
+def _load_lora_config(adapter_dir: str) -> Dict:
+    cfg_path = os.path.join(
+        adapter_dir,
+        "adapter_config.json",
+    )
+    if not os.path.exists(cfg_path):
+        raise FileNotFoundError(f"Missing adapter_config.json under: {adapter_dir}")
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _collect_lora_for_target(
+    lora_state_dict: Dict[str, torch.Tensor],
+    adapter_cfg: Dict,
+    target_weight_key: str,
+) -> Optional[_LoraWeights]:
+    """
+    target_weight_key example:
+        model.layers.0.mlp.up_proj.weight
+        model.layers.0.self_attn.q_proj.weight
+    """
+    r = adapter_cfg.get(
+        "r",
+        None,
+    )
+    lora_alpha = adapter_cfg.get(
+        "lora_alpha",
+        None,
+    )
+    if r is None or lora_alpha is None:
+        raise ValueError("adapter_config.json missing 'r' or 'lora_alpha' (top-level).")
+
+    scale = float(lora_alpha) / float(r)
+    target_path = target_weight_key[: -len(".weight")]
+
+    a_suffix = f"{target_path}.lora_A.weight"
+    b_suffix = f"{target_path}.lora_B.weight"
+
+    A_key = None
+    B_key = None
+    for k in lora_state_dict.keys():
+        if k.endswith(a_suffix):
+            A_key = k
+        elif k.endswith(b_suffix):
+            B_key = k
+
+    if A_key is None or B_key is None:
+        return None
+
+    A = lora_state_dict[A_key].to(torch.float32)
+    B = lora_state_dict[B_key].to(torch.float32)
+    return _LoraWeights(
+        A=A,
+        B=B,
+        scale=scale,
+    )
+
+
+def _apply_lora_delta_inplace(
+    base_weight: torch.Tensor,
+    lora: _LoraWeights,
+    alpha_override: float,
+    weight_coef: float,
+) -> None:
+    """
+    base_weight += weight_coef * alpha_override * (B @ A) * (lora.scale)
+    - alpha_override: your experiment-level scaling (per-expert for FFN, optional for attention)
+    - weight_coef: used for equal-weight averaging across multiple adapters (e.g., 1/4, 1/8).
+    """
+    delta = (lora.B @ lora.A) * (
+        lora.scale * float(alpha_override) * float(weight_coef)
+    )
+    with torch.no_grad():
+        base_weight.add_(
+            delta.to(
+                dtype=base_weight.dtype,
+                device=base_weight.device,
+            )
+        )
+
+
+def _apply_lora_delta_to_mixtral_expert_inplace(
+    gate_up_weight: torch.Tensor,
+    down_weight: torch.Tensor,
+    proj: str,
+    lora: _LoraWeights,
+    alpha_override: float,
+    weight_coef: float,
+) -> None:
+    delta = (lora.B @ lora.A) * (
+        lora.scale * float(alpha_override) * float(weight_coef)
+    )
+    delta = delta.to(
+        dtype=(
+            gate_up_weight.dtype
+            if proj in ["gate_proj", "up_proj"]
+            else down_weight.dtype
+        ),
+        device=(
+            gate_up_weight.device
+            if proj in ["gate_proj", "up_proj"]
+            else down_weight.device
+        ),
+    )
+
+    with torch.no_grad():
+        if proj in [
+            "gate_proj",
+            "up_proj",
+        ]:
+            intermediate_size = gate_up_weight.shape[0] // 2
+            if proj == "gate_proj":
+                gate_up_weight[:intermediate_size].add_(delta)
+                return
+            gate_up_weight[intermediate_size:].add_(delta)
+            return
+
+        if proj == "down_proj":
+            down_weight.add_(delta)
+            return
+
+    raise ValueError(f"Unsupported proj for Mixtral packed experts: {proj}")
+
+
+def _resolve_adapter_plan(
+    config: DictConfig,
+) -> Tuple[
+    List[str],
+    List[float],
+    Dict[str, Dict],
+    Dict[str, Dict[str, torch.Tensor]],
+    List[str],
+]:
+    """
+    Returns:
+        adapter_for_expert: length n, adapter path per expert (for FFN)
+        alpha_for_expert: length n, alpha per expert (for FFN)
+        lora_cfg_for_adapter: dict adapter_path -> adapter_config
+        lora_state_dict_for_adapter: dict adapter_path -> adapter_state_dict
+        all_adapter_paths: list of unique adapter paths involved (for attention averaging)
+    """
+    num_experts = int(config.moe.num_experts)
+    mode = str(config.merge_mode)
+
+    if mode == "one2n":
+        base_adapter = os.path.join(
+            config.base_adapter_dir,
+            str(config.one2n.base_adapter),
+        )
+        alphas = [float(x) for x in list(config.one2n.alphas)]
+        _validate_list_length(
+            name="one2n.alphas",
+            xs=alphas,
+            expected=num_experts,
+        )
+
+        adapter_for_expert = [base_adapter for _ in range(num_experts)]
+        alpha_for_expert = alphas
+
+        lora_cfg = _load_lora_config(adapter_dir=base_adapter)
+        lora_state_dict = _load_lora_state_dict(adapter_dir=base_adapter)
+
+        lora_cfg_for_adapter = {base_adapter: lora_cfg}
+        lora_state_dict_for_adapter = {base_adapter: lora_state_dict}
+        all_adapter_paths = [base_adapter]
+
+    elif mode == "n2n":
+        adapter_paths = [str(p) for p in list(config.n2n.adapter_paths)]
+        _validate_list_length(
+            name="n2n.adapter_paths",
+            xs=adapter_paths,
+            expected=num_experts,
+        )
+        full_adapter_paths = [
+            os.path.join(
+                config.base_adapter_dir,
+                adapter_path,
+            )
+            for adapter_path in adapter_paths
+        ]
+        adapter_for_expert = full_adapter_paths
+
+        if config.n2n.get("alphas", None) is None:
+            alpha_for_expert = [1.0 for _ in range(num_experts)]
+        else:
+            alphas = [float(x) for x in list(config.n2n.alphas)]
+            _validate_list_length(
+                name="n2n.alphas",
+                xs=alphas,
+                expected=num_experts,
+            )
+            alpha_for_expert = alphas
+
+        uniq = sorted(set(adapter_for_expert))
+        lora_cfg_for_adapter = {
+            adapter_dir: _load_lora_config(adapter_dir) for adapter_dir in uniq
+        }
+        lora_state_dict_for_adapter = {
+            adapter_dir: _load_lora_state_dict(adapter_dir) for adapter_dir in uniq
+        }
+        all_adapter_paths = uniq
+
+    elif mode == "m2n":
+        adapter_paths = [str(p) for p in list(config.m2n.adapter_paths)]
+        m = len(adapter_paths)
+        if m <= 0:
+            raise ValueError("m2n requires m2n.adapter_paths (length m > 0).")
+
+        expert_to_adapter = [int(x) for x in list(config.m2n.expert_to_adapter)]
+        _validate_list_length(
+            name="m2n.expert_to_adapter",
+            xs=expert_to_adapter,
+            expected=num_experts,
+        )
+        if any(x < 0 or x >= m for x in expert_to_adapter):
+            raise ValueError(f"m2n.expert_to_adapter must be in [0, {m-1}]")
+
+        full_adapter_paths = [
+            os.path.join(
+                config.base_adapter_dir,
+                adapter_path,
+            )
+            for adapter_path in adapter_paths
+        ]
+        adapter_for_expert = [full_adapter_paths[idx] for idx in expert_to_adapter]
+
+        if config.m2n.get("per_expert_alphas", None) is not None:
+            per_expert_alphas = [float(x) for x in list(config.m2n.per_expert_alphas)]
+            _validate_list_length(
+                name="m2n.per_expert_alphas",
+                xs=per_expert_alphas,
+                expected=num_experts,
+            )
+            alpha_for_expert = per_expert_alphas
+        else:
+            group_alphas = [float(x) for x in list(config.m2n.group_alphas)]
+            num_groups = len(group_alphas)
+            if num_groups <= 0:
+                raise ValueError(
+                    "m2n requires either lora.per_expert_alphas or lora.group_alphas (len>0)."
+                )
+
+            if config.m2n.get("expert_to_group", None) is not None:
+                expert_to_group = [int(x) for x in list(config.m2n.expert_to_group)]
+                _validate_list_length(
+                    name="m2n.expert_to_group",
+                    xs=expert_to_group,
+                    expected=num_experts,
+                )
+                if any(x < 0 or x >= num_groups for x in expert_to_group):
+                    raise ValueError(
+                        f"m2n.expert_to_group must be in [0, {num_groups-1}]"
+                    )
+            else:
+                expert_to_group = [
+                    min((expert * num_groups) // num_experts, num_groups - 1)
+                    for expert in range(num_experts)
+                ]
+
+            alpha_for_expert = [
+                group_alphas[expert_to_group[expert]] for expert in range(num_experts)
+            ]
+
+        uniq = sorted(set(adapter_for_expert))
+        lora_cfg_for_adapter = {
+            adapter_dir: _load_lora_config(adapter_dir) for adapter_dir in uniq
+        }
+        lora_state_dict_for_adapter = {
+            adapter_dir: _load_lora_state_dict(adapter_dir) for adapter_dir in uniq
+        }
+        all_adapter_paths = uniq
+
+    else:
+        raise ValueError("mode must be one of: one2n | n2n | m2n")
+
+    return (
+        adapter_for_expert,
+        alpha_for_expert,
+        lora_cfg_for_adapter,
+        lora_state_dict_for_adapter,
+        all_adapter_paths,
     )
 
 
