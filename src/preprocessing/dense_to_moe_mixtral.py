@@ -65,7 +65,13 @@ def dense_to_moe(
     dense_model.eval()
 
     dense_cfg = dense_model.config
-    dense_model_type = str(getattr(dense_cfg, "model_type", ""))
+    dense_model_type = str(
+        getattr(
+            dense_cfg,
+            "model_type",
+            "",
+        )
+    )
     if dense_model_type not in SUPPORTED_DENSE_MODEL_TYPES:
         raise ValueError(
             "dense_to_moe supports only "

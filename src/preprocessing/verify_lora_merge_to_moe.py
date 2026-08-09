@@ -107,7 +107,11 @@ def verify_lora_merge(
     num_experts = int(d2m_cfg.moe.num_experts)
     mode = str(d2m_cfg.merge_mode)
 
-    vcfg = getattr(d2m_cfg, "verify_merge", None)
+    vcfg = getattr(
+        d2m_cfg,
+        "verify_merge",
+        None,
+    )
     if vcfg is None:
         sample_experts = [0, num_experts - 1]
         max_module_samples = 8
@@ -115,16 +119,50 @@ def verify_lora_merge(
         prefer_projs = ["up_proj", "gate_proj", "down_proj"]
     else:
         sample_experts = list(vcfg.experts)
-        max_module_samples = int(getattr(vcfg, "max_module_samples", 8))
-        strict_targets = bool(getattr(vcfg, "strict_targets", False))
+        max_module_samples = int(
+            getattr(
+                vcfg,
+                "max_module_samples",
+                8,
+            )
+        )
+        strict_targets = bool(
+            getattr(
+                vcfg,
+                "strict_targets",
+                False,
+            )
+        )
         prefer_projs = list(
-            getattr(vcfg, "projs", ["up_proj", "gate_proj", "down_proj"])
+            getattr(
+                vcfg,
+                "projs",
+                ["up_proj", "gate_proj", "down_proj"],
+            )
         )
 
     adapter_cache: Dict[str, Tuple[Dict, Dict[str, torch.Tensor]]] = {}
 
-    tol = float(getattr(d2m_cfg, "verify_merge", {}).get("delta_tol", 5e-3))
-    tol_attn = float(getattr(d2m_cfg, "verify_merge", {}).get("attn_delta_tol", 5e-3))
+    tol = float(
+        getattr(
+            d2m_cfg,
+            "verify_merge",
+            {},
+        ).get(
+            "delta_tol",
+            5e-3,
+        )
+    )
+    tol_attn = float(
+        getattr(
+            d2m_cfg,
+            "verify_merge",
+            {},
+        ).get(
+            "attn_delta_tol",
+            5e-3,
+        )
+    )
 
     representative_adapter_dir, _ = _resolve_adapter_for_expert(
         d2m_cfg=d2m_cfg,
@@ -161,7 +199,10 @@ def verify_lora_merge(
     proj_rank = {proj_name: i for i, proj_name in enumerate(prefer_projs)}
     ffn_targets_in_adapter.sort(
         key=lambda x: (
-            proj_rank.get(x[1], 999),
+            proj_rank.get(
+                x[1],
+                999,
+            ),
             x[0],
         )
     )
@@ -170,7 +211,13 @@ def verify_lora_merge(
     sample_layers = sorted(list(set([layer for layer, _ in sample_layer_proj_pairs])))
 
     if strict_targets:
-        num_hidden_layers = int(getattr(base_model.config, "num_hidden_layers", 0))
+        num_hidden_layers = int(
+            getattr(
+                base_model.config,
+                "num_hidden_layers",
+                0,
+            )
+        )
         if num_hidden_layers <= 0:
             raise RuntimeError(
                 "Could not determine num_hidden_layers from base model config."
@@ -319,7 +366,10 @@ def verify_lora_merge(
             raise RuntimeError(f"Attention key not found in model state_dict: {base_k}")
 
         expected_sum = None
-        for adapter_dir, coef in zip(attn_adapters, coefs):
+        for adapter_dir, coef in zip(
+            attn_adapters,
+            coefs,
+        ):
             lora_cfg, lora_state_dict = _get_adapter(
                 adapter_cache=adapter_cache,
                 adapter_dir=adapter_dir,
@@ -359,7 +409,10 @@ def verify_lora_merge(
             f"[verify_merge] Attention averaging delta check passed (key={base_k}, tol={tol_attn})."
         )
 
-    out_path = os.path.join(merged_dir, "verify_lora_merge_report.json")
+    out_path = os.path.join(
+        merged_dir,
+        "verify_lora_merge_report.json",
+    )
     report = {
         "base_moe_dir": base_moe_dir,
         "merged_dir": merged_dir,
@@ -371,7 +424,11 @@ def verify_lora_merge(
         "sample_layer_proj_pairs": sample_layer_proj_pairs,
         "delta_checks": delta_checks,
     }
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(
+        out_path,
+        "w",
+        encoding="utf-8",
+    ) as f:
         json.dump(
             report,
             f,
@@ -464,7 +521,10 @@ def _resolve_adapter_for_expert(
             if d2m_cfg.m2n.get("expert_to_group", None) is not None:
                 grp = int(list(d2m_cfg.m2n.expert_to_group)[expert])
             else:
-                grp = min((expert * num_groups) // num_experts, num_groups - 1)
+                grp = min(
+                    (expert * num_groups) // num_experts,
+                    num_groups - 1,
+                )
             alpha = float(group_alphas[grp])
         return adapter_dir, alpha
     raise ValueError(f"Unknown merge_mode={merge_mode}")
@@ -489,7 +549,11 @@ def _load_lora_config(adapter_dir: str) -> Dict[str, str]:
     )
     if not os.path.exists(cfg_path):
         raise FileNotFoundError(f"Missing adapter_config.json under: {adapter_dir}")
-    with open(cfg_path, "r", encoding="utf-8") as f:
+    with open(
+        cfg_path,
+        "r",
+        encoding="utf-8",
+    ) as f:
         return json.load(f)
 
 
@@ -577,7 +641,13 @@ def _list_ffn_lora_targets_from_adapter(
     for module_path in modules_with_both:
         match = ffn_pattern_model_layers.match(module_path)
         if match is None:
-            match = ffn_pattern.match(module_path.replace("model.", "", 1))
+            match = ffn_pattern.match(
+                module_path.replace(
+                    "model.",
+                    "",
+                    1,
+                )
+            )
         if match is None:
             continue
 

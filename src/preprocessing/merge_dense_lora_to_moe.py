@@ -174,7 +174,10 @@ def merge_dense_lora_to_moe(
                             f"Expected attention weight key not found: {base_w_key}"
                         )
 
-                    for ap, coef in zip(attn_adapter_paths, attn_weight_coefs):
+                    for ap, coef in zip(
+                        attn_adapter_paths,
+                        attn_weight_coefs,
+                    ):
                         lora_state_dict = lora_state_dict_for_adapter[ap]
                         lora_cfg = lora_cfg_for_adapter[ap]
 
@@ -286,8 +289,14 @@ def _infer_num_layers_and_experts_from_keys(keys: List[str]) -> Tuple[int, int]:
         m = pat.match(k)
         if not m:
             continue
-        layer_max = max(layer_max, int(m.group(1)))
-        expert_max = max(expert_max, int(m.group(2)))
+        layer_max = max(
+            layer_max,
+            int(m.group(1)),
+        )
+        expert_max = max(
+            expert_max,
+            int(m.group(2)),
+        )
     if layer_max < 0 or expert_max < 0:
         raise RuntimeError("Could not infer layers/experts from expert FFN keys.")
     return layer_max + 1, expert_max + 1
@@ -381,7 +390,11 @@ def _load_lora_config(adapter_dir: str) -> Dict:
     )
     if not os.path.exists(cfg_path):
         raise FileNotFoundError(f"Missing adapter_config.json under: {adapter_dir}")
-    with open(cfg_path, "r", encoding="utf-8") as f:
+    with open(
+        cfg_path,
+        "r",
+        encoding="utf-8",
+    ) as f:
         return json.load(f)
 
 
@@ -629,7 +642,10 @@ def _resolve_adapter_plan(
                     )
             else:
                 expert_to_group = [
-                    min((expert * num_groups) // num_experts, num_groups - 1)
+                    min(
+                        (expert * num_groups) // num_experts,
+                        num_groups - 1,
+                    )
                     for expert in range(num_experts)
                 ]
 

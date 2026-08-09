@@ -29,7 +29,10 @@ def specialize_reasoning(
     assistant_start = special_tokens_map.get(
         "additional_special_tokens", ["<|im_start|>assistant\n"]
     )[0]
-    assistant_end = special_tokens_map.get("eos_token", "<|im_end|>")
+    assistant_end = special_tokens_map.get(
+        "eos_token",
+        "<|im_end|>",
+    )
     user_start = special_tokens_map.get(
         "additional_special_tokens", ["<|im_start|>user\n"]
     )[0]

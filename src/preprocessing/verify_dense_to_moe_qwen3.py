@@ -58,7 +58,10 @@ def verify_dense_to_moe(
     moe_state_dict = moe_model.state_dict()
 
     cfg_dict = moe_model.config.to_dict()
-    model_type = cfg_dict.get("model_type", None)
+    model_type = cfg_dict.get(
+        "model_type",
+        None,
+    )
     print(f"[config] model_type={model_type}")
     if model_type != "qwen3_moe":
         raise RuntimeError(f"Expected model_type 'qwen3_moe', got '{model_type}'")
@@ -72,7 +75,12 @@ def verify_dense_to_moe(
             "Missing MoE field in config: num_experts or num_local_experts"
         )
 
-    num_experts = int(cfg_dict.get("num_experts", cfg_dict.get("num_local_experts")))
+    num_experts = int(
+        cfg_dict.get(
+            "num_experts",
+            cfg_dict.get("num_local_experts"),
+        )
+    )
     print(
         f"[config] num_experts={num_experts}, top_k={cfg_dict['num_experts_per_tok']}, moe_intermediate_size={cfg_dict['moe_intermediate_size']}"
     )
@@ -108,23 +116,49 @@ def verify_dense_to_moe(
     )
 
     verify_layers = list(
-        getattr(d2m_cfg, "verify", {}).get(
-            "layers", [0, num_layers // 2, num_layers - 1]
+        getattr(
+            d2m_cfg,
+            "verify",
+            {},
+        ).get(
+            "layers",
+            [0, num_layers // 2, num_layers - 1],
         )
     )
     verify_experts = list(
-        getattr(d2m_cfg, "verify", {}).get("experts", [0, num_experts - 1])
+        getattr(
+            d2m_cfg,
+            "verify",
+            {},
+        ).get(
+            "experts",
+            [0, num_experts - 1],
+        )
     )
     verify_projs = list(
-        getattr(d2m_cfg, "verify", {}).get(
-            "projs", ["up_proj", "gate_proj", "down_proj"]
+        getattr(
+            d2m_cfg,
+            "verify",
+            {},
+        ).get(
+            "projs",
+            ["up_proj", "gate_proj", "down_proj"],
         )
     )
 
     verify_layers = [l for l in verify_layers if 0 <= int(l) < num_layers]
     verify_experts = [e for e in verify_experts if 0 <= int(e) < num_experts]
 
-    tol = float(getattr(d2m_cfg, "verify", {}).get("weight_tol", 0.0))
+    tol = float(
+        getattr(
+            d2m_cfg,
+            "verify",
+            {},
+        ).get(
+            "weight_tol",
+            0.0,
+        )
+    )
 
     report = {"mlp_copy_checks": []}
 
@@ -251,8 +285,11 @@ def verify_dense_to_moe(
         )
     rl = out.router_logits
     if not isinstance(rl, (tuple, list)) or len(rl) != num_layers:
+        router_logits_length = "N/A"
+        if isinstance(rl, (tuple, list)):
+            router_logits_length = len(rl)
         raise RuntimeError(
-            f"router_logits expected length {num_layers}, got {type(rl)} len={len(rl) if isinstance(rl,(tuple,list)) else 'N/A'}"
+            f"router_logits expected length {num_layers}, got {type(rl)} len={router_logits_length}"
         )
 
     sample_rl = rl[verify_layers[0]]
@@ -265,14 +302,21 @@ def verify_dense_to_moe(
         f"[verify] Forward router_logits OK: len={len(rl)}, sample_shape={tuple(sample_rl.shape)}"
     )
 
-    out_path = os.path.join(moe_dir, "verify_dense_to_moe_report.json")
+    out_path = os.path.join(
+        moe_dir,
+        "verify_dense_to_moe_report.json",
+    )
     report["config"] = {
         "model_type": model_type,
         "num_layers": num_layers,
         "num_experts": num_experts,
     }
     report["router_gate_stats_sample"] = gate_stats
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(
+        out_path,
+        "w",
+        encoding="utf-8",
+    ) as f:
         json.dump(
             report,
             f,
