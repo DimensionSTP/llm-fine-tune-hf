@@ -25,11 +25,11 @@ def prepare_train_artifact_config(
         return
 
     if config.resume_training:
-        prepare_resume_artifact_config(config=config)
+        _prepare_resume_artifact_config(config=config)
         return
 
     output_base_dir = os.path.normpath(str(config.output_base_dir))
-    run_id, output_dir = allocate_or_read_run_directory(
+    run_id, output_dir = _allocate_or_read_run_directory(
         output_base_dir=output_base_dir,
         rank=rank,
         allocation_timeout_seconds=float(
@@ -46,7 +46,65 @@ def prepare_train_artifact_config(
     config.output_dir = str(output_dir)
 
 
-def prepare_resume_artifact_config(
+def write_run_metadata(
+    config: DictConfig,
+    training_arguments: TrainingArguments,
+    rank: int,
+) -> None:
+    if rank != 0:
+        return
+
+    output_dir = str(config.output_dir)
+    os.makedirs(
+        output_dir,
+        exist_ok=True,
+    )
+
+    training_arguments_payload = json.loads(
+        training_arguments.to_json_string(),
+    )
+    resolved_config = OmegaConf.to_container(
+        config,
+        resolve=True,
+    )
+
+    _write_json(
+        path=os.path.join(
+            output_dir,
+            "run_manifest.json",
+        ),
+        payload=_build_run_manifest(
+            config=config,
+            training_arguments=training_arguments_payload,
+            resolved_config=resolved_config,
+        ),
+    )
+
+    with open(
+        os.path.join(
+            output_dir,
+            "resolved_config.yaml",
+        ),
+        "w",
+        encoding="utf-8",
+    ) as file:
+        file.write(
+            OmegaConf.to_yaml(
+                config,
+                resolve=True,
+            )
+        )
+
+    _write_json(
+        path=os.path.join(
+            output_dir,
+            "training_args.json",
+        ),
+        payload=training_arguments_payload,
+    )
+
+
+def _prepare_resume_artifact_config(
     config: DictConfig,
 ) -> None:
     if config.resume_from_checkpoint is None:
@@ -60,7 +118,7 @@ def prepare_resume_artifact_config(
             f"resume_from_checkpoint does not exist: {resume_from_checkpoint}"
         )
 
-    output_dir = get_resume_output_dir(
+    output_dir = _get_resume_output_dir(
         resume_from_checkpoint=resume_from_checkpoint,
     )
     config.output_base_dir = os.path.dirname(output_dir)
@@ -68,7 +126,7 @@ def prepare_resume_artifact_config(
     config.output_dir = output_dir
 
 
-def allocate_or_read_run_directory(
+def _allocate_or_read_run_directory(
     output_base_dir: str,
     rank: int,
     allocation_timeout_seconds: float,
@@ -76,19 +134,19 @@ def allocate_or_read_run_directory(
     allocation_freshness_grace_seconds: float,
 ) -> Tuple[str, str]:
     allocation_read_started_at = time.time()
-    if get_world_size() <= 1:
-        return allocate_next_run_directory(output_base_dir=output_base_dir)
+    if _get_world_size() <= 1:
+        return _allocate_next_run_directory(output_base_dir=output_base_dir)
 
-    allocation_key = get_allocation_key()
-    allocation_path = get_allocation_path(
+    allocation_key = _get_allocation_key()
+    allocation_path = _get_allocation_path(
         output_base_dir=output_base_dir,
         allocation_key=allocation_key,
     )
     if rank == 0:
-        run_id, output_dir = allocate_next_run_directory(
+        run_id, output_dir = _allocate_next_run_directory(
             output_base_dir=output_base_dir,
         )
-        write_json(
+        _write_json(
             path=allocation_path,
             payload={
                 "allocation_key": allocation_key,
@@ -100,7 +158,7 @@ def allocate_or_read_run_directory(
         )
         return run_id, output_dir
 
-    return read_run_directory_allocation(
+    return _read_run_directory_allocation(
         allocation_path=allocation_path,
         allocation_key=allocation_key,
         output_base_dir=output_base_dir,
@@ -111,14 +169,14 @@ def allocate_or_read_run_directory(
     )
 
 
-def allocate_next_run_directory(
+def _allocate_next_run_directory(
     output_base_dir: str,
 ) -> Tuple[str, str]:
     os.makedirs(
         output_base_dir,
         exist_ok=True,
     )
-    next_index = get_next_run_index(output_base_dir=output_base_dir)
+    next_index = _get_next_run_index(output_base_dir=output_base_dir)
     while True:
         run_id = f"run-{next_index:04d}"
         output_dir = os.path.join(
@@ -133,7 +191,7 @@ def allocate_next_run_directory(
         return run_id, output_dir
 
 
-def read_run_directory_allocation(
+def _read_run_directory_allocation(
     allocation_path: str,
     allocation_key: str,
     output_base_dir: str,
@@ -160,7 +218,7 @@ def read_run_directory_allocation(
             except json.JSONDecodeError:
                 time.sleep(allocation_poll_interval_seconds)
                 continue
-            if is_current_run_directory_allocation(
+            if _is_current_run_directory_allocation(
                 payload=payload,
                 allocation_key=allocation_key,
                 output_base_dir=output_base_dir,
@@ -173,7 +231,7 @@ def read_run_directory_allocation(
     raise TimeoutError(f"Timed out waiting for run allocation: {allocation_path}")
 
 
-def is_current_run_directory_allocation(
+def _is_current_run_directory_allocation(
     payload: Any,
     allocation_key: str,
     output_base_dir: str,
@@ -206,7 +264,7 @@ def is_current_run_directory_allocation(
     return os.path.basename(output_dir) == run_id
 
 
-def get_next_run_index(
+def _get_next_run_index(
     output_base_dir: str,
 ) -> int:
     run_indices = [
@@ -227,7 +285,7 @@ def get_next_run_index(
     return max(run_indices) + 1
 
 
-def get_resume_output_dir(
+def _get_resume_output_dir(
     resume_from_checkpoint: str,
 ) -> str:
     if re.match(r"^checkpoint-[0-9]+$", os.path.basename(resume_from_checkpoint)):
@@ -235,7 +293,7 @@ def get_resume_output_dir(
     return resume_from_checkpoint
 
 
-def get_allocation_path(
+def _get_allocation_path(
     output_base_dir: str,
     allocation_key: str,
 ) -> str:
@@ -254,7 +312,7 @@ def get_allocation_path(
     )
 
 
-def get_allocation_key() -> str:
+def _get_allocation_key() -> str:
     raw_key = "-".join(
         [
             os.environ.get("TORCHELASTIC_RUN_ID", "none"),
@@ -266,85 +324,27 @@ def get_allocation_key() -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", raw_key)
 
 
-def write_run_metadata(
-    config: DictConfig,
-    training_arguments: TrainingArguments,
-    rank: int,
-) -> None:
-    if rank != 0:
-        return
-
-    output_dir = str(config.output_dir)
-    os.makedirs(
-        output_dir,
-        exist_ok=True,
-    )
-
-    training_arguments_payload = json.loads(
-        training_arguments.to_json_string(),
-    )
-    resolved_config = OmegaConf.to_container(
-        config,
-        resolve=True,
-    )
-
-    write_json(
-        path=os.path.join(
-            output_dir,
-            "run_manifest.json",
-        ),
-        payload=build_run_manifest(
-            config=config,
-            training_arguments=training_arguments_payload,
-            resolved_config=resolved_config,
-        ),
-    )
-
-    with open(
-        os.path.join(
-            output_dir,
-            "resolved_config.yaml",
-        ),
-        "w",
-        encoding="utf-8",
-    ) as file:
-        file.write(
-            OmegaConf.to_yaml(
-                config,
-                resolve=True,
-            )
-        )
-
-    write_json(
-        path=os.path.join(
-            output_dir,
-            "training_args.json",
-        ),
-        payload=training_arguments_payload,
-    )
-
-
-def build_run_manifest(
+def _build_run_manifest(
     config: DictConfig,
     training_arguments: Dict[str, Any],
     resolved_config: Any,
 ) -> Dict[str, Any]:
     return {
         "schema_version": 1,
-        "run": build_run_section(config=config),
-        "paths": build_paths_section(config=config),
-        "peft_initialization": build_peft_initialization_section(config=config),
-        "memory_preflight": build_memory_preflight_section(config=config),
-        "source": build_source_section(),
-        "runtime": build_runtime_section(config=config),
-        "summary": build_summary_section(config=config),
-        "method_hyperparameters": build_method_hyperparameters(config=config),
+        "run": _build_run_section(config=config),
+        "paths": _build_paths_section(config=config),
+        "peft_initialization": _build_peft_initialization_section(config=config),
+        "memory_preflight": _build_memory_preflight_section(config=config),
+        "source": _build_source_section(),
+        "runtime": _build_runtime_section(config=config),
+        "summary": _build_summary_section(config=config),
+        "method_hyperparameters": _build_method_hyperparameters(config=config),
         "training_arguments": training_arguments,
         "resolved_config": resolved_config,
     }
 
 
-def build_run_section(
+def _build_run_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
     return {
@@ -360,7 +360,7 @@ def build_run_section(
     }
 
 
-def build_paths_section(
+def _build_paths_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
     dataset_metadata = build_dataset_input_metadata(
@@ -402,27 +402,27 @@ def build_paths_section(
     }
 
 
-def build_peft_initialization_section(
+def _build_peft_initialization_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
     return build_peft_initialization_metadata(config=config)
 
 
-def build_memory_preflight_section(
+def _build_memory_preflight_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
     return build_memory_preflight_metadata(config=config)
 
 
-def build_source_section() -> Dict[str, Any]:
+def _build_source_section() -> Dict[str, Any]:
     return {
-        "git_revision": get_git_revision(),
+        "git_revision": _get_git_revision(),
         "python_argv": sys.argv,
         "working_directory": os.getcwd(),
     }
 
 
-def build_runtime_section(
+def _build_runtime_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
     runtime_snapshot = build_distributed_runtime_snapshot(config=config)
@@ -433,10 +433,10 @@ def build_runtime_section(
     return runtime_snapshot
 
 
-def build_summary_section(
+def _build_summary_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    return select_config_values(
+    return _select_config_values(
         config=config,
         paths=[
             "run_id",
@@ -513,12 +513,12 @@ def build_summary_section(
             "run_name",
         ],
         extra={
-            "effective_batch_size": get_effective_batch_size(config=config),
+            "effective_batch_size": _get_effective_batch_size(config=config),
         },
     )
 
 
-def build_method_hyperparameters(
+def _build_method_hyperparameters(
     config: DictConfig,
 ) -> Dict[str, Any]:
     common_paths_by_method: Dict[str, List[str]] = {
@@ -688,14 +688,14 @@ def build_method_hyperparameters(
             "reward_embedding",
         ],
     }
-    return select_config_values(
+    return _select_config_values(
         config=config,
         paths=common_paths_by_method[str(config.fine_tune_method)],
         extra=None,
     )
 
 
-def select_config_values(
+def _select_config_values(
     config: DictConfig,
     paths: List[str],
     extra: Optional[Dict[str, Any]],
@@ -713,14 +713,14 @@ def select_config_values(
     return selected
 
 
-def get_effective_batch_size(
+def _get_effective_batch_size(
     config: DictConfig,
 ) -> int:
     runtime_snapshot = build_distributed_runtime_snapshot(config=config)
     return int(runtime_snapshot["effective_batch_size"])
 
 
-def get_device_count(
+def _get_device_count(
     config: DictConfig,
 ) -> int:
     devices = config.devices
@@ -733,11 +733,11 @@ def get_device_count(
     return int(os.environ.get("WORLD_SIZE", "1"))
 
 
-def get_world_size() -> int:
+def _get_world_size() -> int:
     return int(os.environ.get("WORLD_SIZE", "1"))
 
 
-def get_git_revision() -> Optional[str]:
+def _get_git_revision() -> Optional[str]:
     repo_root = os.path.abspath(
         os.path.join(
             os.path.dirname(__file__),
@@ -764,7 +764,7 @@ def get_git_revision() -> Optional[str]:
     return result.stdout.strip()
 
 
-def write_json(
+def _write_json(
     path: str,
     payload: Dict[str, Any],
 ) -> None:
