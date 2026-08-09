@@ -308,8 +308,14 @@ class StructuralDataset:
             return None
 
         scale = math.sqrt(self.max_pixels / float(total_pixels))
-        new_width = max(1, int(width * scale))
-        new_height = max(1, int(height * scale))
+        new_width = max(
+            1,
+            int(width * scale),
+        )
+        new_height = max(
+            1,
+            int(height * scale),
+        )
         return new_width, new_height
 
     def _load_image(

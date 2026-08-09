@@ -195,7 +195,10 @@ class _PILImageAugmenter:
         return Image.blend(
             image,
             noise,
-            alpha=min(0.25, sigma / 255.0),
+            alpha=min(
+                0.25,
+                sigma / 255.0,
+            ),
         )
 
     def _apply_erasure(
@@ -213,11 +216,32 @@ class _PILImageAugmenter:
             self.config.erase_area_max,
         )
         side_ratio = math.sqrt(area_ratio)
-        patch_width = max(1, int(width * side_ratio))
-        patch_height = max(1, int(height * side_ratio))
-        x0 = self.rng.randint(0, max(0, width - patch_width))
-        y0 = self.rng.randint(0, max(0, height - patch_height))
-        fill = self.rng.randint(230, 255)
+        patch_width = max(
+            1,
+            int(width * side_ratio),
+        )
+        patch_height = max(
+            1,
+            int(height * side_ratio),
+        )
+        x0 = self.rng.randint(
+            0,
+            max(
+                0,
+                width - patch_width,
+            ),
+        )
+        y0 = self.rng.randint(
+            0,
+            max(
+                0,
+                height - patch_height,
+            ),
+        )
+        fill = self.rng.randint(
+            230,
+            255,
+        )
 
         erased = image.copy()
         draw = ImageDraw.Draw(erased)
@@ -299,8 +323,14 @@ class _AspectRatioPreservingResize:
         height, width = image.shape[:2]
         scale_percent = self.rng.uniform(*self.scale_percent_range)
         scale_factor = scale_percent / 100.0
-        resized_height = max(1, int(height * scale_factor))
-        resized_width = max(1, int(width * scale_factor))
+        resized_height = max(
+            1,
+            int(height * scale_factor),
+        )
+        resized_width = max(
+            1,
+            int(width * scale_factor),
+        )
         return self.cv2.resize(
             image,
             (resized_width, resized_height),
@@ -364,8 +394,14 @@ class _RandomSeasoning:
         height, width = image.shape[:2]
         total_pixels = height * width
         amount = self.rng.uniform(*self.seasoning_range)
-        total_holes = max(1, int(total_pixels * amount))
-        num_white = self.rng.randint(0, total_holes)
+        total_holes = max(
+            1,
+            int(total_pixels * amount),
+        )
+        num_white = self.rng.randint(
+            0,
+            total_holes,
+        )
         num_black = total_holes - num_white
         output = image.copy()
         self._apply_points(
@@ -413,7 +449,10 @@ class _RandomCoarseDropout:
     ) -> Any:
         output = image.copy()
         total_holes = self.rng.randint(*self.num_holes_range)
-        num_white = self.rng.randint(0, total_holes)
+        num_white = self.rng.randint(
+            0,
+            total_holes,
+        )
         num_black = total_holes - num_white
         self._apply_rectangles(
             image=output,
@@ -443,8 +482,20 @@ class _RandomCoarseDropout:
                 width,
                 self.rng.randint(*self.hole_width_range),
             )
-            y0 = self.rng.randint(0, max(0, height - hole_height))
-            x0 = self.rng.randint(0, max(0, width - hole_width))
+            y0 = self.rng.randint(
+                0,
+                max(
+                    0,
+                    height - hole_height,
+                ),
+            )
+            x0 = self.rng.randint(
+                0,
+                max(
+                    0,
+                    width - hole_width,
+                ),
+            )
             image[y0 : y0 + hole_height, x0 : x0 + hole_width] = value
 
 
@@ -485,7 +536,10 @@ class _FaxLikeNoise:
     ) -> Any:
         height, width = image.shape[:2]
         noise = self.rng.choice(self.fax_noise_params)
-        stripe_noise_stride = self.rng.randint(2, 5)
+        stripe_noise_stride = self.rng.randint(
+            2,
+            5,
+        )
         threshold = noise["binary_threshold"]
         stripe_noise_scale = noise["stripe_noise_scale"]
         uniform_noise_scale = noise["uniform_noise_scale"]
@@ -509,13 +563,17 @@ class _FaxLikeNoise:
         )
         if shift_mask.any():
             noise_stripe[shift_mask, :] = self.np.tile(
-                self.np.roll(noise_stripe[0], 1),
+                self.np.roll(
+                    noise_stripe[0],
+                    1,
+                ),
                 (int(shift_mask.sum()), 1),
             )
 
-        image_gray = self.cv2.cvtColor(image, self.cv2.COLOR_RGB2GRAY).astype(
-            self.np.float32
-        )
+        image_gray = self.cv2.cvtColor(
+            image,
+            self.cv2.COLOR_RGB2GRAY,
+        ).astype(self.np.float32)
         random_noise = self.np_rng.uniform(
             0,
             uniform_noise_scale,
@@ -532,7 +590,11 @@ class _FaxLikeNoise:
             255,
             self.cv2.THRESH_BINARY,
         )
-        return self.np.repeat(thresholded[:, :, None], 3, axis=2)
+        return self.np.repeat(
+            thresholded[:, :, None],
+            3,
+            axis=2,
+        )
 
 
 class _AdaptiveThreshold:
@@ -551,7 +613,10 @@ class _AdaptiveThreshold:
         image: Any,
         **params: Any,
     ) -> Any:
-        image_gray = self.cv2.cvtColor(image, self.cv2.COLOR_RGB2GRAY)
+        image_gray = self.cv2.cvtColor(
+            image,
+            self.cv2.COLOR_RGB2GRAY,
+        )
         image_thresh = self.cv2.adaptiveThreshold(
             image_gray,
             255,
@@ -1079,7 +1144,10 @@ class _AlbumentationsImageAugmenter:
     def _next_seed(
         self,
     ) -> int:
-        return self.rng.randint(0, 2**32 - 1)
+        return self.rng.randint(
+            0,
+            2**32 - 1,
+        )
 
 
 def _build_pil_config(
@@ -1275,7 +1343,13 @@ def _validate_names(
     allowed: List[str],
     name: str,
 ) -> List[str]:
-    names = [str(value) for value in _to_list(value=values, name=name)]
+    names = [
+        str(value)
+        for value in _to_list(
+            value=values,
+            name=name,
+        )
+    ]
     invalid = [value for value in names if value not in allowed]
     if invalid:
         raise ValueError(f"{name} contains unsupported values: {invalid}")
@@ -1286,7 +1360,10 @@ def _to_float_range(
     value: Any,
     name: str,
 ) -> Tuple[float, float]:
-    values = _to_list(value=value, name=name)
+    values = _to_list(
+        value=value,
+        name=name,
+    )
     if len(values) != 2:
         raise ValueError(f"{name} must be a 2-item range.")
     start = float(values[0])
@@ -1335,7 +1412,10 @@ def _to_list(
 
 def _load_albumentations_modules() -> Tuple[Any, Any, Any]:
     try:
-        os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
+        os.environ.setdefault(
+            "NO_ALBUMENTATIONS_UPDATE",
+            "1",
+        )
         import albumentations as albumentations_module
         import cv2 as cv2_module
         import numpy as numpy_module

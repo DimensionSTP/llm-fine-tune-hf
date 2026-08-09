@@ -202,7 +202,10 @@ def load_image(
     )
     if resolved_path is not None and os.path.exists(resolved_path):
         try:
-            with open(resolved_path, "rb") as file:
+            with open(
+                resolved_path,
+                "rb",
+            ) as file:
                 return _load_image_from_bytes(
                     data=file.read(),
                     converted_image_mode=converted_image_mode,
@@ -303,7 +306,14 @@ def is_vlm_content_parts(
         return False
     if len(value) == 0:
         return False
-    return all(isinstance(item, dict) and "type" in item for item in value)
+    return all(
+        isinstance(
+            item,
+            dict,
+        )
+        and "type" in item
+        for item in value
+    )
 
 
 def _load_image_from_bytes(
