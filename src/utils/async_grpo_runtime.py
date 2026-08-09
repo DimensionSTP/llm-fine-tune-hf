@@ -9,6 +9,197 @@ import urllib.request
 from omegaconf import DictConfig
 
 
+def resolve_async_runtime_state(
+    config: DictConfig,
+    rank: int,
+) -> Dict[str, Any]:
+    enabled = (
+        config.fine_tune_method == "async_grpo"
+        and "async_runtime" in config
+        and config.async_runtime.enable
+    )
+    state = {
+        "enabled": enabled,
+        "rank_is_inference": False,
+        "server_managed_by_rank1": False,
+        "stop_signal_path": None,
+        "gpu_partition": None,
+    }
+    if not enabled:
+        return state
+
+    world_size = int(
+        os.environ.get(
+            "WORLD_SIZE",
+            "1",
+        )
+    )
+    if world_size > 1:
+        if world_size != 2:
+            raise ValueError(
+                "async_runtime.enable=true with distributed launch supports world_size=2 only "
+                "(rank0=trainer, rank1=vllm server)."
+            )
+
+        config.vllm_server_base_url = (
+            f"http://{config.async_runtime.vllm_server.host}:"
+            f"{config.async_runtime.vllm_server.port}"
+        )
+        state["stop_signal_path"] = str(config.async_runtime.stop_signal_path)
+
+        visible_gpu_list = _resolve_visible_gpu_list()
+        visible_gpu_ids = ",".join(visible_gpu_list)
+        if rank == 1:
+            state["rank_is_inference"] = True
+            os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
+            config.devices = len(visible_gpu_list)
+            return state
+
+        if rank != 0:
+            raise ValueError(
+                f"Invalid rank for async_grpo world_size=2 split mode: rank={rank}"
+            )
+
+        state["server_managed_by_rank1"] = True
+        os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
+        os.environ["RANK"] = "0"
+        os.environ["WORLD_SIZE"] = "1"
+        os.environ["LOCAL_RANK"] = "0"
+        config.devices = len(visible_gpu_list)
+        config.async_runtime.vllm_server.auto_start = False
+        return state
+
+    gpu_partition = _resolve_async_half_gpu_partition()
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_partition["trainer_gpu_ids"]
+    config.devices = gpu_partition["trainer_gpu_count"]
+    config.vllm_server_base_url = (
+        f"http://{config.async_runtime.vllm_server.host}:"
+        f"{config.async_runtime.vllm_server.port}"
+    )
+    state["gpu_partition"] = gpu_partition
+    return state
+
+
+def run_async_inference_server(
+    config: DictConfig,
+    runtime_state: Dict[str, Any],
+) -> bool:
+    if not runtime_state["rank_is_inference"]:
+        return False
+
+    stop_signal_path = runtime_state["stop_signal_path"]
+    _ensure_async_stop_signal_dir(stop_signal_path)
+    if stop_signal_path is not None and os.path.exists(stop_signal_path):
+        os.remove(stop_signal_path)
+
+    process, log_handle = _start_async_vllm_server(
+        config=config,
+        vllm_gpu_ids=os.environ["CUDA_VISIBLE_DEVICES"],
+    )
+    try:
+        if not _wait_vllm_server_ready(
+            base_url=config.vllm_server_base_url,
+            max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
+            process=process,
+            log_path=config.async_runtime.vllm_server.log_path,
+        ):
+            raise RuntimeError(
+                f"vLLM server did not become ready: {config.vllm_server_base_url}"
+            )
+
+        while True:
+            if stop_signal_path is not None and os.path.exists(stop_signal_path):
+                break
+            if process.poll() is not None:
+                raise RuntimeError("vLLM server process exited unexpectedly.")
+            time.sleep(1)
+    finally:
+        _stop_async_vllm_server(
+            process=process,
+            log_handle=log_handle,
+        )
+        if stop_signal_path is not None and os.path.exists(stop_signal_path):
+            os.remove(stop_signal_path)
+    return True
+
+
+def start_async_training_runtime(
+    config: DictConfig,
+    runtime_state: Dict[str, Any],
+) -> Tuple[Optional[Any], Optional[Any]]:
+    if not runtime_state["enabled"]:
+        return None, None
+
+    if runtime_state["server_managed_by_rank1"]:
+        if not _wait_vllm_server_ready(
+            base_url=config.vllm_server_base_url,
+            max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
+            process=None,
+            log_path=None,
+        ):
+            raise RuntimeError(
+                f"vLLM server did not become ready: {config.vllm_server_base_url}"
+            )
+        return None, None
+
+    if not config.async_runtime.vllm_server.auto_start:
+        return None, None
+
+    if _wait_vllm_server_ready(
+        base_url=config.vllm_server_base_url,
+        max_wait_sec=1,
+        process=None,
+        log_path=None,
+    ):
+        raise ValueError(
+            f"Existing vLLM server already running at {config.vllm_server_base_url}"
+        )
+
+    process, log_handle = _start_async_vllm_server(
+        config=config,
+        vllm_gpu_ids=runtime_state["gpu_partition"]["vllm_gpu_ids"],
+    )
+    if not _wait_vllm_server_ready(
+        base_url=config.vllm_server_base_url,
+        max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
+        process=process,
+        log_path=config.async_runtime.vllm_server.log_path,
+    ):
+        _stop_async_vllm_server(
+            process=process,
+            log_handle=log_handle,
+        )
+        raise RuntimeError(
+            f"vLLM server did not become ready: {config.vllm_server_base_url}"
+        )
+    return process, log_handle
+
+
+def stop_async_training_runtime(
+    config: DictConfig,
+    runtime_state: Dict[str, Any],
+    process: Optional[Any],
+    log_handle: Optional[Any],
+) -> None:
+    if (
+        runtime_state["server_managed_by_rank1"]
+        and runtime_state["stop_signal_path"] is not None
+    ):
+        _ensure_async_stop_signal_dir(runtime_state["stop_signal_path"])
+        with open(
+            runtime_state["stop_signal_path"],
+            "w",
+            encoding="utf-8",
+        ):
+            pass
+
+    if runtime_state["enabled"] and config.async_runtime.vllm_server.auto_stop:
+        _stop_async_vllm_server(
+            process=process,
+            log_handle=log_handle,
+        )
+
+
 def _resolve_visible_gpu_list() -> List[str]:
     visible_devices = os.environ.get(
         "CUDA_VISIBLE_DEVICES",
@@ -38,7 +229,7 @@ def _resolve_visible_gpu_list() -> List[str]:
     )
 
 
-def resolve_async_half_gpu_partition() -> Dict[str, Union[str, int]]:
+def _resolve_async_half_gpu_partition() -> Dict[str, Union[str, int]]:
     visible_gpu_list = _resolve_visible_gpu_list()
 
     visible_gpu_count = len(visible_gpu_list)
@@ -83,7 +274,7 @@ def _resolve_vllm_tensor_parallel_size(
     return resolved_tensor_parallel_size
 
 
-def wait_vllm_server_ready(
+def _wait_vllm_server_ready(
     base_url: str,
     max_wait_sec: int,
     process: Optional[subprocess.Popen],
@@ -153,7 +344,7 @@ def _build_async_vllm_server_env(
     return env
 
 
-def start_async_vllm_server(
+def _start_async_vllm_server(
     config: DictConfig,
     *,
     vllm_gpu_ids: str,
@@ -212,7 +403,7 @@ def start_async_vllm_server(
     return process, log_handle
 
 
-def stop_async_vllm_server(
+def _stop_async_vllm_server(
     *,
     process: Optional[subprocess.Popen],
     log_handle: Optional[Any],
@@ -242,195 +433,4 @@ def _ensure_async_stop_signal_dir(stop_signal_path: Optional[str]) -> None:
         os.makedirs(
             stop_signal_dir,
             exist_ok=True,
-        )
-
-
-def resolve_async_runtime_state(
-    config: DictConfig,
-    rank: int,
-) -> Dict[str, Any]:
-    enabled = (
-        config.fine_tune_method == "async_grpo"
-        and "async_runtime" in config
-        and config.async_runtime.enable
-    )
-    state = {
-        "enabled": enabled,
-        "rank_is_inference": False,
-        "server_managed_by_rank1": False,
-        "stop_signal_path": None,
-        "gpu_partition": None,
-    }
-    if not enabled:
-        return state
-
-    world_size = int(
-        os.environ.get(
-            "WORLD_SIZE",
-            "1",
-        )
-    )
-    if world_size > 1:
-        if world_size != 2:
-            raise ValueError(
-                "async_runtime.enable=true with distributed launch supports world_size=2 only "
-                "(rank0=trainer, rank1=vllm server)."
-            )
-
-        config.vllm_server_base_url = (
-            f"http://{config.async_runtime.vllm_server.host}:"
-            f"{config.async_runtime.vllm_server.port}"
-        )
-        state["stop_signal_path"] = str(config.async_runtime.stop_signal_path)
-
-        visible_gpu_list = _resolve_visible_gpu_list()
-        visible_gpu_ids = ",".join(visible_gpu_list)
-        if rank == 1:
-            state["rank_is_inference"] = True
-            os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
-            config.devices = len(visible_gpu_list)
-            return state
-
-        if rank != 0:
-            raise ValueError(
-                f"Invalid rank for async_grpo world_size=2 split mode: rank={rank}"
-            )
-
-        state["server_managed_by_rank1"] = True
-        os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
-        os.environ["RANK"] = "0"
-        os.environ["WORLD_SIZE"] = "1"
-        os.environ["LOCAL_RANK"] = "0"
-        config.devices = len(visible_gpu_list)
-        config.async_runtime.vllm_server.auto_start = False
-        return state
-
-    gpu_partition = resolve_async_half_gpu_partition()
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_partition["trainer_gpu_ids"]
-    config.devices = gpu_partition["trainer_gpu_count"]
-    config.vllm_server_base_url = (
-        f"http://{config.async_runtime.vllm_server.host}:"
-        f"{config.async_runtime.vllm_server.port}"
-    )
-    state["gpu_partition"] = gpu_partition
-    return state
-
-
-def run_async_inference_server(
-    config: DictConfig,
-    runtime_state: Dict[str, Any],
-) -> bool:
-    if not runtime_state["rank_is_inference"]:
-        return False
-
-    stop_signal_path = runtime_state["stop_signal_path"]
-    _ensure_async_stop_signal_dir(stop_signal_path)
-    if stop_signal_path is not None and os.path.exists(stop_signal_path):
-        os.remove(stop_signal_path)
-
-    process, log_handle = start_async_vllm_server(
-        config=config,
-        vllm_gpu_ids=os.environ["CUDA_VISIBLE_DEVICES"],
-    )
-    try:
-        if not wait_vllm_server_ready(
-            base_url=config.vllm_server_base_url,
-            max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
-            process=process,
-            log_path=config.async_runtime.vllm_server.log_path,
-        ):
-            raise RuntimeError(
-                f"vLLM server did not become ready: {config.vllm_server_base_url}"
-            )
-
-        while True:
-            if stop_signal_path is not None and os.path.exists(stop_signal_path):
-                break
-            if process.poll() is not None:
-                raise RuntimeError("vLLM server process exited unexpectedly.")
-            time.sleep(1)
-    finally:
-        stop_async_vllm_server(
-            process=process,
-            log_handle=log_handle,
-        )
-        if stop_signal_path is not None and os.path.exists(stop_signal_path):
-            os.remove(stop_signal_path)
-    return True
-
-
-def start_async_training_runtime(
-    config: DictConfig,
-    runtime_state: Dict[str, Any],
-) -> Tuple[Optional[Any], Optional[Any]]:
-    if not runtime_state["enabled"]:
-        return None, None
-
-    if runtime_state["server_managed_by_rank1"]:
-        if not wait_vllm_server_ready(
-            base_url=config.vllm_server_base_url,
-            max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
-            process=None,
-            log_path=None,
-        ):
-            raise RuntimeError(
-                f"vLLM server did not become ready: {config.vllm_server_base_url}"
-            )
-        return None, None
-
-    if not config.async_runtime.vllm_server.auto_start:
-        return None, None
-
-    if wait_vllm_server_ready(
-        base_url=config.vllm_server_base_url,
-        max_wait_sec=1,
-        process=None,
-        log_path=None,
-    ):
-        raise ValueError(
-            f"Existing vLLM server already running at {config.vllm_server_base_url}"
-        )
-
-    process, log_handle = start_async_vllm_server(
-        config=config,
-        vllm_gpu_ids=runtime_state["gpu_partition"]["vllm_gpu_ids"],
-    )
-    if not wait_vllm_server_ready(
-        base_url=config.vllm_server_base_url,
-        max_wait_sec=config.async_runtime.vllm_server.ready_timeout,
-        process=process,
-        log_path=config.async_runtime.vllm_server.log_path,
-    ):
-        stop_async_vllm_server(
-            process=process,
-            log_handle=log_handle,
-        )
-        raise RuntimeError(
-            f"vLLM server did not become ready: {config.vllm_server_base_url}"
-        )
-    return process, log_handle
-
-
-def stop_async_training_runtime(
-    config: DictConfig,
-    runtime_state: Dict[str, Any],
-    process: Optional[Any],
-    log_handle: Optional[Any],
-) -> None:
-    if (
-        runtime_state["server_managed_by_rank1"]
-        and runtime_state["stop_signal_path"] is not None
-    ):
-        _ensure_async_stop_signal_dir(runtime_state["stop_signal_path"])
-        with open(
-            runtime_state["stop_signal_path"],
-            "w",
-            encoding="utf-8",
-        ):
-            pass
-
-    if runtime_state["enabled"] and config.async_runtime.vllm_server.auto_stop:
-        stop_async_vllm_server(
-            process=process,
-            log_handle=log_handle,
         )
