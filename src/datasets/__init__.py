@@ -10,7 +10,13 @@ from .gkd_dataset import StructuralDataset as GKDStructuralDataset
 from .gkd_dataset import ConversationalDataset as GKDConversationalDataset
 from .test_dataset import StructuralDataset as TestStructuralDataset
 from .test_dataset import ConversationalDataset as TestConversationalDataset
+from .image_augmentation import build_image_augmenter
 from .image_io import (
+    normalize_image_source,
+    normalize_image_payloads,
+    build_image_io_settings,
+    load_image,
+    image_to_data_uri,
     build_vllm_prompt_payload,
     collect_vllm_images,
     collect_image_sources,
@@ -44,6 +50,12 @@ __all__ = [
     "GKDConversationalDataset",
     "TestStructuralDataset",
     "TestConversationalDataset",
+    "build_image_augmenter",
+    "normalize_image_source",
+    "normalize_image_payloads",
+    "build_image_io_settings",
+    "load_image",
+    "image_to_data_uri",
     "build_vllm_prompt_payload",
     "collect_vllm_images",
     "collect_image_sources",
