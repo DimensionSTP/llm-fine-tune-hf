@@ -5,6 +5,19 @@ from omegaconf import DictConfig, OmegaConf
 from ..helpers import resolve_effective_dataset_name
 
 
+def register_hydra_resolvers() -> None:
+    OmegaConf.register_new_resolver(
+        "reward_save_suffix",
+        _reward_save_suffix,
+        replace=True,
+    )
+    OmegaConf.register_new_resolver(
+        "dataset_effective_name",
+        resolve_effective_dataset_name,
+        replace=True,
+    )
+
+
 def _to_float(
     value: Any,
     default: float,
@@ -46,16 +59,3 @@ def _reward_save_suffix(
     if len(parts) == 0:
         return ""
     return "-rw_" + "+".join(parts)
-
-
-def register_hydra_resolvers() -> None:
-    OmegaConf.register_new_resolver(
-        "reward_save_suffix",
-        _reward_save_suffix,
-        replace=True,
-    )
-    OmegaConf.register_new_resolver(
-        "dataset_effective_name",
-        resolve_effective_dataset_name,
-        replace=True,
-    )
