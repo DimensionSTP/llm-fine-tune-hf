@@ -33,7 +33,103 @@ SUPPORTED_DENSE_MODEL_TYPES = {
 }
 
 
-def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+@hydra.main(
+    config_path="../../configs/",
+    config_name="sft.yaml",
+)
+def dense_to_moe(
+    config: DictConfig,
+) -> None:
+    d2m_cfg = config.dense_to_moe
+
+    os.makedirs(
+        d2m_cfg.moe_model_dir,
+        exist_ok=True,
+    )
+
+    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    device = torch.device(str(d2m_cfg.runtime.device))
+    trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        config.pretrained_model_name,
+        trust_remote_code=trust_remote_code,
+    )
+
+    dense_model = AutoModelForCausalLM.from_pretrained(
+        config.pretrained_model_name,
+        torch_dtype=dtype,
+        device_map=None,
+        trust_remote_code=trust_remote_code,
+    ).to(device)
+    dense_model.eval()
+
+    dense_cfg = dense_model.config
+    dense_model_type = str(getattr(dense_cfg, "model_type", ""))
+    if dense_model_type not in SUPPORTED_DENSE_MODEL_TYPES:
+        raise ValueError(
+            "dense_to_moe supports only "
+            + f"{sorted(SUPPORTED_DENSE_MODEL_TYPES)}, got '{dense_model_type}'"
+        )
+
+    moe_cfg = MixtralConfig.from_dict(dense_cfg.to_dict())
+    moe_cfg.model_type = "mixtral"
+    moe_cfg.architectures = ["MixtralForCausalLM"]
+    moe_cfg.num_local_experts = int(d2m_cfg.moe.num_experts)
+    moe_cfg.num_experts_per_tok = int(d2m_cfg.moe.num_experts_per_tok)
+    moe_cfg.router_aux_loss_coef = float(d2m_cfg.moe.router_aux_loss_coef)
+    moe_cfg.output_router_logits = bool(d2m_cfg.moe.output_router_logits)
+    moe_cfg.intermediate_size = int(dense_cfg.intermediate_size)
+
+    moe_model = MixtralForCausalLM(moe_cfg).to(
+        device=device,
+        dtype=dtype,
+    )
+    moe_model.eval()
+
+    missing, unexpected = moe_model.load_state_dict(
+        dense_model.state_dict(),
+        strict=False,
+    )
+    print(f"[load shared] missing={len(missing)} unexpected={len(unexpected)}")
+
+    copied_tensors, layers_touched = _copy_dense_mlp_to_mixtral_experts(
+        moe_model=moe_model,
+        dense_model=dense_model,
+        num_experts=int(d2m_cfg.moe.num_experts),
+    )
+    print(
+        f"[copy dense->experts] layers_touched={layers_touched}, copied_tensors={copied_tensors}"
+    )
+
+    init_type = str(d2m_cfg.router.init_type)
+    gain = float(d2m_cfg.router.gain)
+
+    routers_inited = 0
+    for layer in moe_model.model.layers:
+        mlp = layer.mlp
+        if hasattr(mlp, "gate"):
+            _init_router_weights(
+                router_param=mlp.gate,
+                init_type=init_type,
+                gain=gain,
+            )
+            routers_inited += 1
+    print(f"[router init] inited={routers_inited}")
+
+    tokenizer.save_pretrained(d2m_cfg.moe_model_dir)
+    moe_model.save_pretrained(
+        d2m_cfg.moe_model_dir,
+        safe_serialization=bool(d2m_cfg.runtime.safe_serialization),
+    )
+
+    print(
+        "[OK] Saved Mixtral-style sparse checkpoint to: "
+        + f"{d2m_cfg.moe_model_dir} (source_model_type={dense_model_type})"
+    )
+
+
+def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
     dtype_str = str(dtype_str).lower()
     if dtype_str in ("bf16", "bfloat16"):
         return torch.bfloat16
@@ -44,7 +140,7 @@ def torch_dtype_from_str(dtype_str: str) -> torch.dtype:
     raise ValueError(f"Unknown dtype: {dtype_str}")
 
 
-def init_router_weights(
+def _init_router_weights(
     router_param: torch.nn.Module,
     init_type: str,
     gain: float,
@@ -67,7 +163,7 @@ def init_router_weights(
     raise ValueError(f"Unknown router init_type: {init_type}")
 
 
-def copy_dense_mlp_to_mixtral_experts(
+def _copy_dense_mlp_to_mixtral_experts(
     moe_model: torch.nn.Module,
     dense_model: torch.nn.Module,
     num_experts: int,
@@ -140,102 +236,6 @@ def copy_dense_mlp_to_mixtral_experts(
         layers += 1
 
     return copied, layers
-
-
-@hydra.main(
-    config_path="../../configs/",
-    config_name="sft.yaml",
-)
-def dense_to_moe(
-    config: DictConfig,
-) -> None:
-    d2m_cfg = config.dense_to_moe
-
-    os.makedirs(
-        d2m_cfg.moe_model_dir,
-        exist_ok=True,
-    )
-
-    dtype = torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
-    device = torch.device(str(d2m_cfg.runtime.device))
-    trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.pretrained_model_name,
-        trust_remote_code=trust_remote_code,
-    )
-
-    dense_model = AutoModelForCausalLM.from_pretrained(
-        config.pretrained_model_name,
-        torch_dtype=dtype,
-        device_map=None,
-        trust_remote_code=trust_remote_code,
-    ).to(device)
-    dense_model.eval()
-
-    dense_cfg = dense_model.config
-    dense_model_type = str(getattr(dense_cfg, "model_type", ""))
-    if dense_model_type not in SUPPORTED_DENSE_MODEL_TYPES:
-        raise ValueError(
-            "dense_to_moe supports only "
-            + f"{sorted(SUPPORTED_DENSE_MODEL_TYPES)}, got '{dense_model_type}'"
-        )
-
-    moe_cfg = MixtralConfig.from_dict(dense_cfg.to_dict())
-    moe_cfg.model_type = "mixtral"
-    moe_cfg.architectures = ["MixtralForCausalLM"]
-    moe_cfg.num_local_experts = int(d2m_cfg.moe.num_experts)
-    moe_cfg.num_experts_per_tok = int(d2m_cfg.moe.num_experts_per_tok)
-    moe_cfg.router_aux_loss_coef = float(d2m_cfg.moe.router_aux_loss_coef)
-    moe_cfg.output_router_logits = bool(d2m_cfg.moe.output_router_logits)
-    moe_cfg.intermediate_size = int(dense_cfg.intermediate_size)
-
-    moe_model = MixtralForCausalLM(moe_cfg).to(
-        device=device,
-        dtype=dtype,
-    )
-    moe_model.eval()
-
-    missing, unexpected = moe_model.load_state_dict(
-        dense_model.state_dict(),
-        strict=False,
-    )
-    print(f"[load shared] missing={len(missing)} unexpected={len(unexpected)}")
-
-    copied_tensors, layers_touched = copy_dense_mlp_to_mixtral_experts(
-        moe_model=moe_model,
-        dense_model=dense_model,
-        num_experts=int(d2m_cfg.moe.num_experts),
-    )
-    print(
-        f"[copy dense->experts] layers_touched={layers_touched}, copied_tensors={copied_tensors}"
-    )
-
-    init_type = str(d2m_cfg.router.init_type)
-    gain = float(d2m_cfg.router.gain)
-
-    routers_inited = 0
-    for layer in moe_model.model.layers:
-        mlp = layer.mlp
-        if hasattr(mlp, "gate"):
-            init_router_weights(
-                router_param=mlp.gate,
-                init_type=init_type,
-                gain=gain,
-            )
-            routers_inited += 1
-    print(f"[router init] inited={routers_inited}")
-
-    tokenizer.save_pretrained(d2m_cfg.moe_model_dir)
-    moe_model.save_pretrained(
-        d2m_cfg.moe_model_dir,
-        safe_serialization=bool(d2m_cfg.runtime.safe_serialization),
-    )
-
-    print(
-        "[OK] Saved Mixtral-style sparse checkpoint to: "
-        + f"{d2m_cfg.moe_model_dir} (source_model_type={dense_model_type})"
-    )
 
 
 if __name__ == "__main__":
