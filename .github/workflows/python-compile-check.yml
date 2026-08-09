@@ -23,4 +23,3 @@ jobs:
         run: |
           set -euo pipefail
           python -m compileall main.py src
-
