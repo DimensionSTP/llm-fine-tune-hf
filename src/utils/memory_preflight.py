@@ -68,6 +68,64 @@ def run_memory_preflight_if_needed(
     )
 
 
+def apply_memory_preflight_dataset(
+    config: DictConfig,
+    train_dataset: Union[Dataset, Any],
+) -> Union[Dataset, Any]:
+    validate_memory_preflight_config(config=config)
+    if not config.memory_preflight.is_probe:
+        return train_dataset
+    _validate_supported_memory_preflight_method(config=config)
+    selected_indices = _load_memory_preflight_selected_indices(
+        path=config.memory_preflight.selected_indices_path,
+    )
+    if hasattr(train_dataset, "select"):
+        return train_dataset.select(selected_indices)
+    return Subset(
+        train_dataset,
+        selected_indices,
+    )
+
+
+def write_memory_preflight_selection(
+    config: DictConfig,
+    train_dataset: Union[Dataset, Any],
+) -> None:
+    if not config.memory_preflight.is_probe:
+        return
+    selected_indices_path = config.memory_preflight.selected_indices_path
+    if selected_indices_path is None:
+        raise ValueError(
+            "memory_preflight.selected_indices_path is required in probe mode."
+        )
+    if _get_memory_preflight_world_size() > 1 and _get_memory_preflight_rank() != 0:
+        _wait_for_memory_preflight_file(
+            config=config,
+            path=selected_indices_path,
+        )
+        return
+    selection = _select_memory_preflight_indices(
+        config=config,
+        train_dataset=train_dataset,
+    )
+    _write_memory_preflight_json(
+        path=selected_indices_path,
+        payload=selection,
+    )
+
+
+def build_memory_preflight_metadata(
+    config: DictConfig,
+) -> Dict[str, Any]:
+    metadata = OmegaConf.to_container(
+        config.memory_preflight,
+        resolve=True,
+    )
+    if not isinstance(metadata, dict):
+        raise ValueError("memory_preflight metadata must be a dictionary.")
+    return metadata
+
+
 def _run_single_node_distributed_memory_preflight(
     config: DictConfig,
     rank: int,
@@ -186,64 +244,6 @@ def _run_memory_preflight_probe(
         "Memory preflight failed before training. "
         f"probe_id={probe_id}, exit_code={result.returncode}, probe_dir={probe_dir}"
     )
-
-
-def apply_memory_preflight_dataset(
-    config: DictConfig,
-    train_dataset: Union[Dataset, Any],
-) -> Union[Dataset, Any]:
-    validate_memory_preflight_config(config=config)
-    if not config.memory_preflight.is_probe:
-        return train_dataset
-    _validate_supported_memory_preflight_method(config=config)
-    selected_indices = _load_memory_preflight_selected_indices(
-        path=config.memory_preflight.selected_indices_path,
-    )
-    if hasattr(train_dataset, "select"):
-        return train_dataset.select(selected_indices)
-    return Subset(
-        train_dataset,
-        selected_indices,
-    )
-
-
-def write_memory_preflight_selection(
-    config: DictConfig,
-    train_dataset: Union[Dataset, Any],
-) -> None:
-    if not config.memory_preflight.is_probe:
-        return
-    selected_indices_path = config.memory_preflight.selected_indices_path
-    if selected_indices_path is None:
-        raise ValueError(
-            "memory_preflight.selected_indices_path is required in probe mode."
-        )
-    if _get_memory_preflight_world_size() > 1 and _get_memory_preflight_rank() != 0:
-        _wait_for_memory_preflight_file(
-            config=config,
-            path=selected_indices_path,
-        )
-        return
-    selection = _select_memory_preflight_indices(
-        config=config,
-        train_dataset=train_dataset,
-    )
-    _write_memory_preflight_json(
-        path=selected_indices_path,
-        payload=selection,
-    )
-
-
-def build_memory_preflight_metadata(
-    config: DictConfig,
-) -> Dict[str, Any]:
-    metadata = OmegaConf.to_container(
-        config.memory_preflight,
-        resolve=True,
-    )
-    if not isinstance(metadata, dict):
-        raise ValueError("memory_preflight metadata must be a dictionary.")
-    return metadata
 
 
 def _validate_supported_memory_preflight_method(
