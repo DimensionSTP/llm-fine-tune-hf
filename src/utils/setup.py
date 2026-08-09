@@ -36,10 +36,6 @@ from ..helpers import filter_chat_template_kwargs
 from ..rewards import RewardManager
 
 
-class DatasetBuilder(Protocol):
-    def __call__(self) -> Dict[str, HFDataset]: ...
-
-
 class SetUp:
     def __init__(
         self,
@@ -396,7 +392,11 @@ class SetUp:
         return val_dataset
 
     def _get_dataset(self) -> Dict[str, HFDataset]:
-        dataset: DatasetBuilder = instantiate(
+        dataset: "_DatasetBuilder" = instantiate(
             self.config.dataset[self.data_type],
         )
         return dataset()
+
+
+class _DatasetBuilder(Protocol):
+    def __call__(self) -> Dict[str, HFDataset]: ...
