@@ -344,6 +344,31 @@ strategy=deepspeed
 vllm_sync_strategy={default or lora_streaming}
 ```
 
+`lora_streaming` resolves parameter-name remapping from `vllm_lora_name_remap`. The default `auto` selection uses model identifiers, modality, and installed package versions, then falls back to the `passthrough` profile. Set `vllm_lora_name_remap.selection` to a configured profile name to force that profile. Each profile may contain multiple non-overlapping prefix rules; unmatched parameter names pass through unchanged.
+
+```yaml
+selection: auto
+default_profile: passthrough
+version_packages: [peft, transformers, trl, vllm]
+profiles:
+  passthrough:
+    prefix_rules: []
+  legacy_namespace:
+    prefix_rules:
+      - source_prefix: model.
+        target_prefix: language_model.model.
+selectors:
+  - name: legacy_model_stack
+    model_patterns: [ModelFamily-*]
+    modalities: [text]
+    package_versions:
+      trl: ">=1.0,<2.0"
+      vllm: ">=0.10,<0.20"
+    profile: legacy_namespace
+```
+
+`auto` requires at most one matching selector. Multiple matches fail fast; a concrete `selection` bypasses selector matching. With the pinned dependency stack, Qwen3.5/3.6 text models remap the causal-LM `model.` namespace to vLLM's conditional-generation `language_model.model.` namespace. Qwen3.5/3.6 VLM models use the `passthrough` profile because vLLM's multimodal mapper handles their `model.language_model.` namespace. The resolved profile, selector, package versions, and prefix rules are written to the run manifest.
+
 * GRPO vLLM importance sampling
 
 ```shell
