@@ -109,6 +109,7 @@ def train(
         training_arguments=training_arguments,
         data_encoder=data_encoder,
     )
+    resolve_lora_streaming_name_remap_config(config=config)
     write_run_metadata(
         config=config,
         training_arguments=training_arguments,
