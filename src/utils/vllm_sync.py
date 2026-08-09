@@ -1,15 +1,131 @@
-from typing import List, Callable, Any
+from typing import Dict, List, Callable, Any
 from contextlib import nullcontext
+from fnmatch import fnmatchcase
 from functools import partial
+from importlib.metadata import version
 from types import MethodType
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
+
+from packaging.specifiers import SpecifierSet
 
 import torch
 
 import bitsandbytes as bnb
 
 import deepspeed
+
+
+def resolve_lora_streaming_name_remap_config(
+    config: DictConfig,
+) -> Dict[str, Any]:
+    if (
+        config.fine_tune_method != "grpo"
+        or not config.use_vllm
+        or not config.is_peft
+        or config.vllm_sync_strategy != "lora_streaming"
+    ):
+        return {}
+
+    remap_config = config.vllm_lora_name_remap
+    runtime_package_versions = {
+        str(package_name): version(str(package_name))
+        for package_name in remap_config.version_packages
+    }
+    resolved = _resolve_lora_streaming_name_remap_profile(
+        config=config,
+        runtime_package_versions=runtime_package_versions,
+    )
+    remap_config.resolved_profile = resolved["profile"]
+    remap_config.resolved_selector = resolved["selector"]
+    remap_config.runtime_package_versions = runtime_package_versions
+    return {
+        "selection": str(remap_config.selection),
+        "default_profile": str(remap_config.default_profile),
+        "resolved_profile": resolved["profile"],
+        "resolved_selector": resolved["selector"],
+        "runtime_package_versions": runtime_package_versions,
+        "prefix_rules": remap_config.profiles[resolved["profile"]].prefix_rules,
+    }
+
+
+def patch_qwen_packed_moe_vllm_sync(
+    trainer: Any,
+    config: DictConfig,
+) -> bool:
+    is_qwen_packed_moe = config.model_type.startswith("Qwen3-") and (
+        "-experts_" in config.model_type
+    )
+    should_patch = (
+        config.fine_tune_method == "grpo"
+        and config.use_vllm
+        and config.is_peft
+        and config.dense_to_moe.router_with_lora
+        and is_qwen_packed_moe
+        and hasattr(trainer, "vllm_generation")
+    )
+    if not should_patch:
+        return False
+
+    trainer.vllm_generation.sync_weights = MethodType(
+        _build_router_with_lora_sync(
+            remap_name=_remap_qwen_sparse_name,
+        ),
+        trainer.vllm_generation,
+    )
+    return True
+
+
+def patch_sparse_decoder_moe_vllm_sync(
+    trainer: Any,
+    config: DictConfig,
+) -> bool:
+    is_sparse_decoder_moe = (
+        "-experts_" in config.model_type and not config.model_type.startswith("Qwen3-")
+    )
+    should_patch = (
+        config.fine_tune_method == "grpo"
+        and config.use_vllm
+        and config.is_peft
+        and config.dense_to_moe.router_with_lora
+        and is_sparse_decoder_moe
+        and hasattr(trainer, "vllm_generation")
+    )
+    if not should_patch:
+        return False
+
+    trainer.vllm_generation.sync_weights = MethodType(
+        _build_router_with_lora_sync(
+            remap_name=_remap_sparse_decoder_name,
+        ),
+        trainer.vllm_generation,
+    )
+    return True
+
+
+def patch_lora_streaming_vllm_sync(
+    trainer: Any,
+    config: DictConfig,
+) -> bool:
+    should_patch = (
+        config.fine_tune_method == "grpo"
+        and config.use_vllm
+        and config.is_peft
+        and config.vllm_sync_strategy == "lora_streaming"
+        and hasattr(trainer, "vllm_generation")
+    )
+    if not should_patch:
+        return False
+
+    resolve_lora_streaming_name_remap_config(config=config)
+    trainer.vllm_generation._lora_streaming_name_remapper = (
+        _get_lora_streaming_name_remapper(config=config)
+    )
+    trainer.vllm_generation.sync_weights = MethodType(
+        _sync_weights_lora_streaming,
+        trainer.vllm_generation,
+    )
+    return True
 
 
 def _build_router_with_lora_sync(
@@ -175,28 +291,97 @@ def _get_vllm_lora_weight_name(
     )
 
 
-def _remap_qwen3_5_lora_streaming_name(
+def _remap_lora_streaming_name(
     name: str,
+    prefix_rules: ListConfig,
 ) -> str:
-    if name.startswith("model."):
-        return f"language_model.{name}"
-    return name
+    matched_rules = [
+        rule for rule in prefix_rules if name.startswith(rule.source_prefix)
+    ]
+    if len(matched_rules) == 0:
+        return name
+    if len(matched_rules) > 1:
+        raise ValueError(
+            f"Multiple vLLM LoRA name remap rules matched parameter: {name}"
+        )
 
-
-def _identity_name(
-    name: str,
-) -> str:
-    return name
+    rule = matched_rules[0]
+    return f"{rule.target_prefix}{name.removeprefix(rule.source_prefix)}"
 
 
 def _get_lora_streaming_name_remapper(
     config: DictConfig,
 ) -> Callable[[str], str]:
-    if config.model_type.startswith("Qwen3.5-") or config.model_type.startswith(
-        "Qwen3.6-",
+    profile = config.vllm_lora_name_remap.profiles[
+        config.vllm_lora_name_remap.resolved_profile
+    ]
+    return partial(
+        _remap_lora_streaming_name,
+        prefix_rules=profile.prefix_rules,
+    )
+
+
+def _selector_matches_lora_streaming_runtime(
+    selector: DictConfig,
+    config: DictConfig,
+    runtime_package_versions: Dict[str, str],
+) -> bool:
+    if len(selector.modalities) > 0 and config.modality not in selector.modalities:
+        return False
+
+    model_identifiers = [
+        str(config.model_type),
+        str(config.pretrained_model_name),
+    ]
+    if len(selector.model_patterns) > 0 and not any(
+        fnmatchcase(model_identifier, pattern)
+        for model_identifier in model_identifiers
+        for pattern in selector.model_patterns
     ):
-        return _remap_qwen3_5_lora_streaming_name
-    return _identity_name
+        return False
+
+    return all(
+        runtime_package_versions[package_name] in SpecifierSet(version_specifier)
+        for package_name, version_specifier in selector.package_versions.items()
+    )
+
+
+def _resolve_lora_streaming_name_remap_profile(
+    config: DictConfig,
+    runtime_package_versions: Dict[str, str],
+) -> Dict[str, str]:
+    remap_config = config.vllm_lora_name_remap
+    if remap_config.selection != "auto":
+        return {
+            "profile": str(remap_config.selection),
+            "selector": "explicit",
+        }
+
+    matched_selectors = [
+        selector
+        for selector in remap_config.selectors
+        if _selector_matches_lora_streaming_runtime(
+            selector=selector,
+            config=config,
+            runtime_package_versions=runtime_package_versions,
+        )
+    ]
+    if len(matched_selectors) > 1:
+        selector_names = [str(selector.name) for selector in matched_selectors]
+        raise ValueError(
+            f"Multiple vLLM LoRA name remap selectors matched: {selector_names}"
+        )
+    if len(matched_selectors) == 1:
+        selector = matched_selectors[0]
+        return {
+            "profile": str(selector.profile),
+            "selector": str(selector.name),
+        }
+
+    return {
+        "profile": str(remap_config.default_profile),
+        "selector": "default",
+    }
 
 
 def _sync_weights_lora_streaming(
@@ -209,11 +394,7 @@ def _sync_weights_lora_streaming(
     model = self.model
     accelerator = self.accelerator
     gather_if_zero3 = _get_gather_context(accelerator=accelerator)
-    remap_name = getattr(
-        self,
-        "_lora_streaming_name_remapper",
-        _identity_name,
-    )
+    remap_name = self._lora_streaming_name_remapper
     should_update = (self.mode == "server" and accelerator.is_main_process) or (
         self.mode == "colocate"
     )
@@ -290,81 +471,3 @@ def _remap_sparse_decoder_name(
         return name
 
     return ""
-
-
-def patch_qwen_packed_moe_vllm_sync(
-    trainer: Any,
-    config: DictConfig,
-) -> bool:
-    is_qwen_packed_moe = config.model_type.startswith("Qwen3-") and (
-        "-experts_" in config.model_type
-    )
-    should_patch = (
-        config.fine_tune_method == "grpo"
-        and config.use_vllm
-        and config.is_peft
-        and config.dense_to_moe.router_with_lora
-        and is_qwen_packed_moe
-        and hasattr(trainer, "vllm_generation")
-    )
-    if not should_patch:
-        return False
-
-    trainer.vllm_generation.sync_weights = MethodType(
-        _build_router_with_lora_sync(
-            remap_name=_remap_qwen_sparse_name,
-        ),
-        trainer.vllm_generation,
-    )
-    return True
-
-
-def patch_sparse_decoder_moe_vllm_sync(
-    trainer: Any,
-    config: DictConfig,
-) -> bool:
-    is_sparse_decoder_moe = (
-        "-experts_" in config.model_type and not config.model_type.startswith("Qwen3-")
-    )
-    should_patch = (
-        config.fine_tune_method == "grpo"
-        and config.use_vllm
-        and config.is_peft
-        and config.dense_to_moe.router_with_lora
-        and is_sparse_decoder_moe
-        and hasattr(trainer, "vllm_generation")
-    )
-    if not should_patch:
-        return False
-
-    trainer.vllm_generation.sync_weights = MethodType(
-        _build_router_with_lora_sync(
-            remap_name=_remap_sparse_decoder_name,
-        ),
-        trainer.vllm_generation,
-    )
-    return True
-
-
-def patch_lora_streaming_vllm_sync(
-    trainer: Any,
-    config: DictConfig,
-) -> bool:
-    should_patch = (
-        config.fine_tune_method == "grpo"
-        and config.use_vllm
-        and config.is_peft
-        and config.vllm_sync_strategy == "lora_streaming"
-        and hasattr(trainer, "vllm_generation")
-    )
-    if not should_patch:
-        return False
-
-    trainer.vllm_generation._lora_streaming_name_remapper = (
-        _get_lora_streaming_name_remapper(config=config)
-    )
-    trainer.vllm_generation.sync_weights = MethodType(
-        _sync_weights_lora_streaming,
-        trainer.vllm_generation,
-    )
-    return True
