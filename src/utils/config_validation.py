@@ -3,6 +3,8 @@ import os
 
 from omegaconf import DictConfig, ListConfig
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import validate_dataloader_runtime_config
 from .memory_preflight import validate_memory_preflight_config
@@ -26,6 +28,7 @@ def validate_training_arguments_config(
     ).validate()
     validate_dataloader_runtime_config(config=config)
     validate_memory_preflight_config(config=config)
+    _validate_vllm_lora_name_remap_config(config=config)
 
     if config.fine_tune_method != "sft":
         return
@@ -273,3 +276,154 @@ def _validate_dataset_files_without_weight(
             raise ValueError(
                 f"{path_label}_files weight requires dataset_resampling.enabled=true."
             )
+
+
+def _validate_vllm_lora_name_remap_config(
+    config: DictConfig,
+) -> None:
+    if config.fine_tune_method != "grpo":
+        return
+
+    remap_config = config.vllm_lora_name_remap
+    profile_names = list(remap_config.profiles.keys())
+    if len(profile_names) == 0:
+        raise ValueError("vllm_lora_name_remap.profiles must not be empty.")
+    if not all(
+        isinstance(profile_name, str)
+        and profile_name.strip()
+        and profile_name == profile_name.strip()
+        for profile_name in profile_names
+    ):
+        raise ValueError(
+            "vllm_lora_name_remap profile names must be trimmed non-empty strings."
+        )
+    if remap_config.default_profile not in remap_config.profiles:
+        raise ValueError(
+            "vllm_lora_name_remap.default_profile must reference a configured profile."
+        )
+    if (
+        remap_config.selection != "auto"
+        and remap_config.selection not in remap_config.profiles
+    ):
+        raise ValueError(
+            "vllm_lora_name_remap.selection must be auto or a configured profile."
+        )
+
+    version_packages = list(remap_config.version_packages)
+    if not all(
+        isinstance(package_name, str)
+        and package_name.strip()
+        and package_name == package_name.strip()
+        for package_name in version_packages
+    ):
+        raise ValueError(
+            "vllm_lora_name_remap.version_packages must contain trimmed non-empty strings."
+        )
+    if len(version_packages) != len(set(version_packages)):
+        raise ValueError(
+            "vllm_lora_name_remap.version_packages must not contain duplicates."
+        )
+
+    for profile_name, profile in remap_config.profiles.items():
+        _validate_vllm_lora_name_remap_profile(
+            profile_name=str(profile_name),
+            profile=profile,
+        )
+    _validate_vllm_lora_name_remap_selectors(
+        selectors=remap_config.selectors,
+        profiles=remap_config.profiles,
+        version_packages=version_packages,
+    )
+
+
+def _validate_vllm_lora_name_remap_profile(
+    profile_name: str,
+    profile: DictConfig,
+) -> None:
+    source_prefixes = []
+    for rule in profile.prefix_rules:
+        if (
+            not isinstance(rule.source_prefix, str)
+            or not rule.source_prefix.strip()
+            or rule.source_prefix != rule.source_prefix.strip()
+        ):
+            raise ValueError(
+                "vllm_lora_name_remap profile "
+                f"'{profile_name}' source_prefix must be a trimmed non-empty string."
+            )
+        if not isinstance(rule.target_prefix, str) or (
+            rule.target_prefix and rule.target_prefix != rule.target_prefix.strip()
+        ):
+            raise ValueError(
+                "vllm_lora_name_remap profile "
+                f"'{profile_name}' target_prefix must be an empty or trimmed string."
+            )
+        if any(
+            rule.source_prefix.startswith(existing_prefix)
+            or existing_prefix.startswith(rule.source_prefix)
+            for existing_prefix in source_prefixes
+        ):
+            raise ValueError(
+                "vllm_lora_name_remap profile "
+                f"'{profile_name}' contains overlapping source prefixes."
+            )
+        source_prefixes.append(rule.source_prefix)
+
+
+def _validate_vllm_lora_name_remap_selectors(
+    selectors: ListConfig,
+    profiles: DictConfig,
+    version_packages: List[str],
+) -> None:
+    selector_names = []
+    for selector in selectors:
+        if (
+            not isinstance(selector.name, str)
+            or not selector.name.strip()
+            or selector.name != selector.name.strip()
+        ):
+            raise ValueError(
+                "vllm_lora_name_remap selector name must be a trimmed non-empty string."
+            )
+        if selector.name in selector_names:
+            raise ValueError("vllm_lora_name_remap selector names must be unique.")
+        selector_names.append(selector.name)
+
+        if selector.profile not in profiles:
+            raise ValueError(
+                "vllm_lora_name_remap selector profile must reference a configured profile."
+            )
+        if not all(
+            isinstance(pattern, str) and pattern.strip() and pattern == pattern.strip()
+            for pattern in selector.model_patterns
+        ):
+            raise ValueError(
+                "vllm_lora_name_remap model_patterns must contain trimmed non-empty strings."
+            )
+        modalities = list(selector.modalities)
+        if not all(
+            isinstance(modality, str)
+            and modality.strip()
+            and modality == modality.strip()
+            for modality in modalities
+        ):
+            raise ValueError(
+                "vllm_lora_name_remap modalities must contain trimmed non-empty strings."
+            )
+        if len(modalities) != len(set(modalities)):
+            raise ValueError(
+                "vllm_lora_name_remap modalities must not contain duplicates."
+            )
+        for package_name, version_specifier in selector.package_versions.items():
+            if package_name not in version_packages:
+                raise ValueError(
+                    "vllm_lora_name_remap selector package must be listed in "
+                    "version_packages."
+                )
+            try:
+                SpecifierSet(str(version_specifier))
+            except InvalidSpecifier as error:
+                raise ValueError(
+                    "vllm_lora_name_remap selector contains an invalid package "
+                    "version specifier."
+                ) from error
