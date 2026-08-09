@@ -12,14 +12,17 @@ from .memory_preflight import (
 )
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
 from .peft_initialization import (
-    build_peft_initialization_metadata,
-    has_peft_target_parameters,
     initialize_peft_model,
+    build_peft_initialization_metadata,
+    is_peft_continue_from_adapter,
+    validate_peft_continuation_base_resolution,
     validate_peft_initialization_config,
+    has_peft_target_parameters,
 )
 from .collate_fns import SFTDynamicPaddingCollator, collate_fn_vlm
 from .hydra_resolvers import register_hydra_resolvers
 from .config_validation import (
+    validate_training_arguments_config,
     validate_train_artifact_config,
     validate_distributed_runtime_config,
 )
@@ -69,13 +72,16 @@ __all__ = [
     "write_memory_preflight_selection",
     "ModelLoadPlan",
     "ModelLoadPlanner",
-    "build_peft_initialization_metadata",
-    "has_peft_target_parameters",
     "initialize_peft_model",
+    "build_peft_initialization_metadata",
+    "is_peft_continue_from_adapter",
+    "validate_peft_continuation_base_resolution",
     "validate_peft_initialization_config",
+    "has_peft_target_parameters",
     "SFTDynamicPaddingCollator",
     "collate_fn_vlm",
     "register_hydra_resolvers",
+    "validate_training_arguments_config",
     "validate_train_artifact_config",
     "validate_distributed_runtime_config",
     "build_distributed_runtime_snapshot",
