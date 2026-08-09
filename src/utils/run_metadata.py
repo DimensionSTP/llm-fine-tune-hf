@@ -570,6 +570,8 @@ def build_method_hyperparameters(
             "log_completions",
             "use_vllm",
             "vllm_mode",
+            "vllm_sync_strategy",
+            "vllm_lora_name_remap",
             "vllm_tensor_parallel_size",
             "vllm_importance_sampling_correction",
             "vllm_importance_sampling_mode",
