@@ -99,7 +99,11 @@ def build_generation_inputs(
     return {
         key: value.to(device)
         for key, value in batch.items()
-        if key != "labels" and isinstance(value, torch.Tensor)
+        if key != "labels"
+        and isinstance(
+            value,
+            torch.Tensor,
+        )
     }
 
 
@@ -163,8 +167,18 @@ def resolve_vllm_tp_size(
     if tp_size > test_gpu_count:
         tp_size = test_gpu_count
     if test_gpu_count % tp_size != 0:
-        divisors = [d for d in range(1, test_gpu_count + 1) if test_gpu_count % d == 0]
-        tp_size = min(divisors, key=lambda d: (abs(d - tp_size), -d))
+        divisors = [
+            d
+            for d in range(
+                1,
+                test_gpu_count + 1,
+            )
+            if test_gpu_count % d == 0
+        ]
+        tp_size = min(
+            divisors,
+            key=lambda d: (abs(d - tp_size), -d),
+        )
 
     return tp_size
 

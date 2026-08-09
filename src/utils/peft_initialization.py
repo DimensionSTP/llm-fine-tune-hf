@@ -314,30 +314,74 @@ def _build_adapter_config_fingerprint(
 ) -> Dict[str, Any]:
     return {
         "peft_type": _normalize_config_value(
-            getattr(adapter_config, "peft_type", None)
+            getattr(
+                adapter_config,
+                "peft_type",
+                None,
+            )
         ),
         "task_type": _normalize_config_value(
-            getattr(adapter_config, "task_type", None)
+            getattr(
+                adapter_config,
+                "task_type",
+                None,
+            )
         ),
         "base_model_name_or_path": _normalize_config_value(
-            getattr(adapter_config, "base_model_name_or_path", None)
+            getattr(
+                adapter_config,
+                "base_model_name_or_path",
+                None,
+            )
         ),
-        "r": _normalize_config_value(getattr(adapter_config, "r", None)),
+        "r": _normalize_config_value(
+            getattr(
+                adapter_config,
+                "r",
+                None,
+            )
+        ),
         "lora_alpha": _normalize_config_value(
-            getattr(adapter_config, "lora_alpha", None)
+            getattr(
+                adapter_config,
+                "lora_alpha",
+                None,
+            )
         ),
         "target_modules": _normalize_config_value(
-            getattr(adapter_config, "target_modules", None)
+            getattr(
+                adapter_config,
+                "target_modules",
+                None,
+            )
         ),
         "target_parameters": _normalize_config_value(
-            getattr(adapter_config, "target_parameters", None)
+            getattr(
+                adapter_config,
+                "target_parameters",
+                None,
+            )
         ),
         "modules_to_save": _normalize_config_value(
-            getattr(adapter_config, "modules_to_save", None)
+            getattr(
+                adapter_config,
+                "modules_to_save",
+                None,
+            )
         ),
-        "bias": _normalize_config_value(getattr(adapter_config, "bias", None)),
+        "bias": _normalize_config_value(
+            getattr(
+                adapter_config,
+                "bias",
+                None,
+            )
+        ),
         "inference_mode": _normalize_config_value(
-            getattr(adapter_config, "inference_mode", None)
+            getattr(
+                adapter_config,
+                "inference_mode",
+                None,
+            )
         ),
     }
 
@@ -346,7 +390,12 @@ def _build_peft_config_fingerprint(
     peft_config: Dict[str, Any],
 ) -> Dict[str, Any]:
     return {
-        "peft_type": _normalize_config_value(peft_config.get("peft_type", "LORA")),
+        "peft_type": _normalize_config_value(
+            peft_config.get(
+                "peft_type",
+                "LORA",
+            )
+        ),
         "task_type": _normalize_config_value(peft_config.get("task_type")),
         "base_model_name_or_path": None,
         "r": _normalize_config_value(peft_config.get("r")),
@@ -434,40 +483,75 @@ def _validate_adapter_lora_config(
 ) -> None:
     _validate_equal_config(
         name="peft_type",
-        adapter_value=getattr(adapter_config, "peft_type", None),
-        expected_value=peft_config_dict.get("peft_type", "LORA"),
+        adapter_value=getattr(
+            adapter_config,
+            "peft_type",
+            None,
+        ),
+        expected_value=peft_config_dict.get(
+            "peft_type",
+            "LORA",
+        ),
     )
     _validate_equal_config(
         name="task_type",
-        adapter_value=getattr(adapter_config, "task_type", None),
+        adapter_value=getattr(
+            adapter_config,
+            "task_type",
+            None,
+        ),
         expected_value=peft_config_dict.get("task_type"),
     )
     _validate_equal_int_config(
         name="r",
-        adapter_value=getattr(adapter_config, "r", None),
+        adapter_value=getattr(
+            adapter_config,
+            "r",
+            None,
+        ),
         expected_value=peft_config_dict.get("r"),
     )
     _validate_equal_int_config(
         name="lora_alpha",
-        adapter_value=getattr(adapter_config, "lora_alpha", None),
+        adapter_value=getattr(
+            adapter_config,
+            "lora_alpha",
+            None,
+        ),
         expected_value=peft_config_dict.get("lora_alpha"),
     )
     _validate_target_modules(
-        adapter_value=getattr(adapter_config, "target_modules", None),
+        adapter_value=getattr(
+            adapter_config,
+            "target_modules",
+            None,
+        ),
         expected_value=peft_config_dict.get("target_modules"),
     )
     _validate_target_parameters(
-        adapter_value=getattr(adapter_config, "target_parameters", None),
+        adapter_value=getattr(
+            adapter_config,
+            "target_parameters",
+            None,
+        ),
         expected_value=peft_config_dict.get("target_parameters"),
     )
     _validate_equal_config(
         name="bias",
-        adapter_value=getattr(adapter_config, "bias", None),
+        adapter_value=getattr(
+            adapter_config,
+            "bias",
+            None,
+        ),
         expected_value=peft_config_dict.get("bias"),
     )
     _validate_equal_config(
         name="modules_to_save",
-        adapter_value=getattr(adapter_config, "modules_to_save", None),
+        adapter_value=getattr(
+            adapter_config,
+            "modules_to_save",
+            None,
+        ),
         expected_value=peft_config_dict.get("modules_to_save"),
     )
 

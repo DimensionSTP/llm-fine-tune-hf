@@ -69,9 +69,17 @@ def _resolve_terminal_tokens(
 
     if bool(termination_config.include_model_generation_eos):
         model = trainer.accelerator.unwrap_model(trainer.model)
-        generation_config = getattr(model, "generation_config", None)
+        generation_config = getattr(
+            model,
+            "generation_config",
+            None,
+        )
         if generation_config is not None:
-            eos_token_id = getattr(generation_config, "eos_token_id", None)
+            eos_token_id = getattr(
+                generation_config,
+                "eos_token_id",
+                None,
+            )
             for token_id in _to_list(eos_token_id):
                 terminal_token_ids.add(int(token_id))
 
@@ -188,7 +196,10 @@ def _log_completion_termination_metrics(
     metrics["completions/clipped_ratio"][-1] = agg_is_truncated.float().mean().item()
     term_completion_lengths = agg_completion_lengths[~agg_is_truncated]
     if len(term_completion_lengths) == 0:
-        term_completion_lengths = torch.zeros(1, device=device)
+        term_completion_lengths = torch.zeros(
+            1,
+            device=device,
+        )
     metrics["completions/mean_terminated_length"][-1] = (
         term_completion_lengths.float().mean().item()
     )
@@ -269,7 +280,11 @@ def _unpadded_completion_ids(
     completion_mask: torch.Tensor,
 ) -> List[List[int]]:
     result = []
-    for token_ids, mask in zip(completion_ids, completion_mask, strict=True):
+    for token_ids, mask in zip(
+        completion_ids,
+        completion_mask,
+        strict=True,
+    ):
         length = int(mask.sum().item())
         result.append([int(token_id) for token_id in token_ids[:length].tolist()])
     return result

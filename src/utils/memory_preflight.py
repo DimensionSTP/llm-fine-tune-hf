@@ -374,7 +374,10 @@ def _build_memory_preflight_tensor_shapes(
             "dtype": str(value.dtype),
         }
         for key, value in sample.items()
-        if isinstance(value, torch.Tensor)
+        if isinstance(
+            value,
+            torch.Tensor,
+        )
     }
 
 
@@ -538,12 +541,23 @@ def _build_memory_preflight_runtime(
     config: DictConfig,
 ) -> Dict[str, Any]:
     world_size = _get_memory_preflight_world_size()
-    local_world_size = int(os.environ.get("LOCAL_WORLD_SIZE", world_size))
+    local_world_size = int(
+        os.environ.get(
+            "LOCAL_WORLD_SIZE",
+            world_size,
+        )
+    )
     return {
         "world_size": world_size,
         "local_world_size": local_world_size,
-        "master_addr": os.environ.get("MASTER_ADDR", "127.0.0.1"),
-        "master_port": os.environ.get("MASTER_PORT", "0"),
+        "master_addr": os.environ.get(
+            "MASTER_ADDR",
+            "127.0.0.1",
+        ),
+        "master_port": os.environ.get(
+            "MASTER_PORT",
+            "0",
+        ),
         "probe_port": _build_memory_preflight_probe_port(
             config=config,
             world_size=world_size,
@@ -553,8 +567,14 @@ def _build_memory_preflight_runtime(
             config=config,
             runtime={
                 "world_size": world_size,
-                "master_addr": os.environ.get("MASTER_ADDR", "127.0.0.1"),
-                "master_port": os.environ.get("MASTER_PORT", "0"),
+                "master_addr": os.environ.get(
+                    "MASTER_ADDR",
+                    "127.0.0.1",
+                ),
+                "master_port": os.environ.get(
+                    "MASTER_PORT",
+                    "0",
+                ),
             },
         ),
     }
@@ -610,11 +630,21 @@ def _resolve_memory_preflight_cuda_visible_devices(
             devices,
             torch.cuda.device_count(),
         )
-        return ",".join(map(str, range(num_gpus)))
+        return ",".join(
+            map(
+                str,
+                range(num_gpus),
+            )
+        )
     if isinstance(devices, str):
         return devices
     if isinstance(devices, (list, ListConfig)):
-        return ",".join(map(str, devices))
+        return ",".join(
+            map(
+                str,
+                devices,
+            )
+        )
     raise ValueError("memory_preflight devices must be int, str, list, or null.")
 
 
@@ -677,7 +707,10 @@ def _wait_for_memory_preflight_coordination(
     )
     while time.monotonic() < deadline_at:
         if os.path.isfile(coordination_path):
-            with open(coordination_path, encoding="utf-8") as file:
+            with open(
+                coordination_path,
+                encoding="utf-8",
+            ) as file:
                 payload = json.load(file)
             created_at = payload["created_at"]
             if created_at >= runtime["started_at"] - freshness_grace_seconds:
@@ -696,7 +729,10 @@ def _wait_for_memory_preflight_result(
         config=config,
         path=result_path,
     )
-    with open(result_path, encoding="utf-8") as file:
+    with open(
+        result_path,
+        encoding="utf-8",
+    ) as file:
         return json.load(file)
 
 
@@ -716,11 +752,21 @@ def _wait_for_memory_preflight_file(
 
 
 def _get_memory_preflight_world_size() -> int:
-    return int(os.environ.get("WORLD_SIZE", "1"))
+    return int(
+        os.environ.get(
+            "WORLD_SIZE",
+            "1",
+        )
+    )
 
 
 def _get_memory_preflight_rank() -> int:
-    return int(os.environ.get("RANK", "0"))
+    return int(
+        os.environ.get(
+            "RANK",
+            "0",
+        )
+    )
 
 
 def _sanitize_memory_preflight_path_token(
@@ -747,7 +793,10 @@ def _load_memory_preflight_selected_indices(
 ) -> List[int]:
     if path is None:
         raise ValueError("memory_preflight.selected_indices_path is required.")
-    with open(path, encoding="utf-8") as file:
+    with open(
+        path,
+        encoding="utf-8",
+    ) as file:
         payload = json.load(file)
     indices = payload["indices"]
     if not isinstance(indices, list) or len(indices) == 0:
@@ -763,7 +812,11 @@ def _write_memory_preflight_json(
         os.path.dirname(path),
         exist_ok=True,
     )
-    with open(path, "w", encoding="utf-8") as file:
+    with open(
+        path,
+        "w",
+        encoding="utf-8",
+    ) as file:
         json.dump(
             _make_memory_preflight_jsonable(value=payload),
             file,

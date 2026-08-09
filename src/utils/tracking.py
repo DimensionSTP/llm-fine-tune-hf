@@ -291,7 +291,10 @@ def _read_tracking_metadata(
     path = _get_tracking_metadata_path(config=config)
     if not os.path.isfile(path):
         return {}
-    with open(path, encoding="utf-8") as file:
+    with open(
+        path,
+        encoding="utf-8",
+    ) as file:
         payload = json.load(file)
     if not isinstance(payload, dict):
         raise ValueError(f"Invalid tracking metadata payload: {path}")
@@ -311,7 +314,11 @@ def _write_json(
     path: str,
     payload: Dict[str, Any],
 ) -> None:
-    with open(path, "w", encoding="utf-8") as file:
+    with open(
+        path,
+        "w",
+        encoding="utf-8",
+    ) as file:
         json.dump(
             payload,
             file,

@@ -213,7 +213,10 @@ def _read_run_directory_allocation(
     while time.monotonic() < allocation_deadline_at:
         if os.path.isfile(allocation_path):
             try:
-                with open(allocation_path, encoding="utf-8") as file:
+                with open(
+                    allocation_path,
+                    encoding="utf-8",
+                ) as file:
                     payload = json.load(file)
             except json.JSONDecodeError:
                 time.sleep(allocation_poll_interval_seconds)
@@ -277,7 +280,12 @@ def _get_next_run_index(
             )
         ]
         if os.path.isdir(child_path)
-        for match in [re.match(r"^run-([0-9]{4})$", child_name)]
+        for match in [
+            re.match(
+                r"^run-([0-9]{4})$",
+                child_name,
+            )
+        ]
         if match is not None
     ]
     if len(run_indices) == 0:
@@ -315,13 +323,29 @@ def _get_allocation_path(
 def _get_allocation_key() -> str:
     raw_key = "-".join(
         [
-            os.environ.get("TORCHELASTIC_RUN_ID", "none"),
-            os.environ.get("MASTER_ADDR", "none"),
-            os.environ.get("MASTER_PORT", "none"),
-            os.environ.get("WORLD_SIZE", "1"),
+            os.environ.get(
+                "TORCHELASTIC_RUN_ID",
+                "none",
+            ),
+            os.environ.get(
+                "MASTER_ADDR",
+                "none",
+            ),
+            os.environ.get(
+                "MASTER_PORT",
+                "none",
+            ),
+            os.environ.get(
+                "WORLD_SIZE",
+                "1",
+            ),
         ]
     )
-    return re.sub(r"[^A-Za-z0-9_.-]+", "_", raw_key)
+    return re.sub(
+        r"[^A-Za-z0-9_.-]+",
+        "_",
+        raw_key,
+    )
 
 
 def _build_run_manifest(
@@ -730,11 +754,21 @@ def _get_device_count(
         return len([device for device in devices.split(",") if device])
     if isinstance(devices, (list, ListConfig)):
         return len(devices)
-    return int(os.environ.get("WORLD_SIZE", "1"))
+    return int(
+        os.environ.get(
+            "WORLD_SIZE",
+            "1",
+        )
+    )
 
 
 def _get_world_size() -> int:
-    return int(os.environ.get("WORLD_SIZE", "1"))
+    return int(
+        os.environ.get(
+            "WORLD_SIZE",
+            "1",
+        )
+    )
 
 
 def _get_git_revision() -> Optional[str]:
@@ -773,7 +807,11 @@ def _write_json(
         exist_ok=True,
     )
     temp_path = f"{path}.tmp.{os.getpid()}"
-    with open(temp_path, "w", encoding="utf-8") as file:
+    with open(
+        temp_path,
+        "w",
+        encoding="utf-8",
+    ) as file:
         json.dump(
             _to_jsonable(payload),
             file,

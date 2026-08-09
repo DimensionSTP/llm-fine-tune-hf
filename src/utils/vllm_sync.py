@@ -62,7 +62,10 @@ def patch_qwen_packed_moe_vllm_sync(
         and config.is_peft
         and config.dense_to_moe.router_with_lora
         and is_qwen_packed_moe
-        and hasattr(trainer, "vllm_generation")
+        and hasattr(
+            trainer,
+            "vllm_generation",
+        )
     )
     if not should_patch:
         return False
@@ -89,7 +92,10 @@ def patch_sparse_decoder_moe_vllm_sync(
         and config.is_peft
         and config.dense_to_moe.router_with_lora
         and is_sparse_decoder_moe
-        and hasattr(trainer, "vllm_generation")
+        and hasattr(
+            trainer,
+            "vllm_generation",
+        )
     )
     if not should_patch:
         return False
@@ -112,7 +118,10 @@ def patch_lora_streaming_vllm_sync(
         and config.use_vllm
         and config.is_peft
         and config.vllm_sync_strategy == "lora_streaming"
-        and hasattr(trainer, "vllm_generation")
+        and hasattr(
+            trainer,
+            "vllm_generation",
+        )
     )
     if not should_patch:
         return False
@@ -176,7 +185,10 @@ def _sync_weights_router_with_lora(
                 continue
 
             if self.mode == "server" and accelerator.is_main_process:
-                self.vllm_client.update_named_param(name, param.data)
+                self.vllm_client.update_named_param(
+                    name,
+                    param.data,
+                )
             elif self.mode == "colocate":
                 llm_model = (
                     self.llm.llm_engine.model_executor.driver_worker.model_runner.model
@@ -206,10 +218,22 @@ def _is_lora_linear_module(
     module: Any,
 ) -> bool:
     return (
-        hasattr(module, "base_layer")
-        and hasattr(module, "lora_A")
-        and hasattr(module, "lora_B")
-        and hasattr(module, "get_delta_weight")
+        hasattr(
+            module,
+            "base_layer",
+        )
+        and hasattr(
+            module,
+            "lora_A",
+        )
+        and hasattr(
+            module,
+            "lora_B",
+        )
+        and hasattr(
+            module,
+            "get_delta_weight",
+        )
     )
 
 
@@ -255,7 +279,11 @@ def _get_dense_base_weight(
     module: Any,
 ) -> torch.Tensor:
     base_weight = module.base_layer.weight
-    quant_state = getattr(base_weight, "quant_state", None)
+    quant_state = getattr(
+        base_weight,
+        "quant_state",
+        None,
+    )
     if quant_state is not None:
         return bnb.functional.dequantize_4bit(
             base_weight.data,
@@ -426,7 +454,10 @@ def _sync_weights_lora_streaming(
                     adapters=adapters,
                 )
                 if self.mode == "server":
-                    self.vllm_client.update_named_param(name, merged_weight)
+                    self.vllm_client.update_named_param(
+                        name,
+                        merged_weight,
+                    )
                 elif self.mode == "colocate":
                     llm_model = (
                         self.llm.llm_engine.model_executor.driver_worker.model_runner.model

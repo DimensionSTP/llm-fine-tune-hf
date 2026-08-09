@@ -46,7 +46,10 @@ def _reward_save_suffix(
     if not isinstance(reward, (dict, DictConfig)):
         return ""
 
-    reward_weight = reward.get("weight", {})
+    reward_weight = reward.get(
+        "weight",
+        {},
+    )
     if not isinstance(reward_weight, (dict, DictConfig)):
         return ""
 
