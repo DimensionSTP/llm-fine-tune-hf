@@ -2,6 +2,18 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.7.0] - 2026-08-10
+
+- Add configurable vLLM LoRA streaming parameter-name remap profiles with automatic or explicit selection based on model identifiers, modality, and runtime package versions.
+- Add a pinned-stack profile that remaps Qwen3.5 and Qwen3.6 text-model `model.` parameters to the vLLM conditional-generation `language_model.model.` namespace while preserving passthrough behavior for VLM and unmatched runtimes.
+- Add fail-fast validation for remap profiles, prefix rules, selectors, package declarations, version specifiers, profile references, and ambiguous selector matches.
+- Resolve the active remap profile before run artifact capture and record the selected profile, selector, package versions, and prefix rules in run metadata.
+- Add `packaging==26.2` to project and requirements dependencies for standards-compliant runtime version matching.
+- Isolate training-argument validation inputs from memory-preflight mutation, remove an unused MoE verification result key, and simplify LoRA merge status reporting.
+- Reorganize and export dataset image, postprocessing, preprocessing, reward, scaling, asynchronous GRPO, Hydra resolver, memory preflight, PEFT initialization, run metadata, setup, and vLLM synchronization APIs according to execution and public-use order.
+- Normalize multi-argument call formatting across datasets, pipelines, preprocessing, rewards, scaling, and utilities, and enforce repository YAML file-ending conventions for GitHub metadata and workflows.
+- Document vLLM LoRA remap configuration, automatic selection behavior, Qwen text and VLM namespace handling, explicit profile selection, failure conditions, and run-manifest fields.
+
 ## [v2.6.0] - 2026-07-15
 
 - Update Hugging Face training dependency pins for the current runtime stack, including `transformers==5.13.1`, `trl==1.8.0`, `vllm==0.19.1`, `safetensors==0.8.0`, and `compressed-tensors==0.15.0.1` across dependency files.
