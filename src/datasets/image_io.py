@@ -32,12 +32,12 @@ def normalize_image_source(
     if image.startswith("data:"):
         return image
 
-    resolved_path = resolve_image_path(
+    resolved_path = _resolve_image_path(
         image_path=image,
         image_root_dir=image_root_dir,
     )
     if resolved_path is None:
-        normalized_base64 = normalize_base64_image_data_uri(
+        normalized_base64 = _normalize_base64_image_data_uri(
             value=image,
             converted_image_mode=converted_image_mode,
         )
@@ -45,7 +45,7 @@ def normalize_image_source(
             return normalized_base64
         return image
     if not _path_exists(path=resolved_path):
-        normalized_base64 = normalize_base64_image_data_uri(
+        normalized_base64 = _normalize_base64_image_data_uri(
             value=image,
             converted_image_mode=converted_image_mode,
         )
@@ -169,7 +169,7 @@ def load_image(
             converted_image_mode=converted_image_mode,
         )
     if isinstance(image, (bytes, bytearray)):
-        return load_image_from_bytes(
+        return _load_image_from_bytes(
             data=bytes(image),
             converted_image_mode=converted_image_mode,
         )
@@ -189,80 +189,31 @@ def load_image(
     if _is_url(value=value):
         try:
             with urllib.request.urlopen(value) as response:
-                return load_image_from_bytes(
+                return _load_image_from_bytes(
                     data=response.read(),
                     converted_image_mode=converted_image_mode,
                 )
         except Exception:
             return None
 
-    resolved_path = resolve_image_path(
+    resolved_path = _resolve_image_path(
         image_path=value,
         image_root_dir=image_root_dir,
     )
     if resolved_path is not None and os.path.exists(resolved_path):
         try:
             with open(resolved_path, "rb") as file:
-                return load_image_from_bytes(
+                return _load_image_from_bytes(
                     data=file.read(),
                     converted_image_mode=converted_image_mode,
                 )
         except Exception:
             return None
 
-    return load_base64_image(
+    return _load_base64_image(
         value=value,
         converted_image_mode=converted_image_mode,
     )
-
-
-def load_image_from_bytes(
-    data: bytes,
-    converted_image_mode: Optional[str],
-) -> Optional[Image.Image]:
-    try:
-        image = Image.open(io.BytesIO(data))
-    except Exception:
-        return None
-    return _convert_image_mode(
-        image=image,
-        converted_image_mode=converted_image_mode,
-    )
-
-
-def load_base64_image(
-    value: str,
-    converted_image_mode: Optional[str],
-) -> Optional[Image.Image]:
-    try:
-        if "base64," in value:
-            _, value = value.split(
-                "base64,",
-                1,
-            )
-        decoded = base64.b64decode(
-            value,
-            validate=False,
-        )
-        return load_image_from_bytes(
-            data=decoded,
-            converted_image_mode=converted_image_mode,
-        )
-    except Exception:
-        return None
-
-
-def normalize_base64_image_data_uri(
-    value: str,
-    converted_image_mode: Optional[str],
-) -> Optional[str]:
-    image = load_base64_image(
-        value=value,
-        converted_image_mode=converted_image_mode,
-    )
-    if image is None:
-        return None
-    return image_to_data_uri(image=image)
 
 
 def image_to_data_uri(
@@ -275,31 +226,6 @@ def image_to_data_uri(
     )
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
     return f"data:image/png;base64,{encoded}"
-
-
-def resolve_image_path(
-    image_path: str,
-    image_root_dir: str,
-) -> Optional[str]:
-    value = image_path.strip()
-    if value == "":
-        return None
-    if _is_url(value=value):
-        return None
-    if value.startswith("data:") or "base64," in value:
-        return None
-    if not _looks_like_path(value=value):
-        return None
-    if os.path.isabs(value):
-        return os.path.normpath(value)
-    if not isinstance(image_root_dir, str) or image_root_dir.strip() == "":
-        raise ValueError("image_root_dir must be a non-empty string.")
-    return os.path.normpath(
-        os.path.join(
-            image_root_dir,
-            value,
-        )
-    )
 
 
 def build_vllm_prompt_payload(
@@ -380,6 +306,80 @@ def is_vlm_content_parts(
     return all(isinstance(item, dict) and "type" in item for item in value)
 
 
+def _load_image_from_bytes(
+    data: bytes,
+    converted_image_mode: Optional[str],
+) -> Optional[Image.Image]:
+    try:
+        image = Image.open(io.BytesIO(data))
+    except Exception:
+        return None
+    return _convert_image_mode(
+        image=image,
+        converted_image_mode=converted_image_mode,
+    )
+
+
+def _load_base64_image(
+    value: str,
+    converted_image_mode: Optional[str],
+) -> Optional[Image.Image]:
+    try:
+        if "base64," in value:
+            _, value = value.split(
+                "base64,",
+                1,
+            )
+        decoded = base64.b64decode(
+            value,
+            validate=False,
+        )
+        return _load_image_from_bytes(
+            data=decoded,
+            converted_image_mode=converted_image_mode,
+        )
+    except Exception:
+        return None
+
+
+def _normalize_base64_image_data_uri(
+    value: str,
+    converted_image_mode: Optional[str],
+) -> Optional[str]:
+    image = _load_base64_image(
+        value=value,
+        converted_image_mode=converted_image_mode,
+    )
+    if image is None:
+        return None
+    return image_to_data_uri(image=image)
+
+
+def _resolve_image_path(
+    image_path: str,
+    image_root_dir: str,
+) -> Optional[str]:
+    value = image_path.strip()
+    if value == "":
+        return None
+    if _is_url(value=value):
+        return None
+    if value.startswith("data:") or "base64," in value:
+        return None
+    if not _looks_like_path(value=value):
+        return None
+    if os.path.isabs(value):
+        return os.path.normpath(value)
+    if not isinstance(image_root_dir, str) or image_root_dir.strip() == "":
+        raise ValueError("image_root_dir must be a non-empty string.")
+    return os.path.normpath(
+        os.path.join(
+            image_root_dir,
+            value,
+        )
+    )
+
+
 def _normalize_image_dict(
     image: Dict[str, Any],
     image_root_dir: str,
@@ -426,7 +426,7 @@ def _load_image_from_dict(
 ) -> Optional[Image.Image]:
     data = image.get("bytes")
     if data is not None:
-        return load_image_from_bytes(
+        return _load_image_from_bytes(
             data=data,
             converted_image_mode=converted_image_mode,
         )
