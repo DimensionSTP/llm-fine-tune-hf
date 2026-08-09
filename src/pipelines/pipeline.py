@@ -28,7 +28,12 @@ from ..utils import *
 def train(
     config: DictConfig,
 ) -> None:
-    rank = int(os.environ.get("RANK", 0))
+    rank = int(
+        os.environ.get(
+            "RANK",
+            0,
+        )
+    )
     validate_peft_initialization_config(config=config)
     run_memory_preflight_if_needed(
         config=config,
@@ -60,12 +65,25 @@ def train(
         and (not async_runtime_enabled)
     ):
         if isinstance(config.devices, int):
-            num_gpus = min(config.devices, torch.cuda.device_count())
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(num_gpus)))
+            num_gpus = min(
+                config.devices,
+                torch.cuda.device_count(),
+            )
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+                map(
+                    str,
+                    range(num_gpus),
+                )
+            )
         elif isinstance(config.devices, str):
             os.environ["CUDA_VISIBLE_DEVICES"] = config.devices
         elif isinstance(config.devices, (list, ListConfig)):
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, config.devices))
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+                map(
+                    str,
+                    config.devices,
+                )
+            )
 
     if rank == 0:
         validate_distributed_runtime_config(
@@ -520,7 +538,10 @@ def test_vllm(
         )
 
         results = []
-        for output, label in zip(outputs, labels):
+        for output, label in zip(
+            outputs,
+            labels,
+        ):
             instruction = output.prompt
             generation = output.outputs[0].text.strip()
             results.append(
@@ -611,7 +632,11 @@ def test_vllm_multi_turn(
 
     try:
         results = []
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating responses"):
+        for _, row in tqdm(
+            df.iterrows(),
+            total=len(df),
+            desc="Generating responses",
+        ):
             contents = row[config.content_column_name]
 
             if isinstance(contents, list) and not is_vlm_content_parts(value=contents):
@@ -745,7 +770,10 @@ def test_vllm_multi_turn(
                         value,
                         ensure_ascii=False,
                     )
-                    if isinstance(value, (list, dict, set))
+                    if isinstance(
+                        value,
+                        (list, dict, set),
+                    )
                     else value
                 )
             )
