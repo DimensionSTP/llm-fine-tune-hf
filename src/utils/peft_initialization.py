@@ -20,12 +20,12 @@ def initialize_peft_model(
 
     mode = str(config.peft_initialization.mode)
     if mode == "fresh":
-        return initialize_fresh_peft_model(
+        return _initialize_fresh_peft_model(
             model=model,
             config=config,
         )
     if mode == "continue_from_adapter":
-        return continue_peft_model_from_adapter(
+        return _continue_peft_model_from_adapter(
             model=model,
             config=config,
             pretrained_model_name=pretrained_model_name,
@@ -39,14 +39,14 @@ def build_peft_initialization_metadata(
 ) -> Dict[str, Any]:
     validate_peft_initialization_config(config=config)
 
-    target_parameters = normalize_target_parameters(
+    target_parameters = _normalize_target_parameters(
         value=OmegaConf.select(
             config,
             "peft_config.target_parameters",
         ),
     )
     uses_target_parameters = bool(config.is_peft) and len(target_parameters) > 0
-    target_parameter_zero3_init_policy = build_target_parameter_zero3_init_policy(
+    target_parameter_zero3_init_policy = _build_target_parameter_zero3_init_policy(
         config=config,
         target_parameters=target_parameters if uses_target_parameters else [],
     )
@@ -64,7 +64,7 @@ def build_peft_initialization_metadata(
         "adapter_path": None,
         "adapter_name": str(config.peft_initialization.adapter_name),
         "adapter_base_model_name_or_path": None,
-        "current_peft_config_fingerprint": build_current_peft_config_fingerprint(
+        "current_peft_config_fingerprint": _build_current_peft_config_fingerprint(
             config=config,
         ),
         "adapter_config_fingerprint": None,
@@ -75,22 +75,22 @@ def build_peft_initialization_metadata(
     if not is_peft_continue_from_adapter(config=config):
         return metadata
 
-    adapter_path = normalize_adapter_path(
+    adapter_path = _normalize_adapter_path(
         adapter_path=str(config.peft_initialization.adapter_path),
     )
     adapter_config = PeftConfig.from_pretrained(adapter_path)
-    peft_config_dict = build_peft_config_dict(config=config)
+    peft_config_dict = _build_peft_config_dict(config=config)
 
-    validate_adapter_base_model(
+    _validate_adapter_base_model(
         adapter_config=adapter_config,
         pretrained_model_name=str(config.pretrained_model_name),
     )
-    validate_adapter_lora_config(
+    _validate_adapter_lora_config(
         adapter_config=adapter_config,
         peft_config_dict=peft_config_dict,
     )
 
-    adapter_base_model = get_adapter_base_model(adapter_config=adapter_config)
+    adapter_base_model = _get_adapter_base_model(adapter_config=adapter_config)
     metadata.update(
         {
             "resolved_base_model_name_for_continuation": str(
@@ -98,7 +98,7 @@ def build_peft_initialization_metadata(
             ),
             "adapter_path": adapter_path,
             "adapter_base_model_name_or_path": adapter_base_model,
-            "adapter_config_fingerprint": build_adapter_config_fingerprint(
+            "adapter_config_fingerprint": _build_adapter_config_fingerprint(
                 adapter_config=adapter_config,
             ),
             "weighted_merge_base_reference": adapter_base_model,
@@ -117,34 +117,10 @@ def is_peft_continue_from_adapter(
     )
 
 
-def build_target_parameter_zero3_init_policy(
-    config: DictConfig,
-    target_parameters: List[str],
-) -> Optional[str]:
-    if len(target_parameters) == 0:
-        return None
-    if config.strategy != "deepspeed":
-        return None
-
-    deepspeed_stage = OmegaConf.select(
-        config,
-        "deepspeed.zero_optimization.stage",
-    )
-    if deepspeed_stage is None or int(deepspeed_stage) != 3:
-        return None
-
-    zero3_init = str(config.model_loading.deepspeed.zero3_init)
-    if zero3_init == "auto":
-        return "hf_zero3_init_disabled_until_after_peft_target_parameter_wrapping"
-    if zero3_init == "disabled":
-        return "hf_zero3_init_disabled_by_config"
-    return "unsupported_force_enabled"
-
-
 def validate_peft_continuation_base_resolution(
     config: DictConfig,
 ) -> None:
-    merged_model_path = build_merged_model_auto_resolution_path(config=config)
+    merged_model_path = _build_merged_model_auto_resolution_path(config=config)
     if merged_model_path is None:
         return
     if not os.path.exists(merged_model_path):
@@ -171,10 +147,47 @@ def validate_peft_initialization_config(
         )
 
     if mode == "continue_from_adapter":
-        validate_continue_from_adapter_config(config=config)
+        _validate_continue_from_adapter_config(config=config)
 
 
-def validate_continue_from_adapter_config(
+def has_peft_target_parameters(
+    config: DictConfig,
+) -> bool:
+    if not config.is_peft:
+        return False
+
+    target_parameters = OmegaConf.select(
+        config,
+        "peft_config.target_parameters",
+    )
+    return len(_normalize_target_parameters(value=target_parameters)) > 0
+
+
+def _build_target_parameter_zero3_init_policy(
+    config: DictConfig,
+    target_parameters: List[str],
+) -> Optional[str]:
+    if len(target_parameters) == 0:
+        return None
+    if config.strategy != "deepspeed":
+        return None
+
+    deepspeed_stage = OmegaConf.select(
+        config,
+        "deepspeed.zero_optimization.stage",
+    )
+    if deepspeed_stage is None or int(deepspeed_stage) != 3:
+        return None
+
+    zero3_init = str(config.model_loading.deepspeed.zero3_init)
+    if zero3_init == "auto":
+        return "hf_zero3_init_disabled_until_after_peft_target_parameter_wrapping"
+    if zero3_init == "disabled":
+        return "hf_zero3_init_disabled_by_config"
+    return "unsupported_force_enabled"
+
+
+def _validate_continue_from_adapter_config(
     config: DictConfig,
 ) -> None:
     if config.fine_tune_method == "async_grpo":
@@ -205,19 +218,19 @@ def validate_continue_from_adapter_config(
     validate_peft_continuation_base_resolution(config=config)
 
 
-def initialize_fresh_peft_model(
+def _initialize_fresh_peft_model(
     model: PreTrainedModel,
     config: DictConfig,
 ) -> PreTrainedModel:
-    peft_config_dict = build_peft_config_dict(config=config)
-    target_parameters = normalize_target_parameters(
+    peft_config_dict = _build_peft_config_dict(config=config)
+    target_parameters = _normalize_target_parameters(
         value=peft_config_dict.get("target_parameters"),
     )
-    with build_peft_target_parameter_wrapping_context(
+    with _build_peft_target_parameter_wrapping_context(
         model=model,
         target_parameters=target_parameters,
     ):
-        validate_peft_target_parameter_shapes(
+        _validate_peft_target_parameter_shapes(
             model=model,
             target_parameters=target_parameters,
         )
@@ -226,37 +239,37 @@ def initialize_fresh_peft_model(
             model=model,
             peft_config=peft_config,
         )
-    validate_trainable_lora_parameters(model=peft_model)
+    _validate_trainable_lora_parameters(model=peft_model)
     return peft_model
 
 
-def continue_peft_model_from_adapter(
+def _continue_peft_model_from_adapter(
     model: PreTrainedModel,
     config: DictConfig,
     pretrained_model_name: str,
 ) -> PreTrainedModel:
-    adapter_path = normalize_adapter_path(
+    adapter_path = _normalize_adapter_path(
         adapter_path=str(config.peft_initialization.adapter_path),
     )
     adapter_config = PeftConfig.from_pretrained(adapter_path)
-    peft_config_dict = build_peft_config_dict(config=config)
+    peft_config_dict = _build_peft_config_dict(config=config)
 
-    validate_adapter_base_model(
+    _validate_adapter_base_model(
         adapter_config=adapter_config,
         pretrained_model_name=pretrained_model_name,
     )
-    validate_adapter_lora_config(
+    _validate_adapter_lora_config(
         adapter_config=adapter_config,
         peft_config_dict=peft_config_dict,
     )
-    target_parameters = normalize_target_parameters(
+    target_parameters = _normalize_target_parameters(
         value=peft_config_dict.get("target_parameters"),
     )
-    with build_peft_target_parameter_wrapping_context(
+    with _build_peft_target_parameter_wrapping_context(
         model=model,
         target_parameters=target_parameters,
     ):
-        validate_peft_target_parameter_shapes(
+        _validate_peft_target_parameter_shapes(
             model=model,
             target_parameters=target_parameters,
         )
@@ -266,11 +279,11 @@ def continue_peft_model_from_adapter(
             adapter_name=str(config.peft_initialization.adapter_name),
             is_trainable=bool(config.peft_initialization.is_trainable),
         )
-    validate_trainable_lora_parameters(model=peft_model)
+    _validate_trainable_lora_parameters(model=peft_model)
     return peft_model
 
 
-def build_peft_config_dict(
+def _build_peft_config_dict(
     config: DictConfig,
 ) -> Dict[str, Any]:
     peft_config_dict = OmegaConf.to_container(
@@ -286,65 +299,69 @@ def build_peft_config_dict(
     return peft_config_dict
 
 
-def build_current_peft_config_fingerprint(
+def _build_current_peft_config_fingerprint(
     config: DictConfig,
 ) -> Dict[str, Any]:
     if not config.is_peft:
         return {}
-    return build_peft_config_fingerprint(
-        peft_config=build_peft_config_dict(config=config),
+    return _build_peft_config_fingerprint(
+        peft_config=_build_peft_config_dict(config=config),
     )
 
 
-def build_adapter_config_fingerprint(
+def _build_adapter_config_fingerprint(
     adapter_config: Any,
 ) -> Dict[str, Any]:
     return {
-        "peft_type": normalize_config_value(getattr(adapter_config, "peft_type", None)),
-        "task_type": normalize_config_value(getattr(adapter_config, "task_type", None)),
-        "base_model_name_or_path": normalize_config_value(
+        "peft_type": _normalize_config_value(
+            getattr(adapter_config, "peft_type", None)
+        ),
+        "task_type": _normalize_config_value(
+            getattr(adapter_config, "task_type", None)
+        ),
+        "base_model_name_or_path": _normalize_config_value(
             getattr(adapter_config, "base_model_name_or_path", None)
         ),
-        "r": normalize_config_value(getattr(adapter_config, "r", None)),
-        "lora_alpha": normalize_config_value(
+        "r": _normalize_config_value(getattr(adapter_config, "r", None)),
+        "lora_alpha": _normalize_config_value(
             getattr(adapter_config, "lora_alpha", None)
         ),
-        "target_modules": normalize_config_value(
+        "target_modules": _normalize_config_value(
             getattr(adapter_config, "target_modules", None)
         ),
-        "target_parameters": normalize_config_value(
+        "target_parameters": _normalize_config_value(
             getattr(adapter_config, "target_parameters", None)
         ),
-        "modules_to_save": normalize_config_value(
+        "modules_to_save": _normalize_config_value(
             getattr(adapter_config, "modules_to_save", None)
         ),
-        "bias": normalize_config_value(getattr(adapter_config, "bias", None)),
-        "inference_mode": normalize_config_value(
+        "bias": _normalize_config_value(getattr(adapter_config, "bias", None)),
+        "inference_mode": _normalize_config_value(
             getattr(adapter_config, "inference_mode", None)
         ),
     }
 
 
-def build_peft_config_fingerprint(
+def _build_peft_config_fingerprint(
     peft_config: Dict[str, Any],
 ) -> Dict[str, Any]:
     return {
-        "peft_type": normalize_config_value(peft_config.get("peft_type", "LORA")),
-        "task_type": normalize_config_value(peft_config.get("task_type")),
+        "peft_type": _normalize_config_value(peft_config.get("peft_type", "LORA")),
+        "task_type": _normalize_config_value(peft_config.get("task_type")),
         "base_model_name_or_path": None,
-        "r": normalize_config_value(peft_config.get("r")),
-        "lora_alpha": normalize_config_value(peft_config.get("lora_alpha")),
-        "target_modules": normalize_config_value(peft_config.get("target_modules")),
-        "target_parameters": normalize_config_value(
+        "r": _normalize_config_value(peft_config.get("r")),
+        "lora_alpha": _normalize_config_value(peft_config.get("lora_alpha")),
+        "target_modules": _normalize_config_value(peft_config.get("target_modules")),
+        "target_parameters": _normalize_config_value(
             peft_config.get("target_parameters")
         ),
-        "modules_to_save": normalize_config_value(peft_config.get("modules_to_save")),
-        "bias": normalize_config_value(peft_config.get("bias")),
-        "inference_mode": normalize_config_value(peft_config.get("inference_mode")),
+        "modules_to_save": _normalize_config_value(peft_config.get("modules_to_save")),
+        "bias": _normalize_config_value(peft_config.get("bias")),
+        "inference_mode": _normalize_config_value(peft_config.get("inference_mode")),
     }
 
 
-def normalize_adapter_path(
+def _normalize_adapter_path(
     adapter_path: str,
 ) -> str:
     normalized_adapter_path = os.path.normpath(adapter_path)
@@ -364,7 +381,7 @@ def normalize_adapter_path(
     return normalized_adapter_path
 
 
-def build_merged_model_auto_resolution_path(
+def _build_merged_model_auto_resolution_path(
     config: DictConfig,
 ) -> Optional[str]:
     if not config.is_preprocessed:
@@ -382,7 +399,7 @@ def build_merged_model_auto_resolution_path(
     )
 
 
-def get_adapter_base_model(
+def _get_adapter_base_model(
     adapter_config: Any,
 ) -> str:
     adapter_base_model = getattr(
@@ -398,11 +415,11 @@ def get_adapter_base_model(
     return adapter_base_model
 
 
-def validate_adapter_base_model(
+def _validate_adapter_base_model(
     adapter_config: Any,
     pretrained_model_name: str,
 ) -> None:
-    adapter_base_model = get_adapter_base_model(adapter_config=adapter_config)
+    adapter_base_model = _get_adapter_base_model(adapter_config=adapter_config)
 
     if os.path.normpath(adapter_base_model) != os.path.normpath(pretrained_model_name):
         raise ValueError(
@@ -411,51 +428,51 @@ def validate_adapter_base_model(
         )
 
 
-def validate_adapter_lora_config(
+def _validate_adapter_lora_config(
     adapter_config: Any,
     peft_config_dict: Dict[str, Any],
 ) -> None:
-    validate_equal_config(
+    _validate_equal_config(
         name="peft_type",
         adapter_value=getattr(adapter_config, "peft_type", None),
         expected_value=peft_config_dict.get("peft_type", "LORA"),
     )
-    validate_equal_config(
+    _validate_equal_config(
         name="task_type",
         adapter_value=getattr(adapter_config, "task_type", None),
         expected_value=peft_config_dict.get("task_type"),
     )
-    validate_equal_int_config(
+    _validate_equal_int_config(
         name="r",
         adapter_value=getattr(adapter_config, "r", None),
         expected_value=peft_config_dict.get("r"),
     )
-    validate_equal_int_config(
+    _validate_equal_int_config(
         name="lora_alpha",
         adapter_value=getattr(adapter_config, "lora_alpha", None),
         expected_value=peft_config_dict.get("lora_alpha"),
     )
-    validate_target_modules(
+    _validate_target_modules(
         adapter_value=getattr(adapter_config, "target_modules", None),
         expected_value=peft_config_dict.get("target_modules"),
     )
-    validate_target_parameters(
+    _validate_target_parameters(
         adapter_value=getattr(adapter_config, "target_parameters", None),
         expected_value=peft_config_dict.get("target_parameters"),
     )
-    validate_equal_config(
+    _validate_equal_config(
         name="bias",
         adapter_value=getattr(adapter_config, "bias", None),
         expected_value=peft_config_dict.get("bias"),
     )
-    validate_equal_config(
+    _validate_equal_config(
         name="modules_to_save",
         adapter_value=getattr(adapter_config, "modules_to_save", None),
         expected_value=peft_config_dict.get("modules_to_save"),
     )
 
 
-def validate_equal_int_config(
+def _validate_equal_int_config(
     name: str,
     adapter_value: Any,
     expected_value: Any,
@@ -469,13 +486,13 @@ def validate_equal_int_config(
         )
 
 
-def validate_equal_config(
+def _validate_equal_config(
     name: str,
     adapter_value: Any,
     expected_value: Any,
 ) -> None:
-    normalized_adapter_value = normalize_config_value(adapter_value)
-    normalized_expected_value = normalize_config_value(expected_value)
+    normalized_adapter_value = _normalize_config_value(adapter_value)
+    normalized_expected_value = _normalize_config_value(expected_value)
     if normalized_adapter_value != normalized_expected_value:
         raise ValueError(
             f"Adapter {name} mismatch: adapter={normalized_adapter_value}, "
@@ -483,12 +500,12 @@ def validate_equal_config(
         )
 
 
-def validate_target_modules(
+def _validate_target_modules(
     adapter_value: Any,
     expected_value: Any,
 ) -> None:
-    adapter_target_modules = normalize_target_modules(value=adapter_value)
-    expected_target_modules = normalize_target_modules(value=expected_value)
+    adapter_target_modules = _normalize_target_modules(value=adapter_value)
+    expected_target_modules = _normalize_target_modules(value=expected_value)
 
     if expected_target_modules == ["all-linear"]:
         if len(adapter_target_modules) == 0:
@@ -502,7 +519,7 @@ def validate_target_modules(
         )
 
 
-def normalize_target_modules(
+def _normalize_target_modules(
     value: Any,
 ) -> List[str]:
     if value is None:
@@ -514,25 +531,12 @@ def normalize_target_modules(
     raise TypeError(f"Unsupported target_modules type: {type(value).__name__}")
 
 
-def has_peft_target_parameters(
-    config: DictConfig,
-) -> bool:
-    if not config.is_peft:
-        return False
-
-    target_parameters = OmegaConf.select(
-        config,
-        "peft_config.target_parameters",
-    )
-    return len(normalize_target_parameters(value=target_parameters)) > 0
-
-
-def validate_target_parameters(
+def _validate_target_parameters(
     adapter_value: Any,
     expected_value: Any,
 ) -> None:
-    adapter_target_parameters = normalize_target_parameters(value=adapter_value)
-    expected_target_parameters = normalize_target_parameters(value=expected_value)
+    adapter_target_parameters = _normalize_target_parameters(value=adapter_value)
+    expected_target_parameters = _normalize_target_parameters(value=expected_value)
 
     if adapter_target_parameters != expected_target_parameters:
         raise ValueError(
@@ -541,7 +545,7 @@ def validate_target_parameters(
         )
 
 
-def normalize_target_parameters(
+def _normalize_target_parameters(
     value: Any,
 ) -> List[str]:
     if value is None:
@@ -553,18 +557,18 @@ def normalize_target_parameters(
     raise TypeError(f"Unsupported target_parameters type: {type(value).__name__}")
 
 
-def build_peft_target_parameter_wrapping_context(
+def _build_peft_target_parameter_wrapping_context(
     model: PreTrainedModel,
     target_parameters: List[str],
 ) -> Any:
     if len(target_parameters) == 0:
         return nullcontext()
 
-    named_target_parameters = resolve_peft_target_parameter_objects(
+    named_target_parameters = _resolve_peft_target_parameter_objects(
         model=model,
         target_parameters=target_parameters,
     )
-    if not has_zero3_partitioned_target_parameters(
+    if not _has_zero3_partitioned_target_parameters(
         named_target_parameters=named_target_parameters,
     ):
         return nullcontext()
@@ -577,7 +581,7 @@ def build_peft_target_parameter_wrapping_context(
     )
 
 
-def resolve_peft_target_parameter_objects(
+def _resolve_peft_target_parameter_objects(
     model: PreTrainedModel,
     target_parameters: List[str],
 ) -> Dict[str, Any]:
@@ -599,7 +603,7 @@ def resolve_peft_target_parameter_objects(
     }
 
 
-def has_zero3_partitioned_target_parameters(
+def _has_zero3_partitioned_target_parameters(
     named_target_parameters: Dict[str, Any],
 ) -> bool:
     return any(
@@ -608,14 +612,14 @@ def has_zero3_partitioned_target_parameters(
     )
 
 
-def validate_peft_target_parameter_shapes(
+def _validate_peft_target_parameter_shapes(
     model: PreTrainedModel,
     target_parameters: List[str],
 ) -> None:
     if len(target_parameters) == 0:
         return
 
-    named_target_parameters = resolve_peft_target_parameter_objects(
+    named_target_parameters = _resolve_peft_target_parameter_objects(
         model=model,
         target_parameters=target_parameters,
     )
@@ -631,7 +635,7 @@ def validate_peft_target_parameter_shapes(
         )
 
 
-def normalize_config_value(
+def _normalize_config_value(
     value: Any,
 ) -> Any:
     if OmegaConf.is_config(value):
@@ -648,7 +652,7 @@ def normalize_config_value(
     return str(value)
 
 
-def validate_trainable_lora_parameters(
+def _validate_trainable_lora_parameters(
     model: PreTrainedModel,
 ) -> None:
     trainable_lora_parameters = sum(
