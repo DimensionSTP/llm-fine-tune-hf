@@ -675,7 +675,7 @@ def merge_lora(
             ),
         )
 
-    print(f"[OK] Merged LoRA (and modules_to_save if present) into base model.")
+    print("[OK] Merged LoRA (and modules_to_save if present) into base model.")
     print(f"[OK] Base model: {base_model_name_or_path}")
     print(f"[OK] Adapter checkpoint: {adapter_path}")
     print(f"[OK] Saved merged model to: {merged_output_path}")
