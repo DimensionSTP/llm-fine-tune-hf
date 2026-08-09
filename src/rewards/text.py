@@ -51,7 +51,11 @@ class MatchReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if category not in ["math", "choice"]:
                 rewards.append(None)
                 continue
@@ -177,7 +181,11 @@ class CodeExecutionReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if category != "code":
                 rewards.append(None)
                 continue
@@ -360,7 +368,11 @@ class RougeReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if category != "rouge":
                 rewards.append(None)
                 continue
@@ -429,7 +441,11 @@ class EquationReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if category != "equation":
                 rewards.append(None)
                 continue
@@ -458,7 +474,13 @@ class EquationReward(BaseReward):
         target = solution[self.equation_target_column_name]
         numbers = solution[self.equation_numbers_column_name]
         try:
-            used_numbers = [int(n) for n in re.findall(r"\d+", equation)]
+            used_numbers = [
+                int(n)
+                for n in re.findall(
+                    r"\d+",
+                    equation,
+                )
+            ]
             if sorted(used_numbers) != sorted(numbers):
                 return 0.0
 
@@ -466,7 +488,11 @@ class EquationReward(BaseReward):
             if not re.match(allowed_pattern, equation):
                 return 0.0
 
-            result = eval(equation, {"__builtins__": None}, {})
+            result = eval(
+                equation,
+                {"__builtins__": None},
+                {},
+            )
             if abs(float(result) - float(target)) < 1e-5:
                 return 1.0
             else:

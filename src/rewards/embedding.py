@@ -130,6 +130,9 @@ class VllmEmbedding:
     ) -> None:
         for key, value in saved_env.items():
             if value is None:
-                os.environ.pop(key, None)
+                os.environ.pop(
+                    key,
+                    None,
+                )
             else:
                 os.environ[key] = value

@@ -57,7 +57,10 @@ class FaissIndex:
             self.load()
 
         if query_embedding.ndim == 1:
-            query_embedding = query_embedding.reshape(1, -1).astype(np.float32)
+            query_embedding = query_embedding.reshape(
+                1,
+                -1,
+            ).astype(np.float32)
         elif query_embedding.ndim == 2:
             query_embedding = query_embedding.astype(np.float32)
         else:
@@ -72,7 +75,10 @@ class FaissIndex:
         )
 
         candidates = []
-        for idx, distance in zip(indices[0], distances[0]):
+        for idx, distance in zip(
+            indices[0],
+            distances[0],
+        ):
             row = self.df.iloc[idx].to_dict()
             row[self.distance_column_name] = float(distance)
             candidates.append(row)

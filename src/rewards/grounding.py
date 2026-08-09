@@ -79,7 +79,11 @@ class GroundingBBoxReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if not self.has_category_token(
                 category=category,
                 token=self.category_token,
@@ -703,13 +707,31 @@ class GroundingBBoxReward(BaseReward):
         left: Tuple[float, float, float, float],
         right: Tuple[float, float, float, float],
     ) -> float:
-        x1 = max(left[0], right[0])
-        y1 = max(left[1], right[1])
-        x2 = min(left[2], right[2])
-        y2 = min(left[3], right[3])
+        x1 = max(
+            left[0],
+            right[0],
+        )
+        y1 = max(
+            left[1],
+            right[1],
+        )
+        x2 = min(
+            left[2],
+            right[2],
+        )
+        y2 = min(
+            left[3],
+            right[3],
+        )
 
-        inter_width = max(0.0, x2 - x1)
-        inter_height = max(0.0, y2 - y1)
+        inter_width = max(
+            0.0,
+            x2 - x1,
+        )
+        inter_height = max(
+            0.0,
+            y2 - y1,
+        )
         intersection = inter_width * inter_height / 1_000_000.0
         if intersection <= 0:
             return 0.0
@@ -841,7 +863,11 @@ class GroundingSelectionReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if not self.has_category_token(
                 category=category,
                 token=self.category_token,
@@ -912,7 +938,14 @@ class GroundingSelectionReward(BaseReward):
             prediction_item_map=prediction_item_map,
             gold_item_map=gold_item_map,
         )
-        reward = base_reward + max(0.0, self.max_reward - base_reward) * quality
+        reward = (
+            base_reward
+            + max(
+                0.0,
+                self.max_reward - base_reward,
+            )
+            * quality
+        )
         reward = self._apply_schema_only_policy(
             reward=reward,
             quality=quality,

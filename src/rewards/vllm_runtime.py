@@ -38,7 +38,11 @@ def _collect_reward_vllm_embeddings(
     embeddings = []
     seen_ids = set()
     for reward in reward_manager.rewards:
-        embedding = getattr(reward, "embedding", None)
+        embedding = getattr(
+            reward,
+            "embedding",
+            None,
+        )
         if not isinstance(embedding, VllmEmbedding):
             continue
         embedding_id = id(embedding)

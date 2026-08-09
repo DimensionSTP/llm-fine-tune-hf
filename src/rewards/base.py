@@ -7,7 +7,10 @@ def format_reward_name_float(
     value: float,
 ) -> str:
     formatted = f"{value:g}"
-    return formatted.replace(".", "p")
+    return formatted.replace(
+        ".",
+        "p",
+    )
 
 
 class BaseReward(ABC):

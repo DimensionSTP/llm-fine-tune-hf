@@ -122,7 +122,11 @@ class KVReward(BaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if not self.has_category_token(
                 category=category,
                 token=self.category_token,
@@ -460,8 +464,22 @@ class KVReward(BaseReward):
         root_name: str,
     ) -> float:
         cap = 1.0
-        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
-        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
+        pred_root = (
+            pred_json.get(root_name)
+            if isinstance(
+                pred_json,
+                dict,
+            )
+            else None
+        )
+        gt_root = (
+            gt_json.get(root_name)
+            if isinstance(
+                gt_json,
+                dict,
+            )
+            else None
+        )
         pred_serialized = json.dumps(
             pred_root,
             ensure_ascii=False,
@@ -476,7 +494,10 @@ class KVReward(BaseReward):
             len(pred_serialized) / max(len(gt_serialized), 1)
             > self.max_serialized_length_ratio
         ):
-            cap = min(cap, self.length_ratio_cap)
+            cap = min(
+                cap,
+                self.length_ratio_cap,
+            )
 
         if root_name == "results":
             pred_leaf_count = self._count_results_leaf_values(results=pred_root)
@@ -488,7 +509,10 @@ class KVReward(BaseReward):
             gt_leaf_count > 0
             and pred_leaf_count / gt_leaf_count > self.max_leaf_count_ratio
         ):
-            cap = min(cap, self.leaf_count_ratio_cap)
+            cap = min(
+                cap,
+                self.leaf_count_ratio_cap,
+            )
         return cap
 
     def _compute_structure_cap(
@@ -497,8 +521,22 @@ class KVReward(BaseReward):
         gt_json: Any,
         root_name: str,
     ) -> float:
-        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
-        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
+        pred_root = (
+            pred_json.get(root_name)
+            if isinstance(
+                pred_json,
+                dict,
+            )
+            else None
+        )
+        gt_root = (
+            gt_json.get(root_name)
+            if isinstance(
+                gt_json,
+                dict,
+            )
+            else None
+        )
         if root_name == "kv":
             return self._compute_kv_structure_cap(
                 pred_kv=pred_root,
@@ -644,8 +682,22 @@ class KVReward(BaseReward):
         gt_json: Any,
         root_name: str,
     ) -> float:
-        pred_root = pred_json.get(root_name) if isinstance(pred_json, dict) else None
-        gt_root = gt_json.get(root_name) if isinstance(gt_json, dict) else None
+        pred_root = (
+            pred_json.get(root_name)
+            if isinstance(
+                pred_json,
+                dict,
+            )
+            else None
+        )
+        gt_root = (
+            gt_json.get(root_name)
+            if isinstance(
+                gt_json,
+                dict,
+            )
+            else None
+        )
         if root_name == "kv":
             return self._compute_kv_root_score(
                 pred_kv=pred_root,
@@ -853,16 +905,37 @@ class KVReward(BaseReward):
 
         leaves: List[Tuple[Tuple[str, ...], int, Any]] = []
         for table_name in self._sorted_mapping_keys(mapping=tables):
-            table_value = tables.get(table_name, {})
+            table_value = tables.get(
+                table_name,
+                {},
+            )
             rows = self._normalize_table_rows(
                 rows=(
-                    table_value.get("rows", []) if isinstance(table_value, dict) else []
+                    table_value.get(
+                        "rows",
+                        [],
+                    )
+                    if isinstance(
+                        table_value,
+                        dict,
+                    )
+                    else []
                 )
             )
             column_names = self._collect_table_column_names(rows=rows)
             for row_index, row in enumerate(rows):
                 for column_name in column_names:
-                    value = row.get(column_name, "") if isinstance(row, dict) else ""
+                    value = (
+                        row.get(
+                            column_name,
+                            "",
+                        )
+                        if isinstance(
+                            row,
+                            dict,
+                        )
+                        else ""
+                    )
                     leaves.append(
                         (
                             (
@@ -1046,7 +1119,10 @@ class KVReward(BaseReward):
                     "rows",
                     [],
                 )
-                if isinstance(table_value, dict)
+                if isinstance(
+                    table_value,
+                    dict,
+                )
                 else []
             ),
         )
@@ -1087,7 +1163,10 @@ class KVReward(BaseReward):
                     "rows",
                     [],
                 )
-                if isinstance(table_value, dict)
+                if isinstance(
+                    table_value,
+                    dict,
+                )
                 else []
             ),
         )
@@ -1138,7 +1217,10 @@ class KVReward(BaseReward):
                     "rows",
                     [],
                 )
-                if isinstance(table_value, dict)
+                if isinstance(
+                    table_value,
+                    dict,
+                )
                 else []
             ),
         )
@@ -1401,4 +1483,10 @@ class KVReward(BaseReward):
     def _clip_unit_score(
         score: float,
     ) -> float:
-        return min(max(float(score), 0.0), 1.0)
+        return min(
+            max(
+                float(score),
+                0.0,
+            ),
+            1.0,
+        )

@@ -198,7 +198,11 @@ class RetrievalHitReward(RetrievalBaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if not self.has_category_token(
                 category=category,
                 token="retrieval",
@@ -438,7 +442,11 @@ class RetrievalnDCGReward(RetrievalBaseReward):
     ) -> List[Optional[float]]:
         rewards = []
         contents = self.get_contents_from_completions(completions=completions)
-        for content, sol, category in zip(contents, solution, reward_categories):
+        for content, sol, category in zip(
+            contents,
+            solution,
+            reward_categories,
+        ):
             if not self.has_category_token(
                 category=category,
                 token="retrieval",
@@ -479,7 +487,10 @@ class RetrievalnDCGReward(RetrievalBaseReward):
                 continue
 
             reward = 0.0
-            for k, weight in zip(self.ndcg_top_ks, self.ndcg_weights):
+            for k, weight in zip(
+                self.ndcg_top_ks,
+                self.ndcg_weights,
+            ):
                 rewritten_ndcg = self._compute_ndcg(
                     ranked_candidates=candidates_from_rewritten,
                     gt_lookup=gt_lookup,
@@ -636,7 +647,10 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         if num_relevant <= 0:
             return 0.0
 
-        limit = min(top_k, len(ranked_candidates))
+        limit = min(
+            top_k,
+            len(ranked_candidates),
+        )
         if limit <= 0:
             return 0.0
 
@@ -646,7 +660,10 @@ class RetrievalnDCGReward(RetrievalBaseReward):
             if candidate in gt_lookup:
                 dcg += 1.0 / math.log2(rank_index + 2)
 
-        ideal_hits = min(num_relevant, limit)
+        ideal_hits = min(
+            num_relevant,
+            limit,
+        )
         if ideal_hits <= 0:
             return 0.0
 
