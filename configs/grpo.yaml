@@ -7,6 +7,7 @@ defaults:
   - tracking: wandb
   - training_arguments: grpo
   - trainer: grpo
+  - vllm_lora_name_remap: base
   - reward: base
   - reward@reward_manager: manager
   - reward@reward_database: database
