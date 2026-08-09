@@ -11,6 +11,7 @@ def format_reward_name_float(
 
 
 class BaseReward(ABC):
+
     def __init__(
         self,
         is_answer_tag: bool,
@@ -31,14 +32,6 @@ class BaseReward(ABC):
         self.extraction_profile = extraction_profile
         self.weight = weight
 
-    @property
-    def name(self) -> str:
-        return re.sub(
-            r"(?<!^)(?=[A-Z])",
-            "_",
-            self.__class__.__name__,
-        ).lower()
-
     def __call__(
         self,
         completions: List[List[Dict[str, str]]],
@@ -55,6 +48,14 @@ class BaseReward(ABC):
         return [
             reward * self.weight if reward is not None else None for reward in rewards
         ]
+
+    @property
+    def name(self) -> str:
+        return re.sub(
+            r"(?<!^)(?=[A-Z])",
+            "_",
+            self.__class__.__name__,
+        ).lower()
 
     @abstractmethod
     def compute(
@@ -165,47 +166,6 @@ class BaseReward(ABC):
 
         return generation
 
-    def _normalize_generation_for_extraction(
-        self,
-        generation: str,
-    ) -> str:
-        if self.extraction_profile == "default":
-            return generation
-        if self.extraction_profile == "gemma4":
-            return self._normalize_gemma4_generation(generation=generation)
-        raise ValueError(
-            f"Unsupported reward extraction profile: {self.extraction_profile}"
-        )
-
-    @staticmethod
-    def _normalize_gemma4_generation(
-        generation: str,
-    ) -> str:
-        text = generation.strip()
-        text = re.sub(
-            r"<\|channel\>thought\b.*?<channel\|>",
-            "",
-            text,
-            flags=re.DOTALL | re.IGNORECASE,
-        )
-        text = re.sub(
-            r"^\s*<\|turn\>model\s*",
-            "",
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(
-            r"^\s*<\|channel\>[A-Za-z0-9_\-]+\s*",
-            "",
-            text,
-            flags=re.IGNORECASE,
-        )
-        for stop_token in ("<turn|>", "<eos>", "<|tool_response|>"):
-            stop_index = text.find(stop_token)
-            if stop_index != -1:
-                text = text[:stop_index]
-        return text.strip()
-
     @staticmethod
     def split_on_keywords(text: str) -> str:
         if not isinstance(text, str):
@@ -305,3 +265,44 @@ class BaseReward(ABC):
 
         category_tokens = category.lower().split("_")
         return token in category_tokens
+
+    def _normalize_generation_for_extraction(
+        self,
+        generation: str,
+    ) -> str:
+        if self.extraction_profile == "default":
+            return generation
+        if self.extraction_profile == "gemma4":
+            return self._normalize_gemma4_generation(generation=generation)
+        raise ValueError(
+            f"Unsupported reward extraction profile: {self.extraction_profile}"
+        )
+
+    @staticmethod
+    def _normalize_gemma4_generation(
+        generation: str,
+    ) -> str:
+        text = generation.strip()
+        text = re.sub(
+            r"<\|channel\>thought\b.*?<channel\|>",
+            "",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        text = re.sub(
+            r"^\s*<\|turn\>model\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"^\s*<\|channel\>[A-Za-z0-9_\-]+\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        for stop_token in ("<turn|>", "<eos>", "<|tool_response|>"):
+            stop_index = text.find(stop_token)
+            if stop_index != -1:
+                text = text[:stop_index]
+        return text.strip()
