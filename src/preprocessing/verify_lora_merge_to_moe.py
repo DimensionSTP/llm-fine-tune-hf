@@ -610,9 +610,6 @@ def verify_lora_merge(
             r = int(lora_cfg["r"])
             lora_alpha = float(lora_cfg["lora_alpha"])
 
-            expert_key = (
-                f"model.layers.{int(layer)}.mlp.experts.{int(expert)}.{proj}.weight"
-            )
             dense_key = f"model.layers.{int(layer)}.mlp.{proj}.weight"
 
             A_B = _collect_lora_A_B(
