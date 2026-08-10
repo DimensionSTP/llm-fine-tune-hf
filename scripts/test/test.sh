@@ -99,8 +99,8 @@ left_padding=True
 is_enable_thinking=False
 is_quantized=False
 is_peft=True
-r=32
-lora_alpha=64
+r=128
+lora_alpha=512
 peft_detail="r\=${r}-a\=${lora_alpha}"
 model_detail="${train_dataset}/${model_type}/${peft_detail}"
 adapter_path="${base_path}/${model_detail}"
