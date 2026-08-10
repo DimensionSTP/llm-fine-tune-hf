@@ -14,7 +14,6 @@ split_ratio=1e-2
 is_strict_split=False
 dataset_name="tulu"
 dataset_format="parquet"
-is_sft=True
 is_preprocessed=False
 strategy="deepspeed"
 upload_user="Qwen"
@@ -63,7 +62,6 @@ accelerate launch \
     is_strict_split=$is_strict_split \
     dataset_name=$dataset_name \
     dataset_format=$dataset_format \
-    is_sft=$is_sft \
     is_preprocessed=$is_preprocessed \
     strategy=$strategy \
     upload_user=$upload_user \
