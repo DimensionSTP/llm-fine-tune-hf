@@ -2,6 +2,16 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.7.1] - 2026-08-10
+
+- Correct the shebangs in the dense-to-MoE preprocessing launchers so direct shell execution resolves `/bin/bash` correctly.
+- Remove unsupported `is_sft` overrides from single-node and multinode GKD launchers, keeping their CLI surface aligned with `configs/gkd.yaml`.
+- Align single-node and multinode GRPO launcher clipping values with `configs/grpo.yaml` by using `epsilon=0.2` and `epsilon_high=null`.
+- Align single-node and multinode asynchronous GRPO launcher clipping values with `configs/async_grpo.yaml` by using `epsilon=0.2` and `epsilon_high=0.2`.
+- Align all standard, large, and vLLM test launcher adapter metadata with the configured PEFT defaults `r=128` and `lora_alpha=512` so adapter paths resolve to the trained artifacts.
+- Remove an unnecessary blank line from the `BaseReward` class body to keep its layout consistent with repository formatting conventions.
+- Replace the quoted local `_DatasetBuilder` annotation with a direct protocol reference, simplifying the type declaration without changing dataset construction behavior.
+
 ## [v2.7.0] - 2026-08-10
 
 - Add configurable vLLM LoRA streaming parameter-name remap profiles with automatic or explicit selection based on model identifiers, modality, and runtime package versions.
