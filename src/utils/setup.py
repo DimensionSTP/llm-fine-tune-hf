@@ -392,7 +392,7 @@ class SetUp:
         return val_dataset
 
     def _get_dataset(self) -> Dict[str, HFDataset]:
-        dataset: "_DatasetBuilder" = instantiate(
+        dataset: _DatasetBuilder = instantiate(
             self.config.dataset[self.data_type],
         )
         return dataset()
