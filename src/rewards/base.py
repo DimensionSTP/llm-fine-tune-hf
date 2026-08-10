@@ -14,7 +14,6 @@ def format_reward_name_float(
 
 
 class BaseReward(ABC):
-
     def __init__(
         self,
         is_answer_tag: bool,
