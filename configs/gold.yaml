@@ -184,7 +184,7 @@ save_detail: ${model_detail}-${teacher_info}-${method_info}-${peft_info}-${peft_
 logging_name: ${save_detail}-lr${lr}
 
 run_id: null
-output_base_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}
+output_base_dir: ${connected_dir}/checkpoints/${model_name}/${effective_dataset_name}/${strategy}/${save_detail}
 output_dir: null
 save_strategy: steps
 save_total_limit: -1

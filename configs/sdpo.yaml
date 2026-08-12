@@ -191,7 +191,7 @@ save_detail: ${model_detail}-loss_type=${loss_type}-${reasoning_info}-${peft_inf
 logging_name: ${save_detail}-lr${lr}
 
 run_id: null
-output_base_dir: ${connected_dir}/checkpoints/${model_name}/${dataset_name}/${strategy}/${save_detail}
+output_base_dir: ${connected_dir}/checkpoints/${model_name}/${effective_dataset_name}/${strategy}/${save_detail}
 output_dir: null
 save_strategy: steps
 save_total_limit: -1
