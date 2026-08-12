@@ -307,8 +307,15 @@ def _configure_mlflow(
     config: DictConfig,
 ) -> None:
     mlflow = _import_mlflow()
-    if config.tracking.tracking_uri is not None:
-        mlflow.set_tracking_uri(config.tracking.tracking_uri)
+    tracking_uri = config.tracking.tracking_uri
+    if config.tracking.require_tracking_uri and (
+        tracking_uri is None or str(tracking_uri).strip() == ""
+    ):
+        raise ValueError(
+            "tracking.tracking_uri is required for the selected MLflow server profile."
+        )
+    if tracking_uri is not None:
+        mlflow.set_tracking_uri(tracking_uri)
     client = mlflow.tracking.MlflowClient()
     experiment = client.get_experiment_by_name(config.project_name)
     if experiment is None:
