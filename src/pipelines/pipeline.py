@@ -315,15 +315,21 @@ def test(
                 results = [item for sublist in all_results for item in sublist]
 
         if rank == 0:
-            df = save_test_results_json(
+            result_artifact = save_test_results_json(
                 results=results,
                 output_dir=config.test_output_dir,
                 output_name=config.test_output_name,
             )
+            write_inference_manifest(
+                config=config,
+                result_path=result_artifact["result_path"],
+                sampling_params=None,
+                tp_size=None,
+            )
             log_tracking_table(
                 config=config,
                 key="test_results",
-                dataframe=df,
+                dataframe=result_artifact["dataframe"],
             )
 
             alert_tracking(
@@ -380,15 +386,21 @@ def test_large(
             tqdm_disable=False,
         )
 
-        df = save_test_results_json(
+        result_artifact = save_test_results_json(
             results=results,
             output_dir=config.test_output_dir,
             output_name=config.test_output_name,
         )
+        write_inference_manifest(
+            config=config,
+            result_path=result_artifact["result_path"],
+            sampling_params=None,
+            tp_size=None,
+        )
         log_tracking_table(
             config=config,
             key="test_results",
-            dataframe=df,
+            dataframe=result_artifact["dataframe"],
         )
 
         alert_tracking(
@@ -568,6 +580,12 @@ def test_vllm(
             orient="records",
             indent=2,
             force_ascii=False,
+        )
+        write_inference_manifest(
+            config=config,
+            result_path=test_output_path,
+            sampling_params=sampling_params,
+            tp_size=tp_size,
         )
 
         log_tracking_table(
@@ -753,7 +771,7 @@ def test_vllm_multi_turn(
         )
         test_output_path = os.path.join(
             config.test_output_dir,
-            f"{config.test_output_name}.jsonl",
+            f"{config.test_output_name}_multi_turn.jsonl",
         )
 
         result_df = pd.DataFrame(results)
@@ -762,6 +780,12 @@ def test_vllm_multi_turn(
             orient="records",
             lines=True,
             force_ascii=False,
+        )
+        write_inference_manifest(
+            config=config,
+            result_path=test_output_path,
+            sampling_params=sampling_params,
+            tp_size=tp_size,
         )
 
         for column in result_df.columns:
