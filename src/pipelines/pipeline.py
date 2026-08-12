@@ -25,6 +25,7 @@ from ..rewards import prepare_colocated_vllm_models
 from ..utils import *
 
 
+@tracking_lifecycle
 def train(
     config: DictConfig,
 ) -> None:
@@ -234,7 +235,7 @@ def train(
             )
     except Exception as e:
         if rank == 0:
-            alert_tracking(
+            alert_tracking_preserving_error(
                 config=config,
                 title="Training Error",
                 text=f"An error occurred during training on {config.dataset_name}: {e}",
@@ -248,10 +249,9 @@ def train(
             process=async_vllm_process,
             log_handle=async_vllm_log_handle,
         )
-        if rank == 0:
-            finish_tracking(config=config)
 
 
+@tracking_lifecycle
 def test(
     config: DictConfig,
 ) -> None:
@@ -340,7 +340,7 @@ def test(
             )
     except Exception as e:
         if rank == 0:
-            alert_tracking(
+            alert_tracking_preserving_error(
                 config=config,
                 title="Testing Error",
                 text=f"An error occurred during testing on {config.dataset_name}: {e}",
@@ -348,12 +348,11 @@ def test(
             )
         raise e
     finally:
-        if rank == 0:
-            finish_tracking(config=config)
         if world_size > 1:
             dist.destroy_process_group()
 
 
+@tracking_lifecycle
 def test_large(
     config: DictConfig,
 ) -> None:
@@ -410,17 +409,16 @@ def test_large(
             level="INFO",
         )
     except Exception as e:
-        alert_tracking(
+        alert_tracking_preserving_error(
             config=config,
             title="Large Model Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
         raise e
-    finally:
-        finish_tracking(config=config)
 
 
+@tracking_lifecycle
 def test_vllm(
     config: DictConfig,
 ) -> None:
@@ -601,17 +599,16 @@ def test_vllm(
             level="INFO",
         )
     except Exception as e:
-        alert_tracking(
+        alert_tracking_preserving_error(
             config=config,
             title="vLLM Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
         raise e
-    finally:
-        finish_tracking(config=config)
 
 
+@tracking_lifecycle
 def test_vllm_multi_turn(
     config: DictConfig,
 ) -> None:
@@ -816,12 +813,10 @@ def test_vllm_multi_turn(
         )
 
     except Exception as e:
-        alert_tracking(
+        alert_tracking_preserving_error(
             config=config,
             title="vLLM Multi-Turn Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
         )
         raise e
-    finally:
-        finish_tracking(config=config)
