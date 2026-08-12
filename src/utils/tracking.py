@@ -1,11 +1,25 @@
-from typing import Dict, Any
+from typing import Dict, Callable, Any
 import os
+from functools import partial, update_wrapper
 import json
+import logging
 import uuid
 
 from omegaconf import DictConfig
 
 import pandas as pd
+
+
+def tracking_lifecycle(
+    function: Callable[[DictConfig], None],
+) -> Callable[[DictConfig], None]:
+    return update_wrapper(
+        wrapper=partial(
+            _run_tracking_lifecycle,
+            function=function,
+        ),
+        wrapped=function,
+    )
 
 
 def init_train_tracking(
@@ -81,18 +95,97 @@ def alert_tracking(
     raise ValueError(f"Unsupported tracking backend: {backend}.")
 
 
+def alert_tracking_preserving_error(
+    config: DictConfig,
+    title: str,
+    text: str,
+    level: str,
+) -> None:
+    try:
+        alert_tracking(
+            config=config,
+            title=title,
+            text=text,
+            level=level,
+        )
+    except Exception as error:
+        logging.getLogger(__name__).exception(
+            f"Failed to send tracking alert while preserving the pipeline error: {error}"
+        )
+
+
 def finish_tracking(
     config: DictConfig,
+    status: str,
 ) -> None:
+    if status not in {"FINISHED", "FAILED", "KILLED"}:
+        raise ValueError(f"Unsupported terminal tracking status: {status}.")
+
     backend = config.tracking.backend
     if backend == "wandb":
         return
     if backend == "mlflow":
         mlflow = _import_mlflow()
         if mlflow.active_run() is not None:
-            mlflow.end_run()
+            mlflow.end_run(status=status)
         return
     raise ValueError(f"Unsupported tracking backend: {backend}.")
+
+
+def _run_tracking_lifecycle(
+    config: DictConfig,
+    function: Callable[[DictConfig], None],
+) -> None:
+    if not _is_tracking_owner():
+        return function(config=config)
+
+    try:
+        result = function(config=config)
+    except (KeyboardInterrupt, SystemExit):
+        _finish_tracking_preserving_error(
+            config=config,
+            status="KILLED",
+        )
+        raise
+    except Exception:
+        _finish_tracking_preserving_error(
+            config=config,
+            status="FAILED",
+        )
+        raise
+
+    finish_tracking(
+        config=config,
+        status="FINISHED",
+    )
+    return result
+
+
+def _finish_tracking_preserving_error(
+    config: DictConfig,
+    status: str,
+) -> None:
+    try:
+        finish_tracking(
+            config=config,
+            status=status,
+        )
+    except Exception as error:
+        logging.getLogger(__name__).exception(
+            f"Failed to finalize tracking status {status} while preserving the pipeline error: {error}"
+        )
+
+
+def _is_tracking_owner() -> bool:
+    return (
+        int(
+            os.environ.get(
+                "RANK",
+                0,
+            )
+        )
+        == 0
+    )
 
 
 def _init_wandb_train_tracking(
