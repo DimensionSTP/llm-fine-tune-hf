@@ -2,6 +2,19 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.8.0] - 2026-08-12
+
+- Isolate training checkpoints by `effective_dataset_name` across all supported fine-tuning methods so transformed or mixed dataset variants cannot collide under the same artifact namespace.
+- Add a versioned training manifest lifecycle that records `prepared` before execution and transitions atomically to `completed` only after training and model saving succeed.
+- Record resolved training artifact paths and existence states in `run_manifest.json`, and finalize that metadata after `trainer.save_model()` completes.
+- Add companion inference manifests for Transformers, large-model, vLLM, and multi-turn vLLM test modes with model, adapter, dataset, runtime, generation, and result lineage.
+- Compose test artifact directories from `model_detail`, give multi-turn results an explicit `_multi_turn` suffix, and remove launcher-level output-path overrides so configuration remains the single path authority.
+- Add a shared tracking lifecycle that maps normal completion, ordinary exceptions, and interrupts to `FINISHED`, `FAILED`, and `KILLED` MLflow terminal states without allowing alert or finalization failures to replace the original pipeline error.
+- Apply lifecycle-managed tracking consistently to training and every test pipeline while preserving rank-zero ownership in distributed execution.
+- Add a remote MLflow server profile driven by `MLFLOW_TRACKING_URI`, optional basic-auth environment variables, and fail-fast validation when the required server URI is missing.
+- Export the new artifact metadata and tracking lifecycle utilities through the public `src.utils` API.
+- Document checkpoint namespaces, train and inference manifest contracts, test artifact layouts, and local versus remote MLflow operation in the README, usage guide, and training/evaluation contract.
+
 ## [v2.7.1] - 2026-08-10
 
 - Correct the shebangs in the dense-to-MoE preprocessing launchers so direct shell execution resolves `/bin/bash` correctly.
