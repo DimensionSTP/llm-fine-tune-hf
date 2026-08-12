@@ -27,7 +27,11 @@ from .config_validation import (
     validate_distributed_runtime_config,
 )
 from .distributed_runtime import build_distributed_runtime_snapshot
-from .run_metadata import prepare_train_artifact_config, write_run_metadata
+from .run_metadata import (
+    prepare_train_artifact_config,
+    write_run_metadata,
+    finalize_run_metadata,
+)
 from .tracking import (
     init_train_tracking,
     init_eval_tracking,
@@ -41,6 +45,7 @@ from .test_utils import (
     build_generation_inputs,
     resolve_text_encoder,
     save_test_results_json,
+    write_inference_manifest,
     resolve_vllm_tp_size,
     build_vllm,
     build_sampling_params,
@@ -87,6 +92,7 @@ __all__ = [
     "build_distributed_runtime_snapshot",
     "prepare_train_artifact_config",
     "write_run_metadata",
+    "finalize_run_metadata",
     "init_train_tracking",
     "init_eval_tracking",
     "log_tracking_table",
@@ -97,6 +103,7 @@ __all__ = [
     "build_generation_inputs",
     "resolve_text_encoder",
     "save_test_results_json",
+    "write_inference_manifest",
     "resolve_vllm_tp_size",
     "build_vllm",
     "build_sampling_params",
