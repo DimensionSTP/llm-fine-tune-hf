@@ -225,6 +225,7 @@ def train(
         trainer.save_model()
 
         if rank == 0:
+            finalize_run_metadata(config=config)
             alert_tracking(
                 config=config,
                 title="Training Complete",
