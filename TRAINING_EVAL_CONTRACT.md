@@ -43,8 +43,10 @@ Dependency notes:
   `${connected_dir}/checkpoints/${model_name}/${effective_dataset_name}/${strategy}/${save_detail}/${run_id}`.
 - `train`: `run_id` must be allocated automatically by Python as an ordered `run-000N` leaf.
 - `train`: runtime batch-size fields must be logged as metadata, not embedded in `save_detail`.
-- `train`: `run_manifest.json` must record planned and observed distributed, device, and batch runtime metadata for single-node and multi-node runs.
-- `test*`: evaluation/generation artifacts must be written to mode-specific test output paths.
+- `train`: `run_manifest.json` must use `prepared` before training and transition to `completed` only after training and model saving succeed, while recording planned and observed distributed, device, batch runtime, and artifact existence metadata.
+- `test`, `test_large`, and `test_vllm`: the canonical result and companion manifest must be written under `${connected_dir}/tests/${model_detail}` as `${test_output_name}.json` and `${test_output_name}_manifest.json`.
+- `test_vllm_multi_turn`: the result and companion manifest must be written under the same model-detail namespace as `${test_output_name}_multi_turn.jsonl` and `${test_output_name}_multi_turn_manifest.json`.
+- `test*`: companion manifests must record model and adapter lineage, resolved test inputs, the effective device map or tensor-parallel size, and effective generation settings.
 - Runs must log enough metadata (model, dataset, key runtime options) for reproducibility.
 - Postprocessing scripts must keep `run_id` as a script-local variable, let the Python entrypoint resolve artifact paths from config-composed `output_base_dir`, and must not require command-line or environment overrides at execution time.
 

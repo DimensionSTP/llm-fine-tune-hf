@@ -51,7 +51,9 @@ python main.py mode=test_vllm
 python main.py mode=test_vllm_multi_turn
 ```
 
-Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, `run_manifest.json` records planned and observed distributed, device, and batch runtime metadata.
+Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. The manifest starts with `status=prepared` and changes to `status=completed` only after training and model saving succeed. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, `run_manifest.json` records planned and observed distributed, device, batch runtime, and artifact existence metadata.
+
+Single-turn test modes write `${connected_dir}/tests/${model_detail}/${test_output_name}.json` and `${test_output_name}_manifest.json`. Multi-turn vLLM testing writes `${test_output_name}_multi_turn.jsonl` and `${test_output_name}_multi_turn_manifest.json` in the same model-detail directory. Companion manifests record the mode, model and adapter lineage, resolved test inputs, runtime device map or tensor-parallel size, and effective generation settings.
 
 W&B is the default tracking backend. Use `tracking=mlflow` to route Trainer reporting and pipeline tracking through MLflow. MLflow uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and train runs write `${output_dir}/tracking_metadata.json` with the generated MLflow run UUID and artifact `run_id` mapping.
 

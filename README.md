@@ -63,7 +63,7 @@ USER_NAME={USER_NAME}
 python main.py mode=train
 ```
 
-Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, set `distributed.enabled=true` and configure `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, and `distributed.main_process_port`; `run_manifest.json` records planned and observed distributed, device, and batch runtime metadata. `run_metadata.allocation_timeout_seconds`, `run_metadata.allocation_poll_interval_seconds`, and `run_metadata.allocation_freshness_grace_seconds` control how non-rank0 processes wait for rank0's shared run directory allocation.
+Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. The initial manifest has `status=prepared`; it is updated atomically to `status=completed` only after training and `trainer.save_model()` both succeed. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, set `distributed.enabled=true` and configure `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, and `distributed.main_process_port`; `run_manifest.json` records planned and observed distributed, device, batch runtime, and artifact existence metadata. `run_metadata.allocation_timeout_seconds`, `run_metadata.allocation_poll_interval_seconds`, and `run_metadata.allocation_freshness_grace_seconds` control how non-rank0 processes wait for rank0's shared run directory allocation.
 
 W&B is the default experiment tracking backend. Use `tracking=mlflow` to switch Trainer reporting and pipeline tracking helpers to MLflow. Train runs use a persisted `tracking_run_id` stored in `${output_dir}/tracking_metadata.json`; checkpoint `run_id` remains local to `output_base_dir`, and interrupted-run resume reuses the persisted tracking identity instead of falling back to `run_id` or starting a new backend run. MLflow stores its generated run UUID in the same metadata file and records artifact `run_id` as `artifact_run_id`.
 
@@ -94,6 +94,8 @@ python main.py mode=test_vllm_multi_turn
 ```
 
 `test_vllm` and `test_vllm_multi_turn` support VLM inputs by sending resolved images through vLLM `multi_modal_data` when `modality` is not `text`.
+
+Test artifacts use the config-composed `${connected_dir}/tests/${model_detail}` directory. `test`, `test_large`, and `test_vllm` update the canonical `${test_output_name}.json` result and `${test_output_name}_manifest.json` companion. `test_vllm_multi_turn` writes `${test_output_name}_multi_turn.jsonl` and `${test_output_name}_multi_turn_manifest.json`. Each companion records the inference mode, model and adapter lineage, resolved test inputs, runtime device map or tensor-parallel size, and effective generation settings.
 
 ### Examples of shell scipts
 
