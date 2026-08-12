@@ -68,18 +68,6 @@ def write_run_metadata(
         resolve=True,
     )
 
-    _write_json(
-        path=os.path.join(
-            output_dir,
-            "run_manifest.json",
-        ),
-        payload=_build_run_manifest(
-            config=config,
-            training_arguments=training_arguments_payload,
-            resolved_config=resolved_config,
-        ),
-    )
-
     with open(
         os.path.join(
             output_dir,
@@ -101,6 +89,55 @@ def write_run_metadata(
             "training_args.json",
         ),
         payload=training_arguments_payload,
+    )
+
+    _write_json(
+        path=os.path.join(
+            output_dir,
+            "run_manifest.json",
+        ),
+        payload=_build_run_manifest(
+            config=config,
+            training_arguments=training_arguments_payload,
+            resolved_config=resolved_config,
+        ),
+    )
+
+
+def finalize_run_metadata(
+    config: DictConfig,
+) -> None:
+    output_dir = str(config.output_dir)
+    manifest_path = os.path.join(
+        output_dir,
+        "run_manifest.json",
+    )
+    if not os.path.isfile(manifest_path):
+        raise FileNotFoundError(f"Run manifest not found: {manifest_path}")
+
+    with open(
+        manifest_path,
+        "r",
+        encoding="utf-8",
+    ) as file:
+        manifest = json.load(file)
+
+    if not isinstance(manifest, dict):
+        raise ValueError("run_manifest.json must contain a JSON object.")
+    if manifest.get("schema_version") != 2:
+        raise ValueError("run_manifest.json schema_version must be 2.")
+    if manifest.get("status") != "prepared":
+        raise ValueError(
+            "run_manifest.json status must be prepared before finalization."
+        )
+
+    manifest["status"] = "completed"
+    manifest["artifacts"] = _build_train_artifact_section(
+        output_dir=output_dir,
+    )
+    _write_json(
+        path=manifest_path,
+        payload=manifest,
     )
 
 
@@ -353,10 +390,13 @@ def _build_run_manifest(
     training_arguments: Dict[str, Any],
     resolved_config: Any,
 ) -> Dict[str, Any]:
+    output_dir = str(config.output_dir)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "status": "prepared",
         "run": _build_run_section(config=config),
         "paths": _build_paths_section(config=config),
+        "artifacts": _build_train_artifact_section(output_dir=output_dir),
         "peft_initialization": _build_peft_initialization_section(config=config),
         "memory_preflight": _build_memory_preflight_section(config=config),
         "source": _build_source_section(),
@@ -365,6 +405,37 @@ def _build_run_manifest(
         "method_hyperparameters": _build_method_hyperparameters(config=config),
         "training_arguments": training_arguments,
         "resolved_config": resolved_config,
+    }
+
+
+def _build_train_artifact_section(
+    output_dir: str,
+) -> Dict[str, Dict[str, Any]]:
+    artifact_paths = {
+        "run_manifest": os.path.join(
+            output_dir,
+            "run_manifest.json",
+        ),
+        "resolved_config": os.path.join(
+            output_dir,
+            "resolved_config.yaml",
+        ),
+        "training_arguments": os.path.join(
+            output_dir,
+            "training_args.json",
+        ),
+        "output_directory": output_dir,
+    }
+    return {
+        artifact_name: {
+            "path": artifact_path,
+            "exists": (
+                True
+                if artifact_name == "run_manifest"
+                else os.path.exists(artifact_path)
+            ),
+        }
+        for artifact_name, artifact_path in artifact_paths.items()
     }
 
 
