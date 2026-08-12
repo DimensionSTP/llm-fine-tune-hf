@@ -2,6 +2,10 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.8.1] - 2026-08-12
+
+- Register the repository's custom Hydra resolvers before composing configuration in the LoRA merge and Hugging Face Hub upload entrypoints, restoring postprocessing execution for configs that reference `dataset_effective_name` or `reward_save_suffix`.
+
 ## [v2.8.0] - 2026-08-12
 
 - Isolate training checkpoints by `effective_dataset_name` across all supported fine-tuning methods so transformed or mixed dataset variants cannot collide under the same artifact namespace.
