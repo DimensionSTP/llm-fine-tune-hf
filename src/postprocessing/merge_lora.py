@@ -34,6 +34,10 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from .artifacts import resolve_existing_artifact_output_dir
+from ..utils.hydra_resolvers import register_hydra_resolvers
+
+
+register_hydra_resolvers()
 
 
 @hydra.main(
