@@ -33,10 +33,12 @@ from .run_metadata import (
     finalize_run_metadata,
 )
 from .tracking import (
+    tracking_lifecycle,
     init_train_tracking,
     init_eval_tracking,
     log_tracking_table,
     alert_tracking,
+    alert_tracking_preserving_error,
     finish_tracking,
 )
 from .test_utils import (
@@ -93,10 +95,12 @@ __all__ = [
     "prepare_train_artifact_config",
     "write_run_metadata",
     "finalize_run_metadata",
+    "tracking_lifecycle",
     "init_train_tracking",
     "init_eval_tracking",
     "log_tracking_table",
     "alert_tracking",
+    "alert_tracking_preserving_error",
     "finish_tracking",
     "build_test_dataloader",
     "generate_test_results",
