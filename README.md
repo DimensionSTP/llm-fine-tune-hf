@@ -65,7 +65,7 @@ python main.py mode=train
 
 Training automatically allocates `run_id` values such as `run-0001` under the method/model/data checkpoint path and writes `run_manifest.json`, `resolved_config.yaml`, and `training_args.json` under `output_dir` before model construction. The initial manifest has `status=prepared`; it is updated atomically to `status=completed` only after training and `trainer.save_model()` both succeed. Runtime batch-size fields stay in metadata instead of the checkpoint path. For distributed or multi-node runs, set `distributed.enabled=true` and configure `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, and `distributed.main_process_port`; `run_manifest.json` records planned and observed distributed, device, batch runtime, and artifact existence metadata. `run_metadata.allocation_timeout_seconds`, `run_metadata.allocation_poll_interval_seconds`, and `run_metadata.allocation_freshness_grace_seconds` control how non-rank0 processes wait for rank0's shared run directory allocation.
 
-W&B is the default experiment tracking backend. Use `tracking=mlflow` to switch Trainer reporting and pipeline tracking helpers to MLflow. Train runs use a persisted `tracking_run_id` stored in `${output_dir}/tracking_metadata.json`; checkpoint `run_id` remains local to `output_base_dir`, and interrupted-run resume reuses the persisted tracking identity instead of falling back to `run_id` or starting a new backend run. MLflow stores its generated run UUID in the same metadata file and records artifact `run_id` as `artifact_run_id`.
+W&B is the default experiment tracking backend. Use `tracking=mlflow` for local SQLite/file-artifact MLflow or `tracking=mlflow_server` for a remote server selected through `MLFLOW_TRACKING_URI`. Train runs use a persisted `tracking_run_id` stored in `${output_dir}/tracking_metadata.json`; checkpoint `run_id` remains local to `output_base_dir`, and interrupted-run resume reuses the persisted tracking identity instead of falling back to `run_id` or starting a new backend run. MLflow stores its generated run UUID in the same metadata file and records artifact `run_id` as `artifact_run_id`. Normal completion, ordinary exceptions, and `KeyboardInterrupt` or `SystemExit` end MLflow runs as `FINISHED`, `FAILED`, and `KILLED`, respectively.
 
 ### Test
 
@@ -239,10 +239,10 @@ dataloader_runtime.mode={auto or manual}
 * Tracking backend
 
 ```shell
-tracking={wandb or mlflow}
+tracking={wandb or mlflow or mlflow_server}
 ```
 
-`wandb` is the default. `mlflow` requires the pinned MLflow dependency, uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume. Resume requires existing tracking metadata for both tracking backends.
+`wandb` is the default. `mlflow` requires the pinned MLflow dependency, uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume. `mlflow_server` requires `MLFLOW_TRACKING_URI` and leaves experiment artifact location selection to the server; set `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD` when the endpoint uses MLflow basic authentication. Resume requires existing tracking metadata for both tracking backends.
 
 * Supported training methods
 

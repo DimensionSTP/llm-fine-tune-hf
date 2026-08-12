@@ -55,7 +55,7 @@ Training automatically allocates `run_id` values such as `run-0001` under the me
 
 Single-turn test modes write `${connected_dir}/tests/${model_detail}/${test_output_name}.json` and `${test_output_name}_manifest.json`. Multi-turn vLLM testing writes `${test_output_name}_multi_turn.jsonl` and `${test_output_name}_multi_turn_manifest.json` in the same model-detail directory. Companion manifests record the mode, model and adapter lineage, resolved test inputs, runtime device map or tensor-parallel size, and effective generation settings.
 
-W&B is the default tracking backend. Use `tracking=mlflow` to route Trainer reporting and pipeline tracking through MLflow. MLflow uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts` by default, and train runs write `${output_dir}/tracking_metadata.json` with the generated MLflow run UUID and artifact `run_id` mapping.
+W&B is the default tracking backend. Use `tracking=mlflow` for local SQLite/file-artifact MLflow or `tracking=mlflow_server` for the remote endpoint in `MLFLOW_TRACKING_URI`. The server profile leaves artifact location selection to the server and uses `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD` when the endpoint requires MLflow basic authentication. Train runs write `${output_dir}/tracking_metadata.json` with the generated MLflow run UUID and artifact `run_id` mapping. Normal completion, ordinary exceptions, and `KeyboardInterrupt` or `SystemExit` end MLflow runs as `FINISHED`, `FAILED`, and `KILLED`, respectively.
 
 ## Script-based Execution
 
@@ -108,7 +108,7 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - SFT padding: `sft_padding_strategy`
 - Training strategy: `strategy=deepspeed`
 - Distributed launch: `distributed.enabled`, `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, `distributed.main_process_port`
-- Tracking backend: `tracking=wandb`, `tracking=mlflow`
+- Tracking backend: `tracking=wandb`, `tracking=mlflow`, `tracking=mlflow_server`
 - PEFT/quantization: `is_quantized`, `is_peft`
 - LoRA merge: `merge_max_shard_size`, `merge_pack_qwen_moe_experts`
 - GRPO/vLLM: `use_vllm`, `vllm_mode`, `vllm_sync_strategy`

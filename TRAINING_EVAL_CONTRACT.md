@@ -37,6 +37,18 @@ Dependency notes:
   - `pip install ".[gpu]"`
   - or pinned Git install command from README.
 
+## Tracking Contract
+
+- The portable default is `tracking=wandb`.
+- `tracking=mlflow` uses local SQLite and file artifacts.
+- `tracking=mlflow_server` requires `MLFLOW_TRACKING_URI`, uses the optional MLflow basic-auth environment variables, and does not set a client-side experiment artifact location.
+- Only rank 0 owns a tracking run during distributed execution.
+- MLflow normal completion, ordinary exceptions, and `KeyboardInterrupt` or `SystemExit` terminate as `FINISHED`, `FAILED`, and `KILLED`, respectively.
+- Tracking alert or finalization failures during exception handling must not replace the original pipeline exception.
+- Forced process death such as `SIGKILL` cannot be finalized by Python and may leave a stale tracking run.
+- Failures during dataset, model, encoder, or Trainer setup after tracking initialization must not leave an active run.
+- Resume reuses the existing `tracking_run_id` from `${output_dir}/tracking_metadata.json`.
+
 ## Output Contract
 
 - `train`: checkpoint/model artifacts must be written to config-defined output directory:
