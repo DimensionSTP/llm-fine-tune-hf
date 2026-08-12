@@ -193,7 +193,7 @@ test_vllm:
 gpu_memory_utilization: 0.95
 
 test_data_dir: benchmarks/test
-test_output_dir: ${connected_dir}/tests/${model_type}
+test_output_dir: ${connected_dir}/tests/${model_detail}
 test_output_name: ${dataset_name}
 
 dus_hidden_layers: 42
