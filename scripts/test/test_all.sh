@@ -219,7 +219,6 @@ do
 
         model_detail="${train_dataset}/${model_type}/${peft_detail}"
         adapter_path="${base_path}/${model_detail}"
-        test_output_dir="${base_path}/tests/${model_detail}"
 
         torchrun --nproc_per_node=$num_gpus main.py mode=test \
             data_type=$data_type \
@@ -243,7 +242,6 @@ do
             generation_config.temperature=$temperature \
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
-            eval_batch_size=$eval_batch_size \
-            test_output_dir=$test_output_dir
+            eval_batch_size=$eval_batch_size
     done
 done

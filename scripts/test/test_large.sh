@@ -109,7 +109,6 @@ temperature=0.6
 top_p=0.95
 top_k=20
 eval_batch_size=16
-test_output_dir="${base_path}/tests/${model_detail}"
 
 python main.py mode=test_large \
     data_type=$data_type \
@@ -133,5 +132,4 @@ python main.py mode=test_large \
     generation_config.temperature=$temperature \
     generation_config.top_p=$top_p \
     generation_config.top_k=$top_k \
-    eval_batch_size=$eval_batch_size \
-    test_output_dir=$test_output_dir
+    eval_batch_size=$eval_batch_size

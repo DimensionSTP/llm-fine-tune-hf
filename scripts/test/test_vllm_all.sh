@@ -216,7 +216,6 @@ do
 
         model_detail="${train_dataset}/${model_type}/${peft_detail}"
         adapter_path="${base_path}/${model_detail}"
-        test_output_dir="${base_path}/tests/${model_detail}"
 
         python main.py mode=test_vllm \
             data_type=$data_type \
@@ -240,7 +239,6 @@ do
             generation_config.temperature=$temperature \
             generation_config.top_p=$top_p \
             generation_config.top_k=$top_k \
-            gpu_memory_utilization=$gpu_memory_utilization \
-            test_output_dir=$test_output_dir
+            gpu_memory_utilization=$gpu_memory_utilization
     done
 done
