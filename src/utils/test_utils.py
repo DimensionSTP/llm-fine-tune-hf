@@ -1,7 +1,8 @@
 from typing import Dict, List, Union, Optional, Any
 import os
+import json
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 import pandas as pd
 
@@ -119,7 +120,7 @@ def save_test_results_json(
     results: List[Dict[str, Any]],
     output_dir: str,
     output_name: str,
-) -> pd.DataFrame:
+) -> Dict[str, Any]:
     os.makedirs(
         output_dir,
         exist_ok=True,
@@ -136,7 +137,89 @@ def save_test_results_json(
         indent=2,
         force_ascii=False,
     )
-    return df
+    return {
+        "dataframe": df,
+        "result_path": test_output_path,
+    }
+
+
+def write_inference_manifest(
+    config: DictConfig,
+    result_path: str,
+    sampling_params: Optional[SamplingParams],
+    tp_size: Optional[int],
+) -> str:
+    if not os.path.isfile(result_path):
+        raise FileNotFoundError(f"Inference result not found: {result_path}")
+
+    test_dataset_files = resolve_dataset_file_specs(
+        dataset_name=config.dataset_name,
+        dataset_format=config.dataset_format,
+        data_path=config.data_path,
+        dataset_subdir=config.test_dataset_subdir,
+        dataset_file_path=config.test_dataset_file_path,
+        dataset_file_paths=config.test_dataset_file_paths,
+        dataset_files=config.test_dataset_files,
+        allow_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
+        path_label="test_dataset",
+        allow_weight=False,
+    )
+    result_stem = os.path.splitext(result_path)[0]
+    manifest_path = f"{result_stem}_manifest.json"
+    manifest = {
+        "schema_version": 1,
+        "status": "completed",
+        "mode": config.mode,
+        "model": {
+            "model_type": config.model_type,
+            "model_detail": config.model_detail,
+            "pretrained_model_name": config.pretrained_model_name,
+            "revision": config.revision,
+        },
+        "peft": {
+            "is_peft": config.is_peft,
+            "adapter_name": (config.peft_test.adapter_name if config.is_peft else None),
+            "adapter_path": (config.peft_test.adapter_path if config.is_peft else None),
+        },
+        "dataset": {
+            "dataset_name": config.dataset_name,
+            "dataset_format": config.dataset_format,
+            "data_type": config.data_type,
+            "modality": config.modality,
+            "resolved_test_dataset_files": test_dataset_files,
+        },
+        "runtime": _build_inference_runtime_section(
+            config=config,
+            sampling_params=sampling_params,
+            tp_size=tp_size,
+        ),
+        "generation": _build_inference_generation_section(
+            config=config,
+            sampling_params=sampling_params,
+        ),
+        "result": {
+            "path": result_path,
+            "exists": os.path.isfile(result_path),
+        },
+    }
+    temp_path = f"{manifest_path}.tmp.{os.getpid()}"
+    with open(
+        temp_path,
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            manifest,
+            file,
+            indent=2,
+            sort_keys=True,
+        )
+        file.write("\n")
+    os.replace(
+        temp_path,
+        manifest_path,
+    )
+    return manifest_path
 
 
 def resolve_vllm_tp_size(
@@ -300,3 +383,70 @@ def load_test_dataframe(
         )
     df = df.fillna("_")
     return df
+
+
+def _build_inference_runtime_section(
+    config: DictConfig,
+    sampling_params: Optional[SamplingParams],
+    tp_size: Optional[int],
+) -> Dict[str, Any]:
+    if sampling_params is not None:
+        return {
+            "backend": "vllm",
+            "device_map": None,
+            "tensor_parallel_size": tp_size,
+        }
+
+    device_map = (
+        config.model_loading.inference.test_large_device_map
+        if config.mode == "test_large"
+        else config.model_loading.inference.device_map
+    )
+    if OmegaConf.is_config(device_map):
+        device_map = OmegaConf.to_container(
+            device_map,
+            resolve=True,
+        )
+    return {
+        "backend": "transformers",
+        "device_map": device_map,
+        "tensor_parallel_size": None,
+    }
+
+
+def _build_inference_generation_section(
+    config: DictConfig,
+    sampling_params: Optional[SamplingParams],
+) -> Dict[str, Any]:
+    configured_generation = OmegaConf.to_container(
+        config.generation_config,
+        resolve=True,
+    )
+    if sampling_params is None:
+        resolved_generation = {
+            "max_new_tokens": config.max_new_tokens,
+            "do_sample": config.do_sample,
+            **configured_generation,
+        }
+        backend = "transformers"
+    else:
+        resolved_generation = {
+            "max_tokens": sampling_params.max_tokens,
+            "temperature": sampling_params.temperature,
+            "top_p": sampling_params.top_p,
+            "top_k": sampling_params.top_k,
+            "stop": sampling_params.stop,
+            "stop_token_ids": sampling_params.stop_token_ids,
+            "skip_special_tokens": sampling_params.skip_special_tokens,
+        }
+        backend = "vllm"
+
+    return {
+        "backend": backend,
+        "seed": config.seed,
+        "max_length": config.max_length,
+        "max_new_tokens": config.max_new_tokens,
+        "do_sample": config.do_sample,
+        "configured_generation": configured_generation,
+        "resolved_generation": resolved_generation,
+    }
