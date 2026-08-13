@@ -5,7 +5,6 @@ from .dataloader_runtime import (
 )
 from .memory_preflight import (
     apply_memory_preflight_dataset,
-    build_memory_preflight_metadata,
     run_memory_preflight_if_needed,
     validate_memory_preflight_config,
     write_memory_preflight_selection,
@@ -30,7 +29,9 @@ from .distributed_runtime import build_distributed_runtime_snapshot
 from .run_metadata import (
     prepare_train_artifact_config,
     write_run_metadata,
-    finalize_run_metadata,
+    write_training_metadata,
+    update_run_metadata,
+    update_run_metadata_preserving_error,
 )
 from .tracking import (
     tracking_lifecycle,
@@ -73,7 +74,6 @@ __all__ = [
     "resolve_dataloader_runtime",
     "validate_dataloader_runtime_config",
     "apply_memory_preflight_dataset",
-    "build_memory_preflight_metadata",
     "run_memory_preflight_if_needed",
     "validate_memory_preflight_config",
     "write_memory_preflight_selection",
@@ -94,7 +94,9 @@ __all__ = [
     "build_distributed_runtime_snapshot",
     "prepare_train_artifact_config",
     "write_run_metadata",
-    "finalize_run_metadata",
+    "write_training_metadata",
+    "update_run_metadata",
+    "update_run_metadata_preserving_error",
     "tracking_lifecycle",
     "init_train_tracking",
     "init_eval_tracking",
