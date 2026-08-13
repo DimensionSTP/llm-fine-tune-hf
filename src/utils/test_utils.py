@@ -164,43 +164,27 @@ def write_inference_manifest(
         path_label="test_dataset",
         allow_weight=False,
     )
+    active_data_encoder_path = (
+        config.custom_data_encoder_path
+        if config.is_preprocessed
+        else config.pretrained_model_name
+    )
     result_stem = os.path.splitext(result_path)[0]
     manifest_path = f"{result_stem}_manifest.json"
     manifest = {
-        "schema_version": 1,
-        "status": "completed",
-        "mode": config.mode,
-        "model": {
-            "model_type": config.model_type,
-            "model_detail": config.model_detail,
-            "pretrained_model_name": config.pretrained_model_name,
-            "revision": config.revision,
-        },
-        "peft": {
-            "is_peft": config.is_peft,
-            "adapter_name": (config.peft_test.adapter_name if config.is_peft else None),
-            "adapter_path": (config.peft_test.adapter_path if config.is_peft else None),
-        },
-        "dataset": {
-            "dataset_name": config.dataset_name,
-            "dataset_format": config.dataset_format,
-            "data_type": config.data_type,
-            "modality": config.modality,
-            "resolved_test_dataset_files": test_dataset_files,
+        "resolved_config": OmegaConf.to_container(
+            config,
+            resolve=True,
+        ),
+        "resolved_input": {
+            "active_data_encoder_path": active_data_encoder_path,
+            "dataset_files": test_dataset_files,
         },
         "runtime": _build_inference_runtime_section(
             config=config,
             sampling_params=sampling_params,
             tp_size=tp_size,
         ),
-        "generation": _build_inference_generation_section(
-            config=config,
-            sampling_params=sampling_params,
-        ),
-        "result": {
-            "path": result_path,
-            "exists": os.path.isfile(result_path),
-        },
     }
     temp_path = f"{manifest_path}.tmp.{os.getpid()}"
     with open(
@@ -395,6 +379,10 @@ def _build_inference_runtime_section(
             "backend": "vllm",
             "device_map": None,
             "tensor_parallel_size": tp_size,
+            "generation": _build_inference_generation_section(
+                config=config,
+                sampling_params=sampling_params,
+            ),
         }
 
     device_map = (
@@ -411,6 +399,10 @@ def _build_inference_runtime_section(
         "backend": "transformers",
         "device_map": device_map,
         "tensor_parallel_size": None,
+        "generation": _build_inference_generation_section(
+            config=config,
+            sampling_params=sampling_params,
+        ),
     }
 
 
@@ -418,35 +410,25 @@ def _build_inference_generation_section(
     config: DictConfig,
     sampling_params: Optional[SamplingParams],
 ) -> Dict[str, Any]:
-    configured_generation = OmegaConf.to_container(
-        config.generation_config,
-        resolve=True,
-    )
     if sampling_params is None:
-        resolved_generation = {
+        configured_generation = OmegaConf.to_container(
+            config.generation_config,
+            resolve=True,
+        )
+        return {
+            "seed": config.seed,
             "max_new_tokens": config.max_new_tokens,
             "do_sample": config.do_sample,
             **configured_generation,
         }
-        backend = "transformers"
-    else:
-        resolved_generation = {
-            "max_tokens": sampling_params.max_tokens,
-            "temperature": sampling_params.temperature,
-            "top_p": sampling_params.top_p,
-            "top_k": sampling_params.top_k,
-            "stop": sampling_params.stop,
-            "stop_token_ids": sampling_params.stop_token_ids,
-            "skip_special_tokens": sampling_params.skip_special_tokens,
-        }
-        backend = "vllm"
 
     return {
-        "backend": backend,
-        "seed": config.seed,
-        "max_length": config.max_length,
-        "max_new_tokens": config.max_new_tokens,
-        "do_sample": config.do_sample,
-        "configured_generation": configured_generation,
-        "resolved_generation": resolved_generation,
+        "seed": sampling_params.seed,
+        "max_tokens": sampling_params.max_tokens,
+        "temperature": sampling_params.temperature,
+        "top_p": sampling_params.top_p,
+        "top_k": sampling_params.top_k,
+        "stop": sampling_params.stop,
+        "stop_token_ids": sampling_params.stop_token_ids,
+        "skip_special_tokens": sampling_params.skip_special_tokens,
     }
