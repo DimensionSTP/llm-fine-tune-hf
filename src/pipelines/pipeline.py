@@ -158,6 +158,7 @@ def train(
             rank=rank,
         )
 
+        vision_patch_embedding_result = None
         if config.fine_tune_method == "async_grpo":
             model = config.pretrained_model_name
             if config.is_preprocessed:
@@ -169,6 +170,7 @@ def train(
                     model = merged_model_path
         else:
             model = setup.get_model()
+            vision_patch_embedding_result = setup.get_vision_patch_embedding_result()
 
         trainer_config = OmegaConf.to_container(
             config.trainer,
@@ -204,6 +206,17 @@ def train(
         trainer = TrainerClass(
             **trainer_kwargs,
         )
+        if vision_patch_embedding_result is not None:
+            vision_patch_embedding_result = (
+                validate_distributed_vision_patch_embedding_result(
+                    compatibility_result=vision_patch_embedding_result,
+                )
+            )
+            write_vision_patch_embedding_metadata(
+                config=config,
+                compatibility_result=vision_patch_embedding_result,
+                rank=rank,
+            )
         if patch_qwen_packed_moe_vllm_sync(
             trainer=trainer,
             config=config,
