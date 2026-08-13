@@ -38,6 +38,8 @@ def build_peft_initialization_metadata(
     config: DictConfig,
 ) -> Dict[str, Any]:
     validate_peft_initialization_config(config=config)
+    if not config.is_peft:
+        return {}
 
     target_parameters = _normalize_target_parameters(
         value=OmegaConf.select(
@@ -45,31 +47,21 @@ def build_peft_initialization_metadata(
             "peft_config.target_parameters",
         ),
     )
-    uses_target_parameters = bool(config.is_peft) and len(target_parameters) > 0
+    uses_target_parameters = len(target_parameters) > 0
     target_parameter_zero3_init_policy = _build_target_parameter_zero3_init_policy(
         config=config,
         target_parameters=target_parameters if uses_target_parameters else [],
     )
 
     metadata = {
-        "mode": str(config.peft_initialization.mode),
-        "is_peft": bool(config.is_peft),
         "uses_target_parameters": uses_target_parameters,
         "target_parameter_count": (
             len(target_parameters) if uses_target_parameters else 0
         ),
         "target_parameter_zero3_init_policy": target_parameter_zero3_init_policy,
-        "requested_base_model_name": str(config.pretrained_model_name),
-        "resolved_base_model_name_for_continuation": None,
-        "adapter_path": None,
-        "adapter_name": str(config.peft_initialization.adapter_name),
-        "adapter_base_model_name_or_path": None,
         "current_peft_config_fingerprint": _build_current_peft_config_fingerprint(
             config=config,
         ),
-        "adapter_config_fingerprint": None,
-        "weighted_merge_base_reference": None,
-        "weighted_merge_candidate": False,
     }
 
     if not is_peft_continue_from_adapter(config=config):
@@ -93,17 +85,12 @@ def build_peft_initialization_metadata(
     adapter_base_model = _get_adapter_base_model(adapter_config=adapter_config)
     metadata.update(
         {
-            "resolved_base_model_name_for_continuation": str(
-                config.pretrained_model_name
-            ),
             "adapter_path": adapter_path,
             "adapter_base_model_name_or_path": adapter_base_model,
             "adapter_config_fingerprint": _build_adapter_config_fingerprint(
                 adapter_config=adapter_config,
             ),
-            "weighted_merge_base_reference": adapter_base_model,
-            "weighted_merge_candidate": True,
-        }
+        },
     )
     return metadata
 
