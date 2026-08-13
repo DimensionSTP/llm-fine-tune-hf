@@ -415,6 +415,16 @@ completion_termination.include_model_generation_eos={True or False}
 
 `completion_termination` is GRPO-only and disabled by default. It extends TRL's truncated-completion masking beyond tokenizer EOS/PAD by treating configured terminal token ids or token texts as valid completion terminators. `infer_finished_from_short_completion=True` also treats generations shorter than `max_completion_length` as terminated. SDPO and async GRPO do not use this option.
 
+* VLM Conv3d patch embedding compatibility
+
+| Mode | Behavior |
+| --- | --- |
+| `conv3d` | Default. Keep the original model implementation; warn when a configured known-risk runtime is observed. |
+| `linear` | Force the equivalent linear strategy only for a certified module class/version and exact full-patch Conv3d structure; otherwise fail fast. |
+| `auto` | Use linear only when both a certified runtime rule and a certified target rule match; unknown or unsupported cases keep Conv3d. |
+
+`vision_patch_embedding` is configured in `configs/vision_patch_embedding/base.yaml`. Target rules identify validated module classes, package versions, projection paths, and operation strategies; runtime rules independently identify validated PyTorch, CUDA, cuDNN, driver, and compute-capability combinations. Add a target or runtime rule only after output and gradient equivalence checks and a GPU smoke on the exact supported range. A known-risk runtime with an unsupported module or structure emits a warning and continues with Conv3d. The resolved mode, matched runtime rules, target modules, structure fingerprint, and fallback warnings are recorded as observed runtime metadata, while the complete policy remains in `resolved_config.yaml`. The current non-Conv3d path applies only to repository-owned Hugging Face image-text models; async GRPO, vLLM test models, and trainer-owned GKD/GOLD teacher models keep the default Conv3d path.
+
 * VLM training image augmentation
 
 ```shell
