@@ -148,6 +148,7 @@ def write_inference_manifest(
     result_path: str,
     sampling_params: Optional[SamplingParams],
     tp_size: Optional[int],
+    vision_patch_embedding_result: Optional[Dict[str, Any]],
 ) -> str:
     if not os.path.isfile(result_path):
         raise FileNotFoundError(f"Inference result not found: {result_path}")
@@ -171,6 +172,13 @@ def write_inference_manifest(
     )
     result_stem = os.path.splitext(result_path)[0]
     manifest_path = f"{result_stem}_manifest.json"
+    runtime = _build_inference_runtime_section(
+        config=config,
+        sampling_params=sampling_params,
+        tp_size=tp_size,
+    )
+    if vision_patch_embedding_result is not None:
+        runtime["vision_patch_embedding"] = vision_patch_embedding_result
     manifest = {
         "resolved_config": OmegaConf.to_container(
             config,
@@ -180,11 +188,7 @@ def write_inference_manifest(
             "active_data_encoder_path": active_data_encoder_path,
             "dataset_files": test_dataset_files,
         },
-        "runtime": _build_inference_runtime_section(
-            config=config,
-            sampling_params=sampling_params,
-            tp_size=tp_size,
-        ),
+        "runtime": runtime,
     }
     temp_path = f"{manifest_path}.tmp.{os.getpid()}"
     with open(

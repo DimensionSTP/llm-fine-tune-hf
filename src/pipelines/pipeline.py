@@ -365,6 +365,13 @@ def test(
 
     data_encoder = setup.get_data_encoder()
     model = setup.get_model()
+    vision_patch_embedding_result = setup.get_vision_patch_embedding_result()
+    if vision_patch_embedding_result is not None:
+        vision_patch_embedding_result = (
+            validate_distributed_vision_patch_embedding_result(
+                compatibility_result=vision_patch_embedding_result,
+            )
+        )
 
     model.to(rank)
 
@@ -401,6 +408,7 @@ def test(
                 result_path=result_artifact["result_path"],
                 sampling_params=None,
                 tp_size=None,
+                vision_patch_embedding_result=vision_patch_embedding_result,
             )
             log_tracking_table(
                 config=config,
@@ -449,6 +457,13 @@ def test_large(
 
     data_encoder = setup.get_data_encoder()
     model = setup.get_model()
+    vision_patch_embedding_result = setup.get_vision_patch_embedding_result()
+    if vision_patch_embedding_result is not None:
+        vision_patch_embedding_result = (
+            validate_distributed_vision_patch_embedding_result(
+                compatibility_result=vision_patch_embedding_result,
+            )
+        )
 
     try:
         results = generate_test_results(
@@ -471,6 +486,7 @@ def test_large(
             result_path=result_artifact["result_path"],
             sampling_params=None,
             tp_size=None,
+            vision_patch_embedding_result=vision_patch_embedding_result,
         )
         log_tracking_table(
             config=config,
@@ -660,6 +676,7 @@ def test_vllm(
             result_path=test_output_path,
             sampling_params=sampling_params,
             tp_size=tp_size,
+            vision_patch_embedding_result=None,
         )
 
         log_tracking_table(
@@ -859,6 +876,7 @@ def test_vllm_multi_turn(
             result_path=test_output_path,
             sampling_params=sampling_params,
             tp_size=tp_size,
+            vision_patch_embedding_result=None,
         )
 
         for column in result_df.columns:
