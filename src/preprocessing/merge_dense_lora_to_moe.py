@@ -209,38 +209,31 @@ def merge_dense_lora_to_moe(
     )
 
     manifest = {
-        "moe_model_dir": moe_model_dir,
-        "output_dir": os.path.abspath(output_dir),
-        "mode": mode,
-        "num_layers": num_layers,
-        "num_experts": num_experts_cfg,
-        "moe_layout": moe_layout,
-        "targets": OmegaConf.to_container(
-            d2m_cfg.targets,
+        "resolved_config": OmegaConf.to_container(
+            config,
             resolve=True,
         ),
-        "merged_ffn_weights": merged_ffn,
-        "missing_ffn_modules": missing_ffn_modules,
-        "merged_attn_weights": merged_attn,
-        "missing_attn_modules": missing_attn_modules,
-        "adapter_for_expert": adapter_for_expert,
-        "alpha_for_expert": alpha_for_expert,
-        "attention_adapters_used": attn_adapter_paths,
-        "attention_equal_weight_coefs": attn_weight_coefs,
-        "runtime": OmegaConf.to_container(
-            d2m_cfg.runtime,
-            resolve=True,
-        ),
-        "hydra_config_resolved": OmegaConf.to_container(
-            d2m_cfg,
-            resolve=True,
-        ),
+        "result": {
+            "moe_layout": moe_layout,
+            "num_layers": num_layers,
+            "num_experts": num_experts_found,
+            "merged_ffn_weights": merged_ffn,
+            "missing_ffn_modules": missing_ffn_modules,
+            "merged_attn_weights": merged_attn,
+            "missing_attn_modules": missing_attn_modules,
+            "adapter_for_expert": adapter_for_expert,
+            "alpha_for_expert": alpha_for_expert,
+            "attention_adapters_used": attn_adapter_paths,
+            "attention_equal_weight_coefs": attn_weight_coefs,
+        },
     }
+    manifest_path = os.path.join(
+        output_dir,
+        "merge_manifest.json",
+    )
+    temp_manifest_path = f"{manifest_path}.tmp.{os.getpid()}"
     with open(
-        os.path.join(
-            output_dir,
-            "merge_manifest.json",
-        ),
+        temp_manifest_path,
         "w",
         encoding="utf-8",
     ) as f:
@@ -250,11 +243,16 @@ def merge_dense_lora_to_moe(
             indent=2,
             ensure_ascii=False,
         )
+        f.write("\n")
+    os.replace(
+        temp_manifest_path,
+        manifest_path,
+    )
 
     print("\n[OK] LoRA bake-in finished (FFN + attention optional).")
     print(
         json.dumps(
-            {k: manifest[k] for k in manifest if k != "hydra_config_resolved"},
+            manifest["result"],
             indent=2,
             ensure_ascii=False,
         )
