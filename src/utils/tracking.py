@@ -210,6 +210,10 @@ def _resolve_wandb_train_run_id(
 ) -> str:
     _validate_tracking_identity_config(config=config)
     metadata = _read_tracking_metadata(config=config)
+    _validate_tracking_metadata_backend(
+        config=config,
+        metadata=metadata,
+    )
     if config.resume_training:
         tracking_run_id = metadata.get("tracking_run_id")
         if not isinstance(tracking_run_id, str) or tracking_run_id == "":
@@ -266,6 +270,10 @@ def _init_mlflow_train_tracking(
     _validate_tracking_identity_config(config=config)
     _configure_mlflow(config=config)
     metadata = _read_tracking_metadata(config=config)
+    _validate_tracking_metadata_backend(
+        config=config,
+        metadata=metadata,
+    )
     tracking_run_id = metadata.get("tracking_run_id")
     if config.resume_training:
         if not isinstance(tracking_run_id, str) or tracking_run_id == "":
@@ -375,12 +383,7 @@ def _write_tracking_metadata(
         path=path,
         payload={
             "backend": str(config.tracking.backend),
-            "artifact_run_id": str(config.run_id),
             "tracking_run_id": str(tracking_run_id),
-            "project_name": str(config.project_name),
-            "logging_name": str(config.logging_name),
-            "output_base_dir": str(config.output_base_dir),
-            "output_dir": str(config.output_dir),
         },
     )
 
@@ -401,6 +404,18 @@ def _read_tracking_metadata(
     return payload
 
 
+def _validate_tracking_metadata_backend(
+    config: DictConfig,
+    metadata: Dict[str, Any],
+) -> None:
+    if len(metadata) == 0:
+        return
+    if metadata.get("backend") != str(config.tracking.backend):
+        raise ValueError(
+            "tracking_metadata.json backend does not match tracking.backend."
+        )
+
+
 def _get_tracking_metadata_path(
     config: DictConfig,
 ) -> str:
@@ -414,8 +429,9 @@ def _write_json(
     path: str,
     payload: Dict[str, Any],
 ) -> None:
+    temp_path = f"{path}.tmp.{os.getpid()}"
     with open(
-        path,
+        temp_path,
         "w",
         encoding="utf-8",
     ) as file:
@@ -426,6 +442,10 @@ def _write_json(
             ensure_ascii=False,
         )
         file.write("\n")
+    os.replace(
+        temp_path,
+        path,
+    )
 
 
 def _normalize_tracking_key(
