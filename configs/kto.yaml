@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - dataset: kto
-  - dataset_namespace: base
+  - dataset_artifact: base
   - image_augmentation: base
   - dataloader_runtime: auto
   - memory_preflight: base
