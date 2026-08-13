@@ -95,7 +95,7 @@ python main.py mode=test_vllm_multi_turn
 
 `test_vllm` and `test_vllm_multi_turn` support VLM inputs by sending resolved images through vLLM `multi_modal_data` when `modality` is not `text`.
 
-Test artifacts use the config-composed `${connected_dir}/tests/${model_detail}` directory. `test`, `test_large`, and `test_vllm` update the canonical `${test_output_name}.json` result and `${test_output_name}_manifest.json` companion. `test_vllm_multi_turn` writes `${test_output_name}_multi_turn.jsonl` and `${test_output_name}_multi_turn_manifest.json`. Each companion records the inference mode, model and adapter lineage, resolved test inputs, runtime device map or tensor-parallel size, and effective generation settings.
+Test artifacts use the config-composed `${connected_dir}/tests/${model_detail}` directory. `test`, `test_large`, and `test_vllm` update the canonical `${dataset_name}.json` result and `${dataset_name}_manifest.json` companion. `test_vllm_multi_turn` writes `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json`. Each companion stores the full resolved config once, plus the active data encoder, resolved test files, runtime backend, effective device map or tensor-parallel size, and actual generation parameters.
 
 ### Examples of shell scipts
 
@@ -281,7 +281,7 @@ dataset_files={null or list of {path, format, weight?} source specs}
 val_dataset_file_path={null or full validation dataset file path}
 val_dataset_file_paths={null or list of validation dataset file paths}
 val_dataset_files={null or list of {path, format} validation source specs}
-dataset_mix_name={null or explicit multi-dataset logging name}
+dataset_namespace={null or explicit dataset artifact namespace}
 allow_dataset_file_name_mismatch={False or True}
 allow_val_dataset_file_name_mismatch={False or True}
 test_dataset_file_path={null or full test dataset file path}
@@ -293,7 +293,7 @@ dataset_resampling.replacement={False or True}
 dataset_resampling.target_size={null or positive integer}
 ```
 
-`dataset_name` remains the logical dataset family. By default the train dataset resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, `dataset_file_path` is a single-file escape hatch, and `dataset_file_paths` merges same-format files in order. `dataset_files` supports multi-format train sources and still merges by default; set `dataset_resampling.enabled=true` only when weighted offline resampling is required. If `dataset_file_paths` or `dataset_files` is set, `dataset_mix_name` is required and becomes `effective_dataset_name` for project, logging, and checkpoint naming. Explicit `val_dataset_file_path(s)` or `val_dataset_files` disables train-internal validation sampling and uses the provided validation source(s); validation and test sources support multi-format merge only, not weights or resampling. Test data uses `test_dataset_subdir`, `test_dataset_file_path`, `test_dataset_file_paths`, or `test_dataset_files` with the same basename mismatch policy. Default scripts do not need dataset override changes; scripted experiments should override primitive dataset keys and let composed names resolve from config.
+`dataset_name` remains the logical dataset family. `dataset_namespace` is the optional, human-readable artifact and logging namespace for a configured dataset composition; when omitted, `effective_dataset_name` falls back to `dataset_name`. By default the train dataset resolves to `${data_path}/${dataset_name}.${dataset_format}`. `dataset_subdir` changes only the directory, `dataset_file_path` is a single-file escape hatch, and `dataset_file_paths` merges same-format files in order. `dataset_files` supports multi-format train sources and still merges by default; set `dataset_resampling.enabled=true` only when weighted offline resampling is required. Multi-file sources require `dataset_namespace`, while their complete source details remain in `resolved_config.yaml` and resolved input metadata instead of being encoded into artifact paths. Explicit `val_dataset_file_path(s)` or `val_dataset_files` disables train-internal validation sampling and uses the provided validation source(s); validation and test sources support multi-format merge only, not weights or resampling. Test data uses `test_dataset_subdir`, `test_dataset_file_path`, `test_dataset_file_paths`, or `test_dataset_files` with the same basename mismatch policy. Default scripts do not need dataset override changes; scripted experiments should override primitive dataset keys and let composed names resolve from config.
 
 * Left padding option
 
