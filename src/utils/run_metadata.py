@@ -1,7 +1,8 @@
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any
 import os
 import re
 import json
+import logging
 import subprocess
 import sys
 import time
@@ -10,10 +11,9 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from transformers import TrainingArguments
 
-from ..helpers.dataset_paths import build_dataset_input_metadata
+from ..helpers.dataset_paths import build_train_dataset_input_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import resolve_dataloader_runtime
-from .memory_preflight import build_memory_preflight_metadata
 from .peft_initialization import build_peft_initialization_metadata
 
 
@@ -22,6 +22,8 @@ def prepare_train_artifact_config(
     rank: int,
 ) -> None:
     if config.mode != "train":
+        return
+    if config.memory_preflight.is_probe:
         return
 
     if config.resume_training:
@@ -48,10 +50,9 @@ def prepare_train_artifact_config(
 
 def write_run_metadata(
     config: DictConfig,
-    training_arguments: TrainingArguments,
     rank: int,
 ) -> None:
-    if rank != 0:
+    if rank != 0 or config.memory_preflight.is_probe:
         return
 
     output_dir = str(config.output_dir)
@@ -60,85 +61,123 @@ def write_run_metadata(
         exist_ok=True,
     )
 
+    manifest_path = _get_run_manifest_path(config=config)
+    manifest = {
+        "run_id": str(config.run_id),
+        "status": "prepared",
+        "stage": "setup",
+        "artifacts": {},
+        "source": _build_source_section(),
+    }
+    _write_json(
+        path=manifest_path,
+        payload=manifest,
+    )
+    _write_resolved_config(config=config)
+    manifest["artifacts"] = _build_train_artifact_section(config=config)
+    _write_json(
+        path=manifest_path,
+        payload=manifest,
+    )
+
+
+def write_training_metadata(
+    config: DictConfig,
+    training_arguments: TrainingArguments,
+    rank: int,
+) -> None:
+    if rank != 0 or config.memory_preflight.is_probe:
+        return
+
     training_arguments_payload = json.loads(
         training_arguments.to_json_string(),
     )
-    resolved_config = OmegaConf.to_container(
-        config,
-        resolve=True,
-    )
-
-    with open(
-        os.path.join(
-            output_dir,
-            "resolved_config.yaml",
-        ),
-        "w",
-        encoding="utf-8",
-    ) as file:
-        file.write(
-            OmegaConf.to_yaml(
-                config,
-                resolve=True,
-            )
-        )
-
+    _write_resolved_config(config=config)
     _write_json(
         path=os.path.join(
-            output_dir,
+            str(config.output_dir),
             "training_args.json",
         ),
         payload=training_arguments_payload,
     )
 
-    _write_json(
-        path=os.path.join(
-            output_dir,
-            "run_manifest.json",
-        ),
-        payload=_build_run_manifest(
-            config=config,
-            training_arguments=training_arguments_payload,
-            resolved_config=resolved_config,
-        ),
+    manifest = _read_run_manifest(config=config)
+    manifest["artifacts"] = _build_train_artifact_section(config=config)
+    manifest["inputs"] = _build_input_section(config=config)
+    manifest["runtime"] = _build_runtime_section(config=config)
+    peft_initialization = build_peft_initialization_metadata(
+        config=config,
     )
-
-
-def finalize_run_metadata(
-    config: DictConfig,
-) -> None:
-    output_dir = str(config.output_dir)
-    manifest_path = os.path.join(
-        output_dir,
-        "run_manifest.json",
-    )
-    if not os.path.isfile(manifest_path):
-        raise FileNotFoundError(f"Run manifest not found: {manifest_path}")
-
-    with open(
-        manifest_path,
-        "r",
-        encoding="utf-8",
-    ) as file:
-        manifest = json.load(file)
-
-    if not isinstance(manifest, dict):
-        raise ValueError("run_manifest.json must contain a JSON object.")
-    if manifest.get("schema_version") != 2:
-        raise ValueError("run_manifest.json schema_version must be 2.")
-    if manifest.get("status") != "prepared":
-        raise ValueError(
-            "run_manifest.json status must be prepared before finalization."
+    if len(peft_initialization) > 0:
+        manifest["peft_initialization"] = peft_initialization
+    else:
+        manifest.pop(
+            "peft_initialization",
+            None,
         )
-
-    manifest["status"] = "completed"
-    manifest["artifacts"] = _build_train_artifact_section(
-        output_dir=output_dir,
-    )
     _write_json(
-        path=manifest_path,
+        path=_get_run_manifest_path(config=config),
         payload=manifest,
     )
+
+
+def update_run_metadata(
+    config: DictConfig,
+    status: str,
+    stage: str,
+    error: Optional[BaseException],
+    rank: int,
+) -> None:
+    if rank != 0 or config.memory_preflight.is_probe:
+        return
+    if status not in {"prepared", "running", "completed", "failed", "interrupted"}:
+        raise ValueError(f"Unsupported run metadata status: {status}.")
+    if stage not in {"preflight", "setup", "training", "saving", "completed"}:
+        raise ValueError(f"Unsupported run metadata stage: {stage}.")
+    if status in {"failed", "interrupted"} and error is None:
+        raise ValueError(f"Run metadata status {status} requires an error.")
+    if status not in {"failed", "interrupted"} and error is not None:
+        raise ValueError(f"Run metadata status {status} must not include an error.")
+
+    manifest = _read_run_manifest(config=config)
+    manifest["status"] = status
+    manifest["stage"] = stage
+    manifest["artifacts"] = _build_train_artifact_section(config=config)
+    if error is None:
+        manifest.pop(
+            "failure",
+            None,
+        )
+    else:
+        manifest["failure"] = {
+            "type": type(error).__name__,
+            "message": str(error),
+        }
+    _write_json(
+        path=_get_run_manifest_path(config=config),
+        payload=manifest,
+    )
+
+
+def update_run_metadata_preserving_error(
+    config: DictConfig,
+    status: str,
+    stage: str,
+    error: BaseException,
+    rank: int,
+) -> None:
+    try:
+        update_run_metadata(
+            config=config,
+            status=status,
+            stage=stage,
+            error=error,
+            rank=rank,
+        )
+    except Exception as metadata_error:
+        logging.getLogger(__name__).exception(
+            f"Failed to update run metadata while preserving the pipeline error: {metadata_error}"
+        )
 
 
 def _prepare_resume_artifact_config(
@@ -385,80 +424,66 @@ def _get_allocation_key() -> str:
     )
 
 
-def _build_run_manifest(
+def _build_train_artifact_section(
     config: DictConfig,
-    training_arguments: Dict[str, Any],
-    resolved_config: Any,
 ) -> Dict[str, Any]:
     output_dir = str(config.output_dir)
-    return {
-        "schema_version": 2,
-        "status": "prepared",
-        "run": _build_run_section(config=config),
-        "paths": _build_paths_section(config=config),
-        "artifacts": _build_train_artifact_section(output_dir=output_dir),
-        "peft_initialization": _build_peft_initialization_section(config=config),
-        "memory_preflight": _build_memory_preflight_section(config=config),
-        "source": _build_source_section(),
-        "runtime": _build_runtime_section(config=config),
-        "summary": _build_summary_section(config=config),
-        "method_hyperparameters": _build_method_hyperparameters(config=config),
-        "training_arguments": training_arguments,
-        "resolved_config": resolved_config,
+    relative_paths = {
+        "resolved_config": "resolved_config.yaml",
+        "training_arguments": "training_args.json",
+        "tracking": "tracking_metadata.json",
     }
+    artifacts = {
+        artifact_name: relative_path
+        for artifact_name, relative_path in relative_paths.items()
+        if os.path.isfile(
+            os.path.join(
+                output_dir,
+                relative_path,
+            )
+        )
+    }
+    memory_preflight_artifacts = _build_memory_preflight_artifact_section(
+        output_dir=output_dir,
+    )
+    if len(memory_preflight_artifacts) > 0:
+        artifacts["memory_preflight"] = memory_preflight_artifacts
+    return artifacts
 
 
-def _build_train_artifact_section(
+def _build_memory_preflight_artifact_section(
     output_dir: str,
-) -> Dict[str, Dict[str, Any]]:
-    artifact_paths = {
-        "run_manifest": os.path.join(
-            output_dir,
-            "run_manifest.json",
+) -> Dict[str, str]:
+    relative_paths = {
+        "command": os.path.join(
+            "memory_preflight",
+            "command.json",
         ),
-        "resolved_config": os.path.join(
-            output_dir,
-            "resolved_config.yaml",
+        "selected_indices": os.path.join(
+            "memory_preflight",
+            "selected_indices.json",
         ),
-        "training_arguments": os.path.join(
-            output_dir,
-            "training_args.json",
+        "result": os.path.join(
+            "memory_preflight",
+            "result.json",
         ),
-        "output_directory": output_dir,
     }
     return {
-        artifact_name: {
-            "path": artifact_path,
-            "exists": (
-                True
-                if artifact_name == "run_manifest"
-                else os.path.exists(artifact_path)
-            ),
-        }
-        for artifact_name, artifact_path in artifact_paths.items()
+        artifact_name: relative_path
+        for artifact_name, relative_path in relative_paths.items()
+        if os.path.isfile(
+            os.path.join(
+                output_dir,
+                relative_path,
+            )
+        )
     }
 
 
-def _build_run_section(
+def _build_input_section(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    return {
-        "run_id": config.run_id,
-        "fine_tune_method": config.fine_tune_method,
-        "model_name": config.model_name,
-        "dataset_name": config.dataset_name,
-        "dataset_mix_name": config.dataset_mix_name,
-        "effective_dataset_name": config.effective_dataset_name,
-        "strategy": config.strategy,
-        "logging_name": config.logging_name,
-        "run_name": config.run_name,
-    }
-
-
-def _build_paths_section(
-    config: DictConfig,
-) -> Dict[str, Any]:
-    dataset_metadata = build_dataset_input_metadata(
+    return build_train_dataset_input_metadata(
         dataset_name=config.dataset_name,
         dataset_format=config.dataset_format,
         data_path=config.data_path,
@@ -471,42 +496,9 @@ def _build_paths_section(
         val_dataset_file_paths=config.val_dataset_file_paths,
         val_dataset_files=config.val_dataset_files,
         allow_val_dataset_file_name_mismatch=config.allow_val_dataset_file_name_mismatch,
-        test_dataset_subdir=config.test_dataset_subdir,
-        test_dataset_file_path=config.test_dataset_file_path,
-        test_dataset_file_paths=config.test_dataset_file_paths,
-        test_dataset_files=config.test_dataset_files,
-        allow_test_dataset_file_name_mismatch=config.allow_test_dataset_file_name_mismatch,
-        dataset_mix_name=config.dataset_mix_name,
-        effective_dataset_name=config.effective_dataset_name,
         use_validation=config.use_validation,
         dataset_resampling=config.dataset_resampling,
     )
-    return {
-        "output_base_dir": config.output_base_dir,
-        "output_dir": config.output_dir,
-        "save_detail": config.save_detail,
-        "dataset": dataset_metadata,
-        "test_dataset": {
-            "dataset_name": config.dataset_name,
-            "dataset_format": config.dataset_format,
-            "test_input_mode": dataset_metadata["test_input_mode"],
-            "resolved_test_dataset_file_paths": dataset_metadata[
-                "resolved_test_dataset_file_paths"
-            ],
-        },
-    }
-
-
-def _build_peft_initialization_section(
-    config: DictConfig,
-) -> Dict[str, Any]:
-    return build_peft_initialization_metadata(config=config)
-
-
-def _build_memory_preflight_section(
-    config: DictConfig,
-) -> Dict[str, Any]:
-    return build_memory_preflight_metadata(config=config)
 
 
 def _build_source_section() -> Dict[str, Any]:
@@ -528,308 +520,53 @@ def _build_runtime_section(
     return runtime_snapshot
 
 
-def _build_summary_section(
+def _write_resolved_config(
     config: DictConfig,
-) -> Dict[str, Any]:
-    return _select_config_values(
-        config=config,
-        paths=[
-            "run_id",
-            "output_base_dir",
-            "output_dir",
-            "model_name",
-            "fine_tune_method",
-            "model_type",
-            "model_detail",
-            "pretrained_model_name",
-            "revision",
-            "dataset_name",
-            "dataset_mix_name",
-            "effective_dataset_name",
-            "dataset_format",
-            "data_path",
-            "dataset_subdir",
-            "dataset_file_path",
-            "dataset_file_paths",
-            "dataset_files",
-            "allow_dataset_file_name_mismatch",
-            "val_dataset_file_path",
-            "val_dataset_file_paths",
-            "val_dataset_files",
-            "allow_val_dataset_file_name_mismatch",
-            "dataset_resampling",
-            "test_dataset_subdir",
-            "test_dataset_file_path",
-            "test_dataset_file_paths",
-            "test_dataset_files",
-            "allow_test_dataset_file_name_mismatch",
-            "dataset_image",
-            "data_type",
-            "split",
-            "split_ratio",
-            "is_strict_split",
-            "seed",
-            "strategy",
-            "save_detail",
-            "batch_size",
-            "eval_batch_size",
-            "gradient_accumulation_steps",
-            "devices",
-            "distributed",
-            "dataloader_runtime",
-            "memory_preflight",
-            "lr",
-            "weight_decay",
-            "scheduler_type",
-            "warmup_ratio",
-            "epoch",
-            "step",
-            "optim",
-            "max_grad_norm",
-            "precision",
-            "is_bf16",
-            "is_quantized",
-            "quantization_config",
-            "model_loading",
-            "is_peft",
-            "peft_initialization",
-            "peft_config",
-            "gradient_checkpointing",
-            "gradient_checkpointing_kwargs",
-            "max_length",
-            "max_new_tokens",
-            "sft_padding_strategy",
-            "truncation_mode",
-            "pad_to_multiple_of",
-            "left_padding",
-            "is_enable_thinking",
-            "chat_template_path",
-            "logging_name",
-            "run_name",
-        ],
-        extra={
-            "effective_batch_size": _get_effective_batch_size(config=config),
-        },
+) -> None:
+    path = os.path.join(
+        str(config.output_dir),
+        "resolved_config.yaml",
+    )
+    temp_path = f"{path}.tmp.{os.getpid()}"
+    with open(
+        temp_path,
+        "w",
+        encoding="utf-8",
+    ) as file:
+        file.write(
+            OmegaConf.to_yaml(
+                config,
+                resolve=True,
+            )
+        )
+    os.replace(
+        temp_path,
+        path,
     )
 
 
-def _build_method_hyperparameters(
+def _read_run_manifest(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    common_paths_by_method: Dict[str, List[str]] = {
-        "sft": [
-            "sft_loss_type",
-            "sft_padding_strategy",
-            "truncation_mode",
-            "pad_to_multiple_of",
-            "response_start_template",
-            "response_end_template",
-            "chat_template_path",
-            "training_arguments.use_liger_kernel",
-            "training_arguments.packing",
-        ],
-        "dpo": [
-            "beta",
-            "truncation_mode",
-            "pad_to_multiple_of",
-            "training_arguments.use_liger_kernel",
-        ],
-        "kto": [
-            "beta",
-            "training_arguments.use_liger_kernel",
-        ],
-        "gkd": [
-            "teacher.upload_user",
-            "teacher.model_type",
-            "teacher.model",
-            "teacher.model_init_kwargs",
-            "max_new_tokens",
-            "generation_config.temperature",
-            "truncation_mode",
-            "pad_to_multiple_of",
-            "training_arguments.use_liger_kernel",
-            "training_arguments.packing",
-        ],
-        "grpo": [
-            "loss_type",
-            "beta",
-            "epsilon",
-            "epsilon_high",
-            "num_generations",
-            "steps_per_generation",
-            "importance_sampling_level",
-            "scale_rewards",
-            "generation_config.temperature",
-            "generation_config.top_p",
-            "generation_config.top_k",
-            "log_completions",
-            "use_vllm",
-            "vllm_mode",
-            "vllm_sync_strategy",
-            "vllm_lora_name_remap",
-            "vllm_tensor_parallel_size",
-            "vllm_importance_sampling_correction",
-            "vllm_importance_sampling_mode",
-            "vllm_importance_sampling_clip_min",
-            "vllm_importance_sampling_clip_max",
-            "vllm_importance_sampling_cap",
-            "gpu_memory_utilization",
-            "sapo_temperature_pos",
-            "sapo_temperature_neg",
-            "completion_termination",
-            "reward",
-            "reward_database",
-            "reward_embedding",
-        ],
-        "a2po": [
-            "num_value_samples",
-            "beta1",
-            "filter_all_incorrect",
-            "beta2",
-            "reward_weights",
-            "generation_config.temperature",
-            "generation_config.top_p",
-            "generation_config.top_k",
-            "reward",
-            "reward_database",
-            "reward_embedding",
-        ],
-        "sdpo": [
-            "loss_type",
-            "beta",
-            "epsilon",
-            "epsilon_high",
-            "num_generations",
-            "steps_per_generation",
-            "importance_sampling_level",
-            "scale_rewards",
-            "generation_config.temperature",
-            "generation_config.top_p",
-            "generation_config.top_k",
-            "use_vllm",
-            "use_teacher_server",
-            "vllm_mode",
-            "vllm_model_impl",
-            "vllm_enable_sleep_mode",
-            "vllm_server_base_url",
-            "vllm_server_host",
-            "vllm_server_port",
-            "vllm_group_port",
-            "vllm_server_timeout",
-            "vllm_tensor_parallel_size",
-            "gpu_memory_utilization",
-            "vllm_max_model_length",
-            "distillation_weight",
-            "teacher_model_kind",
-            "teacher_update_rate",
-            "teacher_sync_steps",
-            "use_successful_as_teacher",
-            "success_reward_threshold",
-            "reward",
-            "reward_database",
-            "reward_embedding",
-        ],
-        "gold": [
-            "teacher.upload_user",
-            "teacher.model_type",
-            "teacher.model",
-            "teacher.model_init_kwargs",
-            "loss_type",
-            "lmbda",
-            "beta",
-            "seq_kd",
-            "use_uld_loss",
-            "num_generations",
-            "generation_batch_size",
-            "max_new_tokens",
-            "generation_config.temperature",
-            "generation_config.top_p",
-            "generation_config.top_k",
-            "truncation_mode",
-            "pad_to_multiple_of",
-            "use_vllm",
-            "vllm_mode",
-            "vllm_model_impl",
-            "vllm_enable_sleep_mode",
-            "vllm_server_base_url",
-            "vllm_server_host",
-            "vllm_server_port",
-            "vllm_group_port",
-            "vllm_server_timeout",
-            "vllm_tensor_parallel_size",
-            "gpu_memory_utilization",
-            "vllm_max_model_length",
-            "vllm_sync_frequency",
-            "training_arguments.use_liger_kernel",
-            "training_arguments.packing",
-        ],
-        "async_grpo": [
-            "epsilon",
-            "epsilon_high",
-            "num_generations",
-            "generation_config.temperature",
-            "log_completions",
-            "num_completions_to_print",
-            "vllm_server_base_url",
-            "vllm_server_timeout",
-            "request_timeout",
-            "max_inflight_tasks",
-            "max_staleness",
-            "queue_maxsize",
-            "weight_sync_steps",
-            "async_runtime",
-            "reward",
-            "reward_database",
-            "reward_embedding",
-        ],
-    }
-    return _select_config_values(
-        config=config,
-        paths=common_paths_by_method[str(config.fine_tune_method)],
-        extra=None,
-    )
+    manifest_path = _get_run_manifest_path(config=config)
+    if not os.path.isfile(manifest_path):
+        raise FileNotFoundError(f"Run manifest not found: {manifest_path}")
+    with open(
+        manifest_path,
+        encoding="utf-8",
+    ) as file:
+        manifest = json.load(file)
+    if not isinstance(manifest, dict):
+        raise ValueError("run_manifest.json must contain a JSON object.")
+    return manifest
 
 
-def _select_config_values(
+def _get_run_manifest_path(
     config: DictConfig,
-    paths: List[str],
-    extra: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
-    selected = dict(extra or {})
-    sentinel = object()
-    for path in paths:
-        value = OmegaConf.select(
-            config,
-            path,
-            default=sentinel,
-        )
-        if value is not sentinel:
-            selected[path] = _to_jsonable(value)
-    return selected
-
-
-def _get_effective_batch_size(
-    config: DictConfig,
-) -> int:
-    runtime_snapshot = build_distributed_runtime_snapshot(config=config)
-    return int(runtime_snapshot["effective_batch_size"])
-
-
-def _get_device_count(
-    config: DictConfig,
-) -> int:
-    devices = config.devices
-    if isinstance(devices, int):
-        return devices
-    if isinstance(devices, str):
-        return len([device for device in devices.split(",") if device])
-    if isinstance(devices, (list, ListConfig)):
-        return len(devices)
-    return int(
-        os.environ.get(
-            "WORLD_SIZE",
-            "1",
-        )
+) -> str:
+    return os.path.join(
+        str(config.output_dir),
+        "run_manifest.json",
     )
 
 

@@ -35,29 +35,16 @@ def train(
             0,
         )
     )
-    validate_peft_initialization_config(config=config)
-    run_memory_preflight_if_needed(
-        config=config,
-        rank=rank,
-    )
-    prepare_train_artifact_config(
-        config=config,
-        rank=rank,
-    )
-    if rank == 0:
-        validate_train_artifact_config(
-            config=config,
-        )
-        init_train_tracking(config=config)
-
-    if "seed" in config:
-        set_seed(config.seed)
-
     is_distributed = "RANK" in os.environ and "WORLD_SIZE" in os.environ
     async_runtime_state = resolve_async_runtime_state(
         config=config,
         rank=rank,
     )
+    if run_async_inference_server(
+        config=config,
+        runtime_state=async_runtime_state,
+    ):
+        return
     async_runtime_enabled = async_runtime_state["enabled"]
 
     if (
@@ -86,99 +73,134 @@ def train(
                 )
             )
 
-    if rank == 0:
-        validate_distributed_runtime_config(
-            config=config,
-            runtime_snapshot=None,
-        )
-
-    setup = SetUp(config)
-    if run_async_inference_server(
+    prepare_train_artifact_config(
         config=config,
-        runtime_state=async_runtime_state,
-    ):
-        return
-
-    async_vllm_process, async_vllm_log_handle = start_async_training_runtime(
-        config=config,
-        runtime_state=async_runtime_state,
-    )
-
-    train_datasets = setup.get_train_datasets()
-    train_dataset = train_datasets["train"]
-    val_dataset = train_datasets["val"]
-    write_memory_preflight_selection(
-        config=config,
-        train_dataset=train_dataset,
-    )
-    train_dataset = apply_memory_preflight_dataset(
-        config=config,
-        train_dataset=train_dataset,
-    )
-
-    ds_config = setup.get_ds_config()
-    training_arguments = setup.get_training_arguments(
-        ds_config=ds_config,
-    )
-
-    data_encoder = setup.get_data_encoder()
-    data_collator = setup.get_data_collator(data_encoder=data_encoder)
-
-    training_arguments = setup.finalize_training_arguments(
-        training_arguments=training_arguments,
-        data_encoder=data_encoder,
-    )
-    resolve_lora_streaming_name_remap_config(config=config)
-    write_run_metadata(
-        config=config,
-        training_arguments=training_arguments,
         rank=rank,
     )
-
-    if config.fine_tune_method == "async_grpo":
-        model = config.pretrained_model_name
-        if config.is_preprocessed:
-            merged_model_path = os.path.join(
-                config.merged_model_path,
-                config.pretrained_model_name,
-            )
-            if os.path.exists(merged_model_path):
-                model = merged_model_path
-    else:
-        model = setup.get_model()
-
-    trainer_config = OmegaConf.to_container(
-        config.trainer,
-        resolve=True,
-    )
-    trainer_config.pop(
-        "_target_",
-        None,
-    )
-
-    TrainerClass = get_class(config.trainer._target_)
-
-    reward_manager = None
-    if config.fine_tune_method in {"grpo", "async_grpo", "sdpo", "a2po"}:
-        reward_manager = setup.get_reward_manager()
-        trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
-
-    if config.fine_tune_method in {"gkd", "gold"}:
-        trainer_config["teacher_model"] = config.teacher.model
-
-    trainer_kwargs = {
-        "model": model,
-        "args": training_arguments,
-        "train_dataset": train_dataset,
-        "processing_class": data_encoder,
-        **trainer_config,
-    }
-    if data_collator is not None:
-        trainer_kwargs["data_collator"] = data_collator
-    if config.fine_tune_method != "async_grpo":
-        trainer_kwargs["eval_dataset"] = val_dataset
+    current_stage = "setup"
+    async_vllm_process = None
+    async_vllm_log_handle = None
 
     try:
+        write_run_metadata(
+            config=config,
+            rank=rank,
+        )
+        validate_peft_initialization_config(config=config)
+        if rank == 0 and not config.memory_preflight.is_probe:
+            validate_train_artifact_config(
+                config=config,
+            )
+            validate_distributed_runtime_config(
+                config=config,
+                runtime_snapshot=None,
+            )
+            init_train_tracking(config=config)
+
+        current_stage = "preflight"
+        update_run_metadata(
+            config=config,
+            status="running",
+            stage=current_stage,
+            error=None,
+            rank=rank,
+        )
+        run_memory_preflight_if_needed(
+            config=config,
+            rank=rank,
+        )
+        current_stage = "setup"
+        update_run_metadata(
+            config=config,
+            status="running",
+            stage=current_stage,
+            error=None,
+            rank=rank,
+        )
+
+        if "seed" in config:
+            set_seed(config.seed)
+
+        setup = SetUp(config)
+        async_vllm_process, async_vllm_log_handle = start_async_training_runtime(
+            config=config,
+            runtime_state=async_runtime_state,
+        )
+
+        train_datasets = setup.get_train_datasets()
+        train_dataset = train_datasets["train"]
+        val_dataset = train_datasets["val"]
+        write_memory_preflight_selection(
+            config=config,
+            train_dataset=train_dataset,
+        )
+        train_dataset = apply_memory_preflight_dataset(
+            config=config,
+            train_dataset=train_dataset,
+        )
+
+        ds_config = setup.get_ds_config()
+        training_arguments = setup.get_training_arguments(
+            ds_config=ds_config,
+        )
+
+        data_encoder = setup.get_data_encoder()
+        data_collator = setup.get_data_collator(data_encoder=data_encoder)
+
+        training_arguments = setup.finalize_training_arguments(
+            training_arguments=training_arguments,
+            data_encoder=data_encoder,
+        )
+        resolve_lora_streaming_name_remap_config(config=config)
+        write_training_metadata(
+            config=config,
+            training_arguments=training_arguments,
+            rank=rank,
+        )
+
+        if config.fine_tune_method == "async_grpo":
+            model = config.pretrained_model_name
+            if config.is_preprocessed:
+                merged_model_path = os.path.join(
+                    config.merged_model_path,
+                    config.pretrained_model_name,
+                )
+                if os.path.exists(merged_model_path):
+                    model = merged_model_path
+        else:
+            model = setup.get_model()
+
+        trainer_config = OmegaConf.to_container(
+            config.trainer,
+            resolve=True,
+        )
+        trainer_config.pop(
+            "_target_",
+            None,
+        )
+
+        TrainerClass = get_class(config.trainer._target_)
+
+        reward_manager = None
+        if config.fine_tune_method in {"grpo", "async_grpo", "sdpo", "a2po"}:
+            reward_manager = setup.get_reward_manager()
+            trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
+
+        if config.fine_tune_method in {"gkd", "gold"}:
+            trainer_config["teacher_model"] = config.teacher.model
+
+        trainer_kwargs = {
+            "model": model,
+            "args": training_arguments,
+            "train_dataset": train_dataset,
+            "processing_class": data_encoder,
+            **trainer_config,
+        }
+        if data_collator is not None:
+            trainer_kwargs["data_collator"] = data_collator
+        if config.fine_tune_method != "async_grpo":
+            trainer_kwargs["eval_dataset"] = val_dataset
+
         trainer = TrainerClass(
             **trainer_kwargs,
         )
@@ -218,22 +240,63 @@ def train(
                 generation_model=trainer.vllm_generation.llm,
             )
 
+        current_stage = "training"
+        update_run_metadata(
+            config=config,
+            status="running",
+            stage=current_stage,
+            error=None,
+            rank=rank,
+        )
         trainer.train(
             resume_from_checkpoint=(
                 config.resume_from_checkpoint if config.resume_training else None
             )
         )
+        if config.memory_preflight.is_probe:
+            return
+
+        current_stage = "saving"
+        update_run_metadata(
+            config=config,
+            status="running",
+            stage=current_stage,
+            error=None,
+            rank=rank,
+        )
         trainer.save_model()
 
         if rank == 0:
-            finalize_run_metadata(config=config)
-            alert_tracking(
+            update_run_metadata(
+                config=config,
+                status="completed",
+                stage="completed",
+                error=None,
+                rank=rank,
+            )
+            alert_tracking_preserving_error(
                 config=config,
                 title="Training Complete",
                 text=f"Training process on {config.dataset_name} has successfully finished.",
                 level="INFO",
             )
+    except (KeyboardInterrupt, SystemExit) as error:
+        update_run_metadata_preserving_error(
+            config=config,
+            status="interrupted",
+            stage=current_stage,
+            error=error,
+            rank=rank,
+        )
+        raise
     except Exception as e:
+        update_run_metadata_preserving_error(
+            config=config,
+            status="failed",
+            stage=current_stage,
+            error=e,
+            rank=rank,
+        )
         if rank == 0:
             alert_tracking_preserving_error(
                 config=config,
@@ -241,7 +304,7 @@ def train(
                 text=f"An error occurred during training on {config.dataset_name}: {e}",
                 level="ERROR",
             )
-        raise e
+        raise
     finally:
         stop_async_training_runtime(
             config=config,
