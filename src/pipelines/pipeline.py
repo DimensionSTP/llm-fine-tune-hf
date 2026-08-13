@@ -318,7 +318,7 @@ def test(
             result_artifact = save_test_results_json(
                 results=results,
                 output_dir=config.test_output_dir,
-                output_name=config.test_output_name,
+                output_name=config.dataset_name,
             )
             write_inference_manifest(
                 config=config,
@@ -388,7 +388,7 @@ def test_large(
         result_artifact = save_test_results_json(
             results=results,
             output_dir=config.test_output_dir,
-            output_name=config.test_output_name,
+            output_name=config.dataset_name,
         )
         write_inference_manifest(
             config=config,
@@ -569,7 +569,7 @@ def test_vllm(
         )
         test_output_path = os.path.join(
             config.test_output_dir,
-            f"{config.test_output_name}.json",
+            f"{config.dataset_name}.json",
         )
 
         df = pd.DataFrame(results)
@@ -768,7 +768,7 @@ def test_vllm_multi_turn(
         )
         test_output_path = os.path.join(
             config.test_output_dir,
-            f"{config.test_output_name}_multi_turn.jsonl",
+            f"{config.dataset_name}_multi_turn.jsonl",
         )
 
         result_df = pd.DataFrame(results)
