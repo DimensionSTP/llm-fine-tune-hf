@@ -36,13 +36,6 @@ def resolve_dataloader_runtime(
         prefetch_factor=prefetch_factor,
     )
 
-    world_size = int(
-        distributed_runtime_snapshot["distributed"]["observed"]["world_size"]
-    )
-    rank = int(distributed_runtime_snapshot["distributed"]["observed"]["rank"])
-    local_rank = int(
-        distributed_runtime_snapshot["distributed"]["observed"]["local_rank"]
-    )
     total_workers_per_node = num_workers_per_process * local_world_size
     prefetch_slots_per_process = _resolve_prefetch_slots_per_process(
         num_workers_per_process=num_workers_per_process,
@@ -50,32 +43,15 @@ def resolve_dataloader_runtime(
     )
 
     return {
-        "configured": {
-            "mode": str(config.dataloader_runtime.mode),
-            "workload": str(config.dataloader_runtime.workload),
-            "num_workers_per_process": config.dataloader_runtime.num_workers_per_process,
-            "max_workers_per_process": int(
-                config.dataloader_runtime.max_workers_per_process
-            ),
-            "persistent_workers": config.dataloader_runtime.persistent_workers,
-            "prefetch_factor": config.dataloader_runtime.prefetch_factor,
-            "pin_memory": bool(config.dataloader_runtime.pin_memory),
-        },
-        "resolved": {
-            "workload": workload,
-            "cpu_count": cpu_count,
-            "world_size": world_size,
-            "local_world_size": local_world_size,
-            "rank": rank,
-            "local_rank": local_rank,
-            "num_workers_per_process": num_workers_per_process,
-            "total_workers_per_node": total_workers_per_node,
-            "persistent_workers": persistent_workers,
-            "prefetch_factor": prefetch_factor,
-            "prefetch_slots_per_process": prefetch_slots_per_process,
-            "prefetch_slots_per_node": prefetch_slots_per_process * local_world_size,
-            "pin_memory": bool(config.dataloader_runtime.pin_memory),
-        },
+        "workload": workload,
+        "cpu_count": cpu_count,
+        "num_workers_per_process": num_workers_per_process,
+        "total_workers_per_node": total_workers_per_node,
+        "persistent_workers": persistent_workers,
+        "prefetch_factor": prefetch_factor,
+        "prefetch_slots_per_process": prefetch_slots_per_process,
+        "prefetch_slots_per_node": prefetch_slots_per_process * local_world_size,
+        "pin_memory": bool(config.dataloader_runtime.pin_memory),
     }
 
 

@@ -51,7 +51,6 @@ class SetUp:
             config=config,
             distributed_runtime_snapshot=self.distributed_runtime_snapshot,
         )
-        self.dataloader_runtime_resolved = self.dataloader_runtime["resolved"]
 
         if config.precision in [32, "32"]:
             self.torch_dtype = torch.float32
@@ -117,14 +116,14 @@ class SetUp:
 
     def get_dataloader_kwargs(self) -> Dict[str, Any]:
         dataloader_kwargs = {
-            "num_workers": self.dataloader_runtime_resolved["num_workers_per_process"],
-            "pin_memory": self.dataloader_runtime_resolved["pin_memory"],
+            "num_workers": self.dataloader_runtime["num_workers_per_process"],
+            "pin_memory": self.dataloader_runtime["pin_memory"],
         }
-        if self.dataloader_runtime_resolved["num_workers_per_process"] > 0:
-            dataloader_kwargs["persistent_workers"] = self.dataloader_runtime_resolved[
+        if self.dataloader_runtime["num_workers_per_process"] > 0:
+            dataloader_kwargs["persistent_workers"] = self.dataloader_runtime[
                 "persistent_workers"
             ]
-            dataloader_kwargs["prefetch_factor"] = self.dataloader_runtime_resolved[
+            dataloader_kwargs["prefetch_factor"] = self.dataloader_runtime[
                 "prefetch_factor"
             ]
         return dataloader_kwargs
@@ -365,16 +364,14 @@ class SetUp:
 
     def _build_dataloader_training_kwargs(self) -> Dict[str, Any]:
         return {
-            "dataloader_num_workers": self.dataloader_runtime_resolved[
+            "dataloader_num_workers": self.dataloader_runtime[
                 "num_workers_per_process"
             ],
-            "dataloader_pin_memory": self.dataloader_runtime_resolved["pin_memory"],
-            "dataloader_persistent_workers": self.dataloader_runtime_resolved[
+            "dataloader_pin_memory": self.dataloader_runtime["pin_memory"],
+            "dataloader_persistent_workers": self.dataloader_runtime[
                 "persistent_workers"
             ],
-            "dataloader_prefetch_factor": self.dataloader_runtime_resolved[
-                "prefetch_factor"
-            ],
+            "dataloader_prefetch_factor": self.dataloader_runtime["prefetch_factor"],
         }
 
     def _get_train_dataset(self) -> Dataset:
