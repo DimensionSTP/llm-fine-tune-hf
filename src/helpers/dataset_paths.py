@@ -301,7 +301,7 @@ def build_dataset_file_path_metadata(
     }
 
 
-def build_dataset_input_metadata(
+def build_train_dataset_input_metadata(
     dataset_name: str,
     dataset_format: str,
     data_path: str,
@@ -314,13 +314,6 @@ def build_dataset_input_metadata(
     val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
     val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
     allow_val_dataset_file_name_mismatch: bool,
-    test_dataset_subdir: Optional[str],
-    test_dataset_file_path: Optional[str],
-    test_dataset_file_paths: Optional[Union[List[str], ListConfig]],
-    test_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-    allow_test_dataset_file_name_mismatch: bool,
-    dataset_mix_name: Optional[str],
-    effective_dataset_name: str,
     use_validation: bool,
     dataset_resampling: DictConfig,
 ) -> Dict[str, Any]:
@@ -347,48 +340,22 @@ def build_dataset_input_metadata(
         path_label="val_dataset",
         allow_weight=False,
     )
-    test_specs = resolve_dataset_file_specs(
-        dataset_name=dataset_name,
-        dataset_format=dataset_format,
-        data_path=data_path,
-        dataset_subdir=test_dataset_subdir,
-        dataset_file_path=test_dataset_file_path,
-        dataset_file_paths=test_dataset_file_paths,
-        dataset_files=test_dataset_files,
-        allow_dataset_file_name_mismatch=allow_test_dataset_file_name_mismatch,
-        path_label="test_dataset",
-        allow_weight=False,
-    )
     return {
-        "dataset_name": dataset_name,
-        "dataset_mix_name": _normalize_optional_path(path=dataset_mix_name),
-        "effective_dataset_name": effective_dataset_name,
-        "dataset_format": dataset_format,
-        "data_path": os.path.normpath(str(data_path)),
-        "train_input_mode": _get_train_input_mode(
-            specs=train_specs,
-            dataset_resampling=dataset_resampling,
-        ),
-        "validation_input_mode": _get_validation_input_mode(
-            specs=val_specs,
-            use_validation=use_validation,
-        ),
-        "test_input_mode": _get_spec_input_mode(specs=test_specs),
-        "split_ratio_used": use_validation and val_specs is None,
-        "dataset_resampling": {
-            "enabled": dataset_resampling.enabled,
-            "strategy": dataset_resampling.strategy,
-            "replacement": dataset_resampling.replacement,
-            "target_size": dataset_resampling.target_size,
+        "train": {
+            "mode": _get_train_input_mode(
+                specs=train_specs,
+                dataset_resampling=dataset_resampling,
+            ),
+            "files": train_specs,
         },
-        "resolved_train_dataset_files": train_specs,
-        "resolved_val_dataset_files": val_specs,
-        "resolved_test_dataset_files": test_specs,
-        "resolved_train_dataset_file_paths": [spec["path"] for spec in train_specs],
-        "resolved_val_dataset_file_paths": (
-            None if val_specs is None else [spec["path"] for spec in val_specs]
-        ),
-        "resolved_test_dataset_file_paths": [spec["path"] for spec in test_specs],
+        "validation": {
+            "mode": _get_validation_input_mode(
+                specs=val_specs,
+                use_validation=use_validation,
+            ),
+            "files": val_specs,
+            "from_train_split": use_validation and val_specs is None,
+        },
     }
 
 
@@ -636,7 +603,7 @@ def _get_validation_input_mode(
 __all__ = [
     "build_dataset_file_name",
     "build_dataset_file_path_metadata",
-    "build_dataset_input_metadata",
+    "build_train_dataset_input_metadata",
     "resolve_effective_dataset_name",
     "resolve_dataset_file_path",
     "resolve_dataset_file_paths",
