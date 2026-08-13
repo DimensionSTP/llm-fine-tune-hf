@@ -81,10 +81,13 @@ def apply_memory_preflight_dataset(
     )
     if hasattr(train_dataset, "select"):
         return train_dataset.select(selected_indices)
-    return Subset(
+    subset = Subset(
         train_dataset,
         selected_indices,
     )
+    if hasattr(train_dataset, "column_names"):
+        subset.column_names = train_dataset.column_names
+    return subset
 
 
 def write_memory_preflight_selection(
