@@ -25,6 +25,7 @@ dependencies = [
     "nltk==3.9.3",
     "num2words==0.5.14",
     "numpy==2.4.4",
+    "nvidia-ml-py==13.595.45",
     "omegaconf==2.3.0",
     "opencv-python-headless==4.13.0.92",
     "packaging==26.2",
