@@ -14,6 +14,7 @@ defaults:
   - reward@reward_embedding: embedding
   - deepspeed: ds_config
   - model_loading: train_runtime
+  - vision_patch_embedding: base
   - peft_initialization: lora
   - run_metadata: allocation
   - dataset@test_dataset: test
