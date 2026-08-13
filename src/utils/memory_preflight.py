@@ -114,18 +114,6 @@ def write_memory_preflight_selection(
     )
 
 
-def build_memory_preflight_metadata(
-    config: DictConfig,
-) -> Dict[str, Any]:
-    metadata = OmegaConf.to_container(
-        config.memory_preflight,
-        resolve=True,
-    )
-    if not isinstance(metadata, dict):
-        raise ValueError("memory_preflight metadata must be a dictionary.")
-    return metadata
-
-
 def _run_single_node_distributed_memory_preflight(
     config: DictConfig,
     rank: int,
@@ -164,7 +152,7 @@ def _run_single_node_distributed_memory_preflight(
         "Memory preflight failed before training. "
         f"probe_id={result_payload['probe_id']}, "
         f"exit_code={result_payload['exit_code']}, "
-        f"probe_dir={result_payload['probe_dir']}"
+        f"probe_dir={_build_memory_preflight_probe_dir(config=config)}"
     )
 
 
@@ -175,7 +163,6 @@ def _run_memory_preflight_probe(
     probe_id = _build_memory_preflight_probe_id(runtime=runtime)
     probe_dir = _build_memory_preflight_probe_dir(
         config=config,
-        probe_id=probe_id,
     )
     os.makedirs(
         probe_dir,
@@ -215,7 +202,6 @@ def _run_memory_preflight_probe(
         payload={
             "probe_id": probe_id,
             "command": command,
-            "selected_indices_path": selected_indices_path,
         },
     )
     result = subprocess.run(
@@ -231,8 +217,6 @@ def _run_memory_preflight_probe(
         "probe_id": probe_id,
         "exit_code": int(result.returncode),
         "success": result.returncode == 0,
-        "probe_dir": probe_dir,
-        "selected_indices_path": selected_indices_path,
     }
     _write_memory_preflight_json(
         path=result_path,
@@ -307,43 +291,8 @@ def _select_memory_preflight_indices(
         "required_count": required_count,
         "selected_count": len(indices),
         "dataset_length": len(train_dataset),
-        "generation": _build_memory_preflight_generation_metadata(config=config),
         "samples": selected,
     }
-
-
-def _build_memory_preflight_generation_metadata(
-    config: DictConfig,
-) -> Dict[str, Any]:
-    method = str(config.fine_tune_method)
-    metadata = {
-        "fine_tune_method": method,
-    }
-    if method in {"grpo", "sdpo", "async_grpo"}:
-        metadata.update(
-            {
-                "num_generations": int(config.num_generations),
-                "max_completion_length": int(config.max_new_tokens),
-                "steps_per_generation": config.steps_per_generation,
-                "use_vllm": bool(config.use_vllm),
-            }
-        )
-        if config.use_vllm:
-            metadata.update(
-                {
-                    "vllm_mode": str(config.vllm_mode),
-                    "vllm_tensor_parallel_size": int(config.vllm_tensor_parallel_size),
-                    "gpu_memory_utilization": float(config.gpu_memory_utilization),
-                }
-            )
-    if method == "a2po":
-        metadata.update(
-            {
-                "num_value_samples": int(config.num_value_samples),
-                "max_completion_length": int(config.max_new_tokens),
-            }
-        )
-    return metadata
 
 
 def _score_memory_preflight_sample(
@@ -422,7 +371,7 @@ def _build_memory_preflight_command(
     selected_indices_path: str,
     runtime: Dict[str, Any],
 ) -> List[str]:
-    output_base_dir = os.path.join(
+    probe_output_dir = os.path.join(
         probe_dir,
         "checkpoints",
     )
@@ -431,9 +380,9 @@ def _build_memory_preflight_command(
         f"memory_preflight.probe_id={probe_id}",
         "memory_preflight.selected_indices_path="
         f"{_escape_memory_preflight_override_value(value=selected_indices_path)}",
-        f"output_base_dir={_escape_memory_preflight_override_value(value=output_base_dir)}",
-        "run_id=null",
-        "output_dir=null",
+        f"output_base_dir={_escape_memory_preflight_override_value(value=probe_dir)}",
+        "run_id=memory-preflight",
+        f"output_dir={_escape_memory_preflight_override_value(value=probe_output_dir)}",
         "use_validation=false",
         "val_dataset_file_path=null",
         "val_dataset_file_paths=null",
@@ -528,12 +477,10 @@ def _escape_memory_preflight_override_value(
 
 def _build_memory_preflight_probe_dir(
     config: DictConfig,
-    probe_id: str,
 ) -> str:
     return os.path.join(
-        str(config.output_base_dir),
-        ".memory_preflight",
-        probe_id,
+        str(config.output_dir),
+        "memory_preflight",
     )
 
 
@@ -591,8 +538,8 @@ def _build_memory_preflight_coordination_path(
         value=str(runtime["master_port"]),
     )
     return os.path.join(
-        str(config.output_base_dir),
-        ".memory_preflight",
+        str(config.output_dir),
+        "memory_preflight",
         f"distributed_{master_addr}_{master_port}_{int(runtime['world_size'])}.json",
     )
 
@@ -812,8 +759,9 @@ def _write_memory_preflight_json(
         os.path.dirname(path),
         exist_ok=True,
     )
+    temp_path = f"{path}.tmp.{os.getpid()}"
     with open(
-        path,
+        temp_path,
         "w",
         encoding="utf-8",
     ) as file:
@@ -823,6 +771,11 @@ def _write_memory_preflight_json(
             ensure_ascii=False,
             indent=2,
         )
+        file.write("\n")
+    os.replace(
+        temp_path,
+        path,
+    )
 
 
 def _make_memory_preflight_jsonable(
