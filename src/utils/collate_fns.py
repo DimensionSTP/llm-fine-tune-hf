@@ -4,6 +4,7 @@ import torch
 
 
 def collate_fn_vlm(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    _validate_vlm_batch(batch=batch)
     keys = batch[0].keys()
     collated = {}
     for key in keys:
@@ -13,28 +14,16 @@ def collate_fn_vlm(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tens
                 items,
                 dim=0,
             )
-        elif key == "image_grid_thw":
-            collated[key] = torch.cat(
-                items,
-                dim=0,
-            )
-        elif key in {
-            "input_ids",
-            "attention_mask",
-            "pixel_position_ids",
-        }:
-            collated[key] = torch.stack(
-                items,
-                dim=0,
+        elif _is_vlm_grid_key(key=key):
+            collated[key] = _collate_vlm_grid_tensors(
+                key=key,
+                tensors=items,
             )
         else:
-            try:
-                collated[key] = torch.stack(
-                    items,
-                    dim=0,
-                )
-            except:
-                collated[key] = items
+            collated[key] = _stack_vlm_tensors(
+                key=key,
+                tensors=items,
+            )
     return collated
 
 
@@ -55,7 +44,7 @@ class SFTDynamicPaddingCollator:
         self,
         batch: List[Dict[str, Any]],
     ) -> Dict[str, torch.Tensor]:
-        self._validate_batch(batch=batch)
+        _validate_vlm_batch(batch=batch)
         output = {}
         for key in batch[0].keys():
             items = [sample[key] for sample in batch]
@@ -86,25 +75,6 @@ class SFTDynamicPaddingCollator:
             else:
                 raise ValueError(f"Unsupported SFT dynamic collator key: {key}.")
         return output
-
-    def _validate_batch(
-        self,
-        batch: List[Dict[str, Any]],
-    ) -> None:
-        if not batch:
-            raise ValueError("SFT dynamic collator received an empty batch.")
-
-        keys = set(batch[0].keys())
-        for sample in batch:
-            if set(sample.keys()) != keys:
-                raise ValueError(
-                    "All SFT dynamic collator samples must have the same keys."
-                )
-            for key, value in sample.items():
-                if not isinstance(value, torch.Tensor):
-                    raise ValueError(
-                        f"SFT dynamic collator only supports tensor values, got {type(value)} for key {key}."
-                    )
 
     def _is_sequence_key(
         self,
@@ -223,14 +193,67 @@ class SFTDynamicPaddingCollator:
         key: str,
         tensors: List[torch.Tensor],
     ) -> torch.Tensor:
-        if key in ["image_grid_thw", "image_sizes", "video_grid_thw"] and all(
-            tensor.dim() == 1 for tensor in tensors
-        ):
-            return torch.stack(
-                tensors,
-                dim=0,
+        if _is_vlm_grid_key(key=key):
+            return _collate_vlm_grid_tensors(
+                key=key,
+                tensors=tensors,
             )
         return torch.cat(
             tensors,
             dim=0,
         )
+
+
+def _validate_vlm_batch(
+    batch: List[Dict[str, Any]],
+) -> None:
+    if not batch:
+        raise ValueError("VLM collator received an empty batch.")
+
+    keys = set(batch[0].keys())
+    for sample in batch:
+        if set(sample.keys()) != keys:
+            raise ValueError("All VLM collator samples must have the same keys.")
+        for key, value in sample.items():
+            if not isinstance(value, torch.Tensor):
+                raise ValueError(
+                    f"VLM collator only supports tensor values, got {type(value)} for key {key}."
+                )
+
+
+def _is_vlm_grid_key(
+    key: str,
+) -> bool:
+    return key in ["image_grid_thw", "image_sizes", "video_grid_thw"]
+
+
+def _collate_vlm_grid_tensors(
+    key: str,
+    tensors: List[torch.Tensor],
+) -> torch.Tensor:
+    normalized_tensors = [
+        tensor.unsqueeze(0) if tensor.dim() == 1 else tensor for tensor in tensors
+    ]
+    trailing_shape = normalized_tensors[0].shape[1:]
+    if any(
+        tensor.dim() != 2 or tensor.shape[1:] != trailing_shape
+        for tensor in normalized_tensors
+    ):
+        raise ValueError(f"VLM grid key {key} has incompatible shapes.")
+    return torch.cat(
+        normalized_tensors,
+        dim=0,
+    )
+
+
+def _stack_vlm_tensors(
+    key: str,
+    tensors: List[torch.Tensor],
+) -> torch.Tensor:
+    expected_shape = tensors[0].shape
+    if any(tensor.shape != expected_shape for tensor in tensors[1:]):
+        raise ValueError(f"VLM key {key} has incompatible shapes for stacking.")
+    return torch.stack(
+        tensors,
+        dim=0,
+    )

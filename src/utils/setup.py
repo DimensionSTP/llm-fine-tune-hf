@@ -1,4 +1,4 @@
-from typing import Dict, Union, Optional, Protocol, Any
+from typing import Dict, Union, Optional, Protocol, Callable, Any
 import re
 
 from omegaconf import DictConfig, OmegaConf
@@ -31,7 +31,7 @@ from .dataloader_runtime import resolve_dataloader_runtime
 from .model_loading import ModelLoadPlanner
 from .config_validation import validate_training_arguments_config
 from .peft_initialization import initialize_peft_model
-from .collate_fns import SFTDynamicPaddingCollator
+from .collate_fns import SFTDynamicPaddingCollator, collate_fn_vlm
 from ..helpers import filter_chat_template_kwargs
 from ..rewards import RewardManager
 
@@ -181,11 +181,11 @@ class SetUp:
     def get_data_collator(
         self,
         data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
-    ) -> Optional[SFTDynamicPaddingCollator]:
+    ) -> Optional[Callable[..., Dict[str, torch.Tensor]]]:
         if self.config.fine_tune_method != "sft":
             return None
         if self.config.sft_padding_strategy != "dynamic":
-            return None
+            return collate_fn_vlm if self.config.modality != "text" else None
         if self.config.left_padding:
             raise ValueError("SFT dynamic padding does not support left_padding=true.")
 
