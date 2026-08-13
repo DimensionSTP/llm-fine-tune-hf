@@ -361,29 +361,14 @@ def build_train_dataset_input_metadata(
 
 def resolve_effective_dataset_name(
     dataset_name: str,
-    dataset_mix_name: Optional[str],
-    dataset_file_paths: Optional[Union[List[str], ListConfig]],
-    dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
+    dataset_namespace: Optional[str],
 ) -> str:
-    normalized_dataset_file_paths = _normalize_optional_path_list(
-        paths=dataset_file_paths,
+    normalized_dataset_namespace = _normalize_optional_dataset_namespace(
+        dataset_namespace=dataset_namespace,
     )
-    normalized_dataset_files = _normalize_optional_dataset_file_specs(
-        dataset_files=dataset_files,
-        path_label="dataset",
-        allow_weight=True,
-    )
-    if normalized_dataset_file_paths is None and normalized_dataset_files is None:
+    if normalized_dataset_namespace is None:
         return dataset_name
-
-    normalized_dataset_mix_name = _normalize_optional_path(
-        path=dataset_mix_name,
-    )
-    if normalized_dataset_mix_name is None:
-        raise ValueError(
-            "dataset_mix_name is required when dataset_file_paths or dataset_files is set."
-        )
-    return normalized_dataset_mix_name
+    return normalized_dataset_namespace
 
 
 def build_dataset_file_name(
@@ -403,6 +388,19 @@ def _validate_data_path(
     if not isinstance(data_path, str) or data_path.strip() == "":
         raise ValueError("data_path must be a non-empty string.")
     return os.path.normpath(data_path)
+
+
+def _normalize_optional_dataset_namespace(
+    dataset_namespace: Optional[str],
+) -> Optional[str]:
+    if dataset_namespace is None:
+        return None
+    if not isinstance(dataset_namespace, str):
+        raise ValueError("dataset_namespace must be a string or null.")
+    normalized = dataset_namespace.strip()
+    if normalized == "":
+        return None
+    return normalized
 
 
 def _normalize_optional_path(

@@ -167,11 +167,20 @@ def _validate_dataset_input_config(
         dataset_files=config.test_dataset_files,
     )
 
-    if (config.dataset_file_paths is not None or config.dataset_files is not None) and (
-        config.dataset_mix_name is None or config.dataset_mix_name.strip() == ""
+    if config.dataset_namespace is not None and (
+        not isinstance(config.dataset_namespace, str)
+        or config.dataset_namespace.strip() == ""
+        or config.dataset_namespace != config.dataset_namespace.strip()
     ):
         raise ValueError(
-            "dataset_mix_name is required when dataset_file_paths or dataset_files is set."
+            "dataset_namespace must be a trimmed non-empty string or null."
+        )
+
+    if (
+        config.dataset_file_paths is not None or config.dataset_files is not None
+    ) and config.dataset_namespace is None:
+        raise ValueError(
+            "dataset_namespace is required when dataset_file_paths or dataset_files is set."
         )
 
     _validate_dataset_resampling_config(config=config)
