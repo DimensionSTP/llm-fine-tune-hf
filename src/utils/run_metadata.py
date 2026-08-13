@@ -121,6 +121,22 @@ def write_training_metadata(
     )
 
 
+def write_vision_patch_embedding_metadata(
+    config: DictConfig,
+    compatibility_result: Dict[str, Any],
+    rank: int,
+) -> None:
+    if rank != 0 or config.memory_preflight.is_probe:
+        return
+
+    manifest = _read_run_manifest(config=config)
+    manifest["runtime"]["vision_patch_embedding"] = compatibility_result
+    _write_json(
+        path=_get_run_manifest_path(config=config),
+        payload=manifest,
+    )
+
+
 def update_run_metadata(
     config: DictConfig,
     status: str,
