@@ -55,7 +55,8 @@ Dependency notes:
   `${connected_dir}/checkpoints/${model_name}/${effective_dataset_name}/${strategy}/${save_detail}/${run_id}`.
 - `train`: `run_id` must be allocated automatically by Python as an ordered `run-000N` leaf.
 - `train`: runtime batch-size fields must be logged as metadata, not embedded in `save_detail`.
-- `train`: `run_manifest.json` must use `prepared` before training and transition to `completed` only after training and model saving succeed, while recording planned and observed distributed, device, batch runtime, and artifact existence metadata.
+- `train`: `run_manifest.json` and `resolved_config.yaml` must exist before preflight, tracking, or setup. The manifest must record `prepared`, `running`, `completed`, `failed`, or `interrupted` and the last `preflight`, `setup`, `training`, `saving`, or `completed` stage.
+- `train`: `resolved_config.yaml` is the complete config source of truth, `training_args.json` records instantiated trainer arguments, and `run_manifest.json` records observed inputs, PEFT lineage, runtime facts, failures, and relative internal artifact references without duplicating either file.
 - `test`, `test_large`, and `test_vllm`: the canonical result and companion manifest must be written under `${connected_dir}/tests/${model_detail}` as `${dataset_name}.json` and `${dataset_name}_manifest.json`.
 - `test_vllm_multi_turn`: the result and companion manifest must be written under the same model-detail namespace as `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json`.
 - `test*`: companion manifests must store the full resolved config once and add the active data encoder, resolved test files, runtime backend, effective device map or tensor-parallel size, and actual generation parameters.
