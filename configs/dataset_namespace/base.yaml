@@ -1,0 +1,3 @@
+# @package _global_
+dataset_namespace: null
+effective_dataset_name: ${dataset_effective_name:${dataset_name},${dataset_namespace}}
