@@ -10,6 +10,11 @@ from .memory_preflight import (
     write_memory_preflight_selection,
 )
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
+from .vision_patch_embedding import (
+    validate_vision_patch_embedding_config,
+    apply_vision_patch_embedding_compatibility,
+    validate_distributed_vision_patch_embedding_result,
+)
 from .peft_initialization import (
     initialize_peft_model,
     build_peft_initialization_metadata,
@@ -30,6 +35,7 @@ from .run_metadata import (
     prepare_train_artifact_config,
     write_run_metadata,
     write_training_metadata,
+    write_vision_patch_embedding_metadata,
     update_run_metadata,
     update_run_metadata_preserving_error,
 )
@@ -79,6 +85,9 @@ __all__ = [
     "write_memory_preflight_selection",
     "ModelLoadPlan",
     "ModelLoadPlanner",
+    "validate_vision_patch_embedding_config",
+    "apply_vision_patch_embedding_compatibility",
+    "validate_distributed_vision_patch_embedding_result",
     "initialize_peft_model",
     "build_peft_initialization_metadata",
     "is_peft_continue_from_adapter",
@@ -95,6 +104,7 @@ __all__ = [
     "prepare_train_artifact_config",
     "write_run_metadata",
     "write_training_metadata",
+    "write_vision_patch_embedding_metadata",
     "update_run_metadata",
     "update_run_metadata_preserving_error",
     "tracking_lifecycle",
