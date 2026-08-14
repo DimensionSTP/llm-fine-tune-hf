@@ -204,9 +204,7 @@ def _resolve_probe_decision(
         measurement["native_milliseconds"] - measurement["linear_milliseconds"]
         for measurement in measurements
     )
-    use_linear = maximum_ratio >= float(
-        probe_config["slowdown_ratio"]
-    ) and maximum_difference >= float(probe_config["minimum_slowdown_milliseconds"])
+    use_linear = maximum_ratio >= float(probe_config["slowdown_ratio"])
     result["decision"] = "linear" if use_linear else "native"
     result["decision_reason"] = (
         "performance_threshold_matched"
