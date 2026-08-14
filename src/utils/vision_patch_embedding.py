@@ -1,365 +1,430 @@
 from typing import Dict, List, Tuple, Set, Optional, Any
+import os
 import importlib.metadata
+import json
 from types import MethodType
 import warnings
 
-from omegaconf import DictConfig, ListConfig
-
-from packaging.specifiers import InvalidSpecifier, SpecifierSet
-from packaging.version import InvalidVersion, Version
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 import torch
 from torch import distributed as dist
 from torch import nn
 import torch.nn.functional as F
 
+from .vision_patch_embedding_probe import run_vision_patch_embedding_probe
+
 
 def validate_vision_patch_embedding_config(
     config: DictConfig,
 ) -> None:
     compatibility_config = config.vision_patch_embedding
-    if compatibility_config.mode not in {"conv3d", "linear", "auto"}:
-        raise ValueError("vision_patch_embedding.mode must be conv3d, linear, or auto.")
+    if compatibility_config.mode not in {"native", "linear", "auto"}:
+        raise ValueError("vision_patch_embedding.mode must be native, linear, or auto.")
     if compatibility_config.mode == "linear" and config.modality == "text":
         raise ValueError(
             "vision_patch_embedding.mode=linear requires an image-text model."
         )
     if (
         config.modality != "text"
-        and compatibility_config.mode != "conv3d"
-        and config.mode in {"test_vllm", "test_vllm_multi_turn"}
+        and compatibility_config.mode != "native"
+        and (
+            (config.mode == "train" and config.fine_tune_method == "async_grpo")
+            or config.mode in {"test_vllm", "test_vllm_multi_turn"}
+        )
     ):
         raise ValueError(
-            "Non-conv3d vision patch embedding modes are not supported by vLLM test modes."
+            "Non-native vision patch embedding modes require a repository-owned "
+            "Hugging Face model object."
         )
     if (
         config.modality != "text"
-        and compatibility_config.mode != "conv3d"
-        and config.fine_tune_method == "async_grpo"
-    ):
-        raise ValueError(
-            "Non-conv3d vision patch embedding modes are not supported by async GRPO."
-        )
-    if (
-        config.modality != "text"
-        and compatibility_config.mode != "conv3d"
+        and compatibility_config.mode != "native"
+        and config.mode == "train"
         and config.fine_tune_method in {"gkd", "gold"}
     ):
         raise ValueError(
-            "Non-conv3d vision patch embedding modes are not supported for trainer-owned teacher models."
+            "Non-native vision patch embedding modes are not supported for "
+            "trainer-owned GKD or GOLD teacher models."
         )
 
-    target_rules = compatibility_config.target_rules
-    runtime_rules = compatibility_config.runtime_rules
-    if not isinstance(target_rules, (list, ListConfig)):
-        raise ValueError("vision_patch_embedding.target_rules must be a list.")
-    if not isinstance(runtime_rules, (list, ListConfig)):
-        raise ValueError("vision_patch_embedding.runtime_rules must be a list.")
-    if compatibility_config.mode == "linear" and len(target_rules) == 0:
+    dimensions = compatibility_config.dimensions
+    if not isinstance(dimensions, (list, ListConfig)) or len(dimensions) == 0:
+        raise ValueError("vision_patch_embedding.dimensions must be a non-empty list.")
+    normalized_dimensions = [int(dimension) for dimension in dimensions]
+    if len(set(normalized_dimensions)) != len(normalized_dimensions):
         raise ValueError(
-            "vision_patch_embedding.mode=linear requires at least one target rule."
+            "vision_patch_embedding.dimensions must not contain duplicates."
         )
-    if compatibility_config.mode == "auto" and (
-        len(target_rules) == 0 or len(runtime_rules) == 0
-    ):
-        raise ValueError(
-            "vision_patch_embedding.mode=auto requires target and runtime rules."
-        )
+    if any(dimension not in {2, 3} for dimension in normalized_dimensions):
+        raise ValueError("vision_patch_embedding.dimensions supports only 2 and 3.")
 
-    _validate_target_rules(target_rules=target_rules)
-    _validate_runtime_rules(runtime_rules=runtime_rules)
+    _validate_auto_probe_config(
+        auto_probe_config=compatibility_config.auto_probe,
+    )
 
 
-def apply_vision_patch_embedding_compatibility(
+def prepare_vision_patch_embedding_compatibility(
     model: nn.Module,
     config: DictConfig,
-    rank: int,
     model_role: str,
 ) -> Dict[str, Any]:
     validate_vision_patch_embedding_config(config=config)
-    compatibility_config = config.vision_patch_embedding
     if config.modality == "text":
-        return _build_not_applicable_result(model_role=model_role)
+        return _build_not_applicable_plan(model_role=model_role)
+
+    compatibility_config = config.vision_patch_embedding
+    candidates = _discover_candidates(
+        model=model,
+        dimensions=set(int(value) for value in compatibility_config.dimensions),
+    )
+    if compatibility_config.mode == "linear" and len(candidates) == 0:
+        raise ValueError(
+            "vision_patch_embedding.mode=linear found no full-patch convolution candidates."
+        )
+
+    warning_messages = _build_no_candidate_warnings(
+        requested_mode=compatibility_config.mode,
+        candidate_count=len(candidates),
+        model_role=model_role,
+    )
 
     runtime_fingerprint = _build_runtime_fingerprint()
-    warnings_payload: List[str] = []
-    if (
-        runtime_fingerprint["device_name"] is not None
-        and runtime_fingerprint["driver_version"] is None
-    ):
-        warnings_payload.append(
-            "Vision patch embedding could not observe the NVIDIA driver version; "
-            "runtime rules that require a driver version will not match."
-        )
-    matched_runtime_rules = _find_matching_runtime_rules(
-        runtime_rules=compatibility_config.runtime_rules,
-        runtime_fingerprint=runtime_fingerprint,
+    probe_config = OmegaConf.to_container(
+        compatibility_config.auto_probe,
+        resolve=True,
     )
-    target_inspections = _inspect_model_targets(
-        model=model,
-        target_rules=compatibility_config.target_rules,
-    )
-    unverified_conv3d_modules = _find_unverified_conv3d_modules(
-        model=model,
-        target_inspections=target_inspections,
-    )
-    resolved_mode, selection_reason = _resolve_mode(
-        requested_mode=compatibility_config.mode,
-        matched_runtime_rules=matched_runtime_rules,
-        target_inspections=target_inspections,
-        unverified_conv3d_modules=unverified_conv3d_modules,
-        warnings_payload=warnings_payload,
-    )
-
-    if resolved_mode == "linear":
-        _apply_linear_strategy(target_inspections=target_inspections)
-    else:
-        _restore_original_forwards(target_inspections=target_inspections)
-
-    for message in warnings_payload:
-        if rank == 0:
-            warnings.warn(
-                message,
-                RuntimeWarning,
-                stacklevel=2,
-            )
+    signatures = _collect_signatures(candidates=candidates)
+    probe_cache = {}
+    local_probe_results = {}
+    local_decisions = {}
+    for signature_key, signature in signatures.items():
+        if compatibility_config.mode == "auto":
+            if signature_key not in probe_cache:
+                probe_cache[signature_key] = run_vision_patch_embedding_probe(
+                    signature=signature,
+                    probe_config=probe_config,
+                )
+            probe_result = probe_cache[signature_key]
+            local_probe_results[signature_key] = probe_result
+            local_decisions[signature_key] = probe_result["decision"]
+        else:
+            local_decisions[signature_key] = compatibility_config.mode
 
     return {
+        "_candidates": candidates,
+        "_dimensions": set(int(value) for value in compatibility_config.dimensions),
+        "_model": model,
+        "_probe_cache": probe_cache,
+        "_probe_config": probe_config,
         "scope": model_role,
-        "resolved_mode": resolved_mode,
-        "selection_reason": selection_reason,
-        "matched_runtime_rules": matched_runtime_rules,
+        "requested_mode": compatibility_config.mode,
         "runtime_fingerprint": runtime_fingerprint,
-        "modules": _build_module_metadata(
-            target_inspections=target_inspections,
-            resolved_mode=resolved_mode,
-        ),
-        "unverified_conv3d_modules": unverified_conv3d_modules,
-        "warnings": warnings_payload,
-        "distributed_consistent": None,
+        "local_probe_results": local_probe_results,
+        "local_decisions": local_decisions,
+        "warnings": warning_messages,
     }
 
 
-def validate_distributed_vision_patch_embedding_result(
-    compatibility_result: Dict[str, Any],
+def apply_vision_patch_embedding_compatibility(
+    compatibility_plan: Dict[str, Any],
 ) -> Dict[str, Any]:
-    validated_result = dict(compatibility_result)
-    if not dist.is_available() or not dist.is_initialized():
-        validated_result["distributed_consistent"] = True
-        return validated_result
-
-    local_summary = _build_distributed_summary(
-        compatibility_result=compatibility_result,
-    )
-    gathered_summaries: List[Optional[Dict[str, Any]]] = [None] * dist.get_world_size()
-    dist.all_gather_object(
-        gathered_summaries,
-        local_summary,
-    )
-    reference_summary = gathered_summaries[0]
-    if any(summary != reference_summary for summary in gathered_summaries[1:]):
-        raise RuntimeError(
-            "Vision patch embedding compatibility differs across distributed ranks: "
-            f"{gathered_summaries}"
+    if compatibility_plan["requested_mode"] == "not_applicable":
+        return _build_not_applicable_result(
+            model_role=compatibility_plan["scope"],
         )
 
-    validated_result["distributed_consistent"] = True
-    return validated_result
+    local_summary = _build_local_summary(compatibility_plan=compatibility_plan)
+    rank_evidence = _gather_rank_evidence(local_summary=local_summary)
+    _validate_rank_candidate_consistency(rank_evidence=rank_evidence)
+    _raise_for_probe_failures(rank_evidence=rank_evidence)
+    global_decisions = _resolve_global_decisions(rank_evidence=rank_evidence)
 
-
-def _validate_target_rules(
-    target_rules: ListConfig,
-) -> None:
-    rule_names: Set[str] = set()
-    class_version_pairs: Set[Tuple[str, str]] = set()
-    installed_class_rules: Dict[str, List[str]] = {}
-    required_keys = {
-        "name",
-        "strategy",
-        "projection_path",
-        "package_name",
-        "package_version",
-        "module_classes",
-    }
-    for rule_index, rule in enumerate(target_rules):
-        if not isinstance(rule, DictConfig):
-            raise ValueError(
-                f"vision_patch_embedding.target_rules[{rule_index}] must be a mapping."
-            )
-        _require_config_keys(
-            config_value=rule,
-            required_keys=required_keys,
-            config_path=f"vision_patch_embedding.target_rules[{rule_index}]",
-        )
-        _validate_trimmed_string(
-            value=rule.name,
-            config_path=f"vision_patch_embedding.target_rules[{rule_index}].name",
-        )
-        if rule.name in rule_names:
-            raise ValueError(f"Duplicate vision patch target rule name: {rule.name}")
-        rule_names.add(rule.name)
-        if rule.strategy != "flattened_full_patch":
-            raise ValueError(
-                f"Unsupported vision patch embedding strategy: {rule.strategy}"
-            )
-        _validate_trimmed_string(
-            value=rule.projection_path,
-            config_path=(
-                f"vision_patch_embedding.target_rules[{rule_index}].projection_path"
-            ),
-        )
-        if not rule.projection_path.isidentifier():
-            raise ValueError(
-                "vision_patch_embedding projection_path must be one attribute name."
-            )
-        _validate_trimmed_string(
-            value=rule.package_name,
-            config_path=(
-                f"vision_patch_embedding.target_rules[{rule_index}].package_name"
-            ),
-        )
-        _validate_version_specifier(
-            value=rule.package_version,
-            config_path=(
-                f"vision_patch_embedding.target_rules[{rule_index}].package_version"
-            ),
-        )
-        installed_package_version = _get_package_version(
-            package_name=rule.package_name,
-        )
-        if (
-            not isinstance(rule.module_classes, (list, ListConfig))
-            or len(rule.module_classes) == 0
-        ):
-            raise ValueError(
-                "vision_patch_embedding target rule module_classes must be a non-empty list."
-            )
-        for module_class in rule.module_classes:
-            _validate_trimmed_string(
-                value=module_class,
-                config_path=(
-                    f"vision_patch_embedding.target_rules[{rule_index}].module_classes"
-                ),
-            )
-            class_version_pair = (
-                module_class,
-                rule.package_version,
-            )
-            if class_version_pair in class_version_pairs:
-                raise ValueError(
-                    "Duplicate vision patch target class and package version: "
-                    f"{module_class} {rule.package_version}"
+    candidates = compatibility_plan["_candidates"]
+    changed_modules: List[nn.Module] = []
+    try:
+        for candidate in candidates:
+            module = candidate["module"]
+            decision = global_decisions[candidate["signature_key"]]
+            if decision == "linear":
+                if _is_linear_strategy_applied(module=module):
+                    continue
+                _apply_linear_strategy(
+                    module=module,
+                    signature_key=candidate["signature_key"],
                 )
-            class_version_pairs.add(class_version_pair)
-            if installed_package_version is not None and _version_matches(
-                version_specifier=rule.package_version,
-                observed_version=installed_package_version,
-            ):
-                installed_class_rules.setdefault(
-                    module_class,
-                    [],
-                ).append(rule.name)
+                changed_modules.append(module)
+            else:
+                _restore_original_forward(module=module)
+    except Exception:
+        for module in changed_modules:
+            _restore_original_forward(module=module)
+        raise
 
-    for module_class, matching_rule_names in installed_class_rules.items():
-        if len(matching_rule_names) > 1:
-            raise ValueError(
-                "Multiple vision patch target rules match the installed package "
-                f"version for {module_class}: {sorted(matching_rule_names)}"
-            )
-
-
-def _validate_runtime_rules(
-    runtime_rules: ListConfig,
-) -> None:
-    rule_names: Set[str] = set()
-    required_keys = {
-        "name",
-        "torch_version",
-        "cuda_version",
-        "cudnn_version",
-        "driver_version",
-        "compute_capabilities",
+    resolved_mode = _resolve_applied_mode(global_decisions=global_decisions)
+    return {
+        "scope": compatibility_plan["scope"],
+        "requested_mode": compatibility_plan["requested_mode"],
+        "resolved_mode": resolved_mode,
+        "selection_reason": _build_selection_reason(
+            requested_mode=compatibility_plan["requested_mode"],
+            resolved_mode=resolved_mode,
+            candidate_count=len(candidates),
+        ),
+        "runtime_fingerprint": compatibility_plan["runtime_fingerprint"],
+        "global_decisions": global_decisions,
+        "modules": _build_module_metadata(
+            candidates=candidates,
+            global_decisions=global_decisions,
+        ),
+        "rank_evidence": rank_evidence,
+        "warnings": compatibility_plan["warnings"],
+        "distributed_consistent": True,
     }
-    for rule_index, rule in enumerate(runtime_rules):
-        if not isinstance(rule, DictConfig):
-            raise ValueError(
-                f"vision_patch_embedding.runtime_rules[{rule_index}] must be a mapping."
+
+
+def apply_trainer_vision_patch_embedding_compatibility(
+    trainer: Any,
+    compatibility_plan: Dict[str, Any],
+) -> Dict[str, Any]:
+    related_plans = _prepare_trainer_related_plans(
+        trainer=trainer,
+        compatibility_plan=compatibility_plan,
+    )
+    all_plans = [compatibility_plan, *related_plans]
+    try:
+        compatibility_results = [
+            apply_vision_patch_embedding_compatibility(
+                compatibility_plan=model_plan,
             )
-        _require_config_keys(
-            config_value=rule,
-            required_keys=required_keys,
-            config_path=f"vision_patch_embedding.runtime_rules[{rule_index}]",
+            for model_plan in all_plans
+        ]
+    except Exception:
+        for model_plan in all_plans:
+            for candidate in model_plan["_candidates"]:
+                _restore_original_forward(module=candidate["module"])
+        raise
+
+    primary_result = compatibility_results[0]
+    primary_result["related_models"] = compatibility_results[1:]
+    return primary_result
+
+
+def _prepare_trainer_related_plans(
+    trainer: Any,
+    compatibility_plan: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    if compatibility_plan["requested_mode"] in {"native", "not_applicable"}:
+        return []
+
+    seen_model_ids = {id(compatibility_plan["_model"])}
+    seen_candidate_ids = {
+        id(candidate["module"]) for candidate in compatibility_plan["_candidates"]
+    }
+    related_plans = []
+    for attribute_name, model_role in [
+        ("ref_model", "trainer_reference_model"),
+        ("teacher_model", "trainer_teacher_model"),
+    ]:
+        related_model = getattr(
+            trainer,
+            attribute_name,
+            None,
         )
-        _validate_trimmed_string(
-            value=rule.name,
-            config_path=f"vision_patch_embedding.runtime_rules[{rule_index}].name",
-        )
-        if rule.name in rule_names:
-            raise ValueError(f"Duplicate vision patch runtime rule name: {rule.name}")
-        rule_names.add(rule.name)
-        for version_key in [
-            "torch_version",
-            "cuda_version",
-            "cudnn_version",
-            "driver_version",
-        ]:
-            _validate_version_specifier(
-                value=rule[version_key],
-                config_path=(
-                    f"vision_patch_embedding.runtime_rules[{rule_index}].{version_key}"
-                ),
-            )
         if (
-            not isinstance(rule.compute_capabilities, (list, ListConfig))
-            or len(rule.compute_capabilities) == 0
+            not isinstance(related_model, nn.Module)
+            or id(related_model) in seen_model_ids
         ):
-            raise ValueError(
-                "vision_patch_embedding runtime rule compute_capabilities must be a non-empty list."
-            )
-        for capability in rule.compute_capabilities:
-            _validate_trimmed_string(
-                value=capability,
-                config_path=(
-                    "vision_patch_embedding.runtime_rules"
-                    f"[{rule_index}].compute_capabilities"
-                ),
-            )
+            continue
+        related_plan = _prepare_related_model_plan(
+            model=related_model,
+            model_role=model_role,
+            compatibility_plan=compatibility_plan,
+        )
+        unique_candidates = [
+            candidate
+            for candidate in related_plan["_candidates"]
+            if id(candidate["module"]) not in seen_candidate_ids
+        ]
+        seen_model_ids.add(id(related_model))
+        if len(unique_candidates) == 0:
+            continue
+        related_plan["_candidates"] = unique_candidates
+        unique_signature_keys = {
+            candidate["signature_key"] for candidate in unique_candidates
+        }
+        related_plan["local_probe_results"] = {
+            signature_key: probe_result
+            for signature_key, probe_result in related_plan[
+                "local_probe_results"
+            ].items()
+            if signature_key in unique_signature_keys
+        }
+        related_plan["local_decisions"] = {
+            signature_key: decision
+            for signature_key, decision in related_plan["local_decisions"].items()
+            if signature_key in unique_signature_keys
+        }
+        related_candidate_ids = {
+            id(candidate["module"]) for candidate in unique_candidates
+        }
+        seen_candidate_ids.update(related_candidate_ids)
+        related_plans.append(related_plan)
+    return related_plans
 
 
-def _require_config_keys(
-    config_value: DictConfig,
-    required_keys: Set[str],
-    config_path: str,
+def _prepare_related_model_plan(
+    model: nn.Module,
+    model_role: str,
+    compatibility_plan: Dict[str, Any],
+) -> Dict[str, Any]:
+    requested_mode = compatibility_plan["requested_mode"]
+    candidates = _discover_candidates(
+        model=model,
+        dimensions=compatibility_plan["_dimensions"],
+    )
+    if requested_mode == "linear" and len(candidates) == 0:
+        raise ValueError(
+            f"vision_patch_embedding.mode=linear found no full-patch convolution "
+            f"candidates in {model_role}."
+        )
+
+    warning_messages = _build_no_candidate_warnings(
+        requested_mode=requested_mode,
+        candidate_count=len(candidates),
+        model_role=model_role,
+    )
+    signatures = _collect_signatures(candidates=candidates)
+    local_probe_results = {}
+    local_decisions = {}
+    probe_cache = compatibility_plan["_probe_cache"]
+    for signature_key, signature in signatures.items():
+        if requested_mode == "auto":
+            if signature_key not in probe_cache:
+                probe_cache[signature_key] = run_vision_patch_embedding_probe(
+                    signature=signature,
+                    probe_config=compatibility_plan["_probe_config"],
+                )
+            probe_result = probe_cache[signature_key]
+            local_probe_results[signature_key] = probe_result
+            local_decisions[signature_key] = probe_result["decision"]
+        else:
+            local_decisions[signature_key] = requested_mode
+
+    return {
+        "_candidates": candidates,
+        "_dimensions": compatibility_plan["_dimensions"],
+        "_model": model,
+        "_probe_cache": probe_cache,
+        "_probe_config": compatibility_plan["_probe_config"],
+        "scope": model_role,
+        "requested_mode": requested_mode,
+        "runtime_fingerprint": _build_runtime_fingerprint(),
+        "local_probe_results": local_probe_results,
+        "local_decisions": local_decisions,
+        "warnings": warning_messages,
+    }
+
+
+def _build_no_candidate_warnings(
+    requested_mode: str,
+    candidate_count: int,
+    model_role: str,
+) -> List[str]:
+    if requested_mode != "auto" or candidate_count > 0:
+        return []
+    warning_message = (
+        f"Vision patch embedding auto mode found no compatible full-patch Conv2d "
+        f"or Conv3d candidates in {model_role}; continuing with native model behavior."
+    )
+    if (
+        int(
+            os.environ.get(
+                "RANK",
+                0,
+            )
+        )
+        == 0
+    ):
+        warnings.warn(
+            warning_message,
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return [warning_message]
+
+
+def _validate_auto_probe_config(
+    auto_probe_config: DictConfig,
 ) -> None:
-    missing_keys = required_keys - set(config_value.keys())
+    required_keys = {
+        "startup_timeout_seconds",
+        "operation_timeout_seconds",
+        "warmup_iterations",
+        "measurement_iterations",
+        "patch_counts",
+        "slowdown_ratio",
+        "minimum_slowdown_milliseconds",
+        "fp32_equivalence_atol",
+        "fp32_equivalence_rtol",
+        "runtime_equivalence_atol",
+        "runtime_equivalence_rtol",
+    }
+    missing_keys = required_keys - set(auto_probe_config.keys())
     if len(missing_keys) > 0:
         raise ValueError(
-            f"{config_path} is missing required keys: {sorted(missing_keys)}"
+            "vision_patch_embedding.auto_probe is missing required keys: "
+            f"{sorted(missing_keys)}"
+        )
+    positive_values = {
+        "startup_timeout_seconds": auto_probe_config.startup_timeout_seconds,
+        "operation_timeout_seconds": auto_probe_config.operation_timeout_seconds,
+        "warmup_iterations": auto_probe_config.warmup_iterations,
+        "measurement_iterations": auto_probe_config.measurement_iterations,
+        "slowdown_ratio": auto_probe_config.slowdown_ratio,
+        "fp32_equivalence_atol": auto_probe_config.fp32_equivalence_atol,
+        "fp32_equivalence_rtol": auto_probe_config.fp32_equivalence_rtol,
+        "runtime_equivalence_atol": auto_probe_config.runtime_equivalence_atol,
+        "runtime_equivalence_rtol": auto_probe_config.runtime_equivalence_rtol,
+    }
+    for key, value in positive_values.items():
+        if float(value) <= 0:
+            raise ValueError(
+                f"vision_patch_embedding.auto_probe.{key} must be positive."
+            )
+    if float(auto_probe_config.minimum_slowdown_milliseconds) < 0:
+        raise ValueError(
+            "vision_patch_embedding.auto_probe.minimum_slowdown_milliseconds "
+            "must be greater than or equal to zero."
+        )
+    patch_counts = auto_probe_config.patch_counts
+    if not isinstance(patch_counts, (list, ListConfig)) or len(patch_counts) == 0:
+        raise ValueError(
+            "vision_patch_embedding.auto_probe.patch_counts must be a non-empty list."
+        )
+    normalized_patch_counts = [int(value) for value in patch_counts]
+    if any(value <= 0 for value in normalized_patch_counts):
+        raise ValueError(
+            "vision_patch_embedding.auto_probe.patch_counts must contain positive integers."
+        )
+    if normalized_patch_counts != sorted(set(normalized_patch_counts)):
+        raise ValueError(
+            "vision_patch_embedding.auto_probe.patch_counts must be unique and sorted."
         )
 
 
-def _validate_trimmed_string(
-    value: str,
-    config_path: str,
-) -> None:
-    if not isinstance(value, str) or value.strip() == "" or value != value.strip():
-        raise ValueError(f"{config_path} must be a trimmed non-empty string.")
-
-
-def _validate_version_specifier(
-    value: str,
-    config_path: str,
-) -> None:
-    _validate_trimmed_string(
-        value=value,
-        config_path=config_path,
-    )
-    try:
-        SpecifierSet(value)
-    except InvalidSpecifier as error:
-        raise ValueError(
-            f"Invalid version specifier at {config_path}: {value}"
-        ) from error
+def _build_not_applicable_plan(
+    model_role: str,
+) -> Dict[str, Any]:
+    return {
+        "_candidates": [],
+        "scope": model_role,
+        "requested_mode": "not_applicable",
+        "runtime_fingerprint": {},
+        "local_probe_results": {},
+        "local_decisions": {},
+        "warnings": [],
+    }
 
 
 def _build_not_applicable_result(
@@ -367,20 +432,195 @@ def _build_not_applicable_result(
 ) -> Dict[str, Any]:
     return {
         "scope": model_role,
-        "resolved_mode": "conv3d",
-        "selection_reason": "not_applicable_text_model",
-        "matched_runtime_rules": [],
+        "requested_mode": "not_applicable",
+        "resolved_mode": "not_applicable",
+        "selection_reason": "text_model",
         "runtime_fingerprint": {},
+        "global_decisions": {},
         "modules": [],
-        "unverified_conv3d_modules": [],
+        "rank_evidence": [],
         "warnings": [],
         "distributed_consistent": True,
     }
 
 
-def _build_runtime_fingerprint() -> Dict[str, Optional[str]]:
+def _discover_candidates(
+    model: nn.Module,
+    dimensions: Set[int],
+) -> List[Dict[str, Any]]:
+    candidates = []
+    for module_path, module in model.named_modules():
+        dimension = _get_convolution_dimension(module=module)
+        if dimension is None or dimension not in dimensions:
+            continue
+        validation_error = _validate_candidate(
+            module=module,
+            dimension=dimension,
+        )
+        if validation_error is not None:
+            continue
+        signature = _build_signature(
+            module=module,
+            dimension=dimension,
+        )
+        candidates.append(
+            {
+                "path": module_path,
+                "class": _get_module_class_path(module=module),
+                "module": module,
+                "signature": signature,
+                "signature_key": _build_signature_key(signature=signature),
+                "structure": _build_structure_fingerprint(
+                    module=module,
+                    dimension=dimension,
+                ),
+            }
+        )
+    return candidates
+
+
+def _get_convolution_dimension(
+    module: nn.Module,
+) -> Optional[int]:
+    if isinstance(module, nn.Conv2d) and module.__class__.forward is nn.Conv2d.forward:
+        return 2
+    if isinstance(module, nn.Conv3d) and module.__class__.forward is nn.Conv3d.forward:
+        return 3
+    return None
+
+
+def _validate_candidate(
+    module: nn.Module,
+    dimension: int,
+) -> Optional[str]:
+    logical_shape = _resolve_parameter_shape(parameter=module.weight)
+    if len(logical_shape) != dimension + 2:
+        return "weight_rank_mismatch"
+    if tuple(module.kernel_size) != tuple(module.stride):
+        return "kernel_stride_mismatch"
+    if not _is_zero_padding(
+        padding=module.padding,
+        dimension=dimension,
+    ):
+        return "nonzero_padding"
+    if tuple(module.dilation) != (1,) * dimension:
+        return "nonunit_dilation"
+    if module.groups != 1:
+        return "grouped_convolution"
+    if logical_shape[0] != module.out_channels:
+        return "output_channel_mismatch"
+    if logical_shape[1] != module.in_channels:
+        return "input_channel_mismatch"
+    if logical_shape[2:] != tuple(module.kernel_size):
+        return "kernel_shape_mismatch"
+    if module.bias is not None and _resolve_parameter_shape(
+        parameter=module.bias,
+    ) != (module.out_channels,):
+        return "bias_shape_mismatch"
+    return None
+
+
+def _is_zero_padding(
+    padding: Any,
+    dimension: int,
+) -> bool:
+    if padding == "valid":
+        return True
+    if isinstance(padding, str):
+        return False
+    return tuple(padding) == (0,) * dimension
+
+
+def _build_signature(
+    module: nn.Module,
+    dimension: int,
+) -> Dict[str, Any]:
+    return {
+        "dimension": dimension,
+        "in_channels": module.in_channels,
+        "out_channels": module.out_channels,
+        "kernel_size": list(module.kernel_size),
+        "stride": list(module.stride),
+        "bias": module.bias is not None,
+        "dtype": str(module.weight.dtype),
+    }
+
+
+def _build_signature_key(
+    signature: Dict[str, Any],
+) -> str:
+    return json.dumps(
+        signature,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _collect_signatures(
+    candidates: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    return {
+        candidate["signature_key"]: candidate["signature"] for candidate in candidates
+    }
+
+
+def _resolve_parameter_shape(
+    parameter: torch.Tensor,
+) -> Tuple[int, ...]:
+    if hasattr(
+        parameter,
+        "ds_shape",
+    ):
+        return tuple(parameter.ds_shape)
+    return tuple(parameter.shape)
+
+
+def _build_structure_fingerprint(
+    module: nn.Module,
+    dimension: int,
+) -> Dict[str, Any]:
+    return {
+        "dimension": dimension,
+        "in_channels": module.in_channels,
+        "out_channels": module.out_channels,
+        "kernel_size": list(module.kernel_size),
+        "stride": list(module.stride),
+        "padding": (
+            module.padding
+            if isinstance(
+                module.padding,
+                str,
+            )
+            else list(module.padding)
+        ),
+        "dilation": list(module.dilation),
+        "groups": module.groups,
+        "bias": module.bias is not None,
+        "weight_shape": list(_resolve_parameter_shape(parameter=module.weight)),
+    }
+
+
+def _get_module_class_path(
+    module: nn.Module,
+) -> str:
+    return f"{module.__class__.__module__}.{module.__class__.__qualname__}"
+
+
+def _build_runtime_fingerprint() -> Dict[str, Any]:
     cuda_available = torch.cuda.is_available() and torch.cuda.device_count() > 0
-    current_device = torch.cuda.current_device() if cuda_available else None
+    local_rank = int(
+        os.environ.get(
+            "LOCAL_RANK",
+            0,
+        )
+    )
+    current_device = None
+    if cuda_available:
+        current_device = (
+            local_rank
+            if local_rank < torch.cuda.device_count()
+            else torch.cuda.current_device()
+        )
     capability = (
         torch.cuda.get_device_capability(current_device)
         if current_device is not None
@@ -444,341 +684,123 @@ def _get_driver_version() -> Optional[str]:
     return str(driver_version)
 
 
-def _find_matching_runtime_rules(
-    runtime_rules: ListConfig,
-    runtime_fingerprint: Dict[str, Optional[str]],
-) -> List[str]:
-    return sorted(
-        rule.name
-        for rule in runtime_rules
-        if _matches_runtime_rule(
-            rule=rule,
-            runtime_fingerprint=runtime_fingerprint,
-        )
-    )
-
-
-def _matches_runtime_rule(
-    rule: DictConfig,
-    runtime_fingerprint: Dict[str, Optional[str]],
-) -> bool:
-    version_pairs = [
-        (rule.torch_version, runtime_fingerprint["torch_version"]),
-        (rule.cuda_version, runtime_fingerprint["cuda_version"]),
-        (rule.cudnn_version, runtime_fingerprint["cudnn_version"]),
-        (rule.driver_version, runtime_fingerprint["driver_version"]),
-    ]
-    for version_specifier, observed_version in version_pairs:
-        if observed_version is None or not _version_matches(
-            version_specifier=version_specifier,
-            observed_version=observed_version,
-        ):
-            return False
-    return runtime_fingerprint["compute_capability"] in set(rule.compute_capabilities)
-
-
-def _version_matches(
-    version_specifier: str,
-    observed_version: str,
-) -> bool:
-    try:
-        return SpecifierSet(version_specifier).contains(
-            Version(observed_version),
-            prereleases=True,
-        )
-    except InvalidVersion:
-        return False
-
-
-def _inspect_model_targets(
-    model: nn.Module,
-    target_rules: ListConfig,
-) -> List[Dict[str, Any]]:
-    inspections: List[Dict[str, Any]] = []
-    for module_path, module in model.named_modules():
-        module_class = _get_module_class_path(module=module)
-        matching_rules = _find_matching_target_rules(
-            module_class=module_class,
-            target_rules=target_rules,
-        )
-        if len(matching_rules) == 0:
-            continue
-        if len(matching_rules) > 1:
-            raise ValueError(
-                "Multiple vision patch target rules match the current module: "
-                f"module={module_path}, class={module_class}, "
-                f"rules={[rule.name for rule in matching_rules]}"
-            )
-        inspections.append(
-            _inspect_target_module(
-                module_path=module_path,
-                module=module,
-                target_rule=matching_rules[0],
-            )
-        )
-    return inspections
-
-
-def _get_module_class_path(
-    module: nn.Module,
-) -> str:
-    return f"{module.__class__.__module__}.{module.__class__.__qualname__}"
-
-
-def _find_matching_target_rules(
-    module_class: str,
-    target_rules: ListConfig,
-) -> List[DictConfig]:
-    matching_rules = []
-    for rule in target_rules:
-        if module_class not in set(rule.module_classes):
-            continue
-        package_version = _get_package_version(package_name=rule.package_name)
-        if package_version is None or not _version_matches(
-            version_specifier=rule.package_version,
-            observed_version=package_version,
-        ):
-            continue
-        matching_rules.append(rule)
-    return matching_rules
-
-
-def _inspect_target_module(
-    module_path: str,
-    module: nn.Module,
-    target_rule: DictConfig,
+def _build_local_summary(
+    compatibility_plan: Dict[str, Any],
 ) -> Dict[str, Any]:
-    projection = (
-        getattr(
-            module,
-            target_rule.projection_path,
-        )
-        if hasattr(
-            module,
-            target_rule.projection_path,
-        )
-        else None
-    )
-    validation_error = _validate_projection(projection=projection)
     return {
-        "path": module_path,
-        "module": module,
-        "class": _get_module_class_path(module=module),
-        "target_rule": target_rule.name,
-        "strategy": target_rule.strategy,
-        "projection_path": target_rule.projection_path,
-        "projection": projection,
-        "structure": _build_structure_fingerprint(projection=projection),
-        "validation_error": validation_error,
-    }
-
-
-def _validate_projection(
-    projection: Any,
-) -> Optional[str]:
-    if not isinstance(projection, nn.Conv3d):
-        return "projection is not torch.nn.Conv3d"
-    weight_shape = _resolve_parameter_shape(parameter=projection.weight)
-    if len(weight_shape) != 5:
-        return "projection weight must have rank 5"
-    if projection.kernel_size != projection.stride:
-        return "projection kernel_size and stride must match"
-    if projection.padding != (0, 0, 0):
-        return "projection padding must be zero"
-    if projection.dilation != (1, 1, 1):
-        return "projection dilation must be one"
-    if projection.groups != 1:
-        return "projection groups must be one"
-    if weight_shape[0] != projection.out_channels:
-        return "projection weight output channels do not match"
-    if weight_shape[1] != projection.in_channels:
-        return "projection weight input channels do not match"
-    if weight_shape[2:] != projection.kernel_size:
-        return "projection weight kernel shape does not match"
-    if projection.bias is not None and _resolve_parameter_shape(
-        parameter=projection.bias,
-    ) != (projection.out_channels,):
-        return "projection bias shape does not match output channels"
-    return None
-
-
-def _resolve_parameter_shape(
-    parameter: torch.Tensor,
-) -> Tuple[int, ...]:
-    if hasattr(
-        parameter,
-        "ds_shape",
-    ):
-        return tuple(parameter.ds_shape)
-    return tuple(parameter.shape)
-
-
-def _build_structure_fingerprint(
-    projection: Any,
-) -> Dict[str, Any]:
-    if not isinstance(projection, nn.Conv3d):
-        return {
-            "projection_class": (
-                _get_module_class_path(module=projection)
-                if isinstance(projection, nn.Module)
-                else None
-            ),
-        }
-    return {
-        "projection_class": _get_module_class_path(module=projection),
-        "in_channels": projection.in_channels,
-        "out_channels": projection.out_channels,
-        "kernel_size": list(projection.kernel_size),
-        "stride": list(projection.stride),
-        "padding": list(projection.padding),
-        "dilation": list(projection.dilation),
-        "groups": projection.groups,
-        "bias": projection.bias is not None,
-        "weight_shape": list(
-            _resolve_parameter_shape(parameter=projection.weight),
+        "rank": int(
+            os.environ.get(
+                "RANK",
+                0,
+            )
         ),
+        "scope": compatibility_plan["scope"],
+        "requested_mode": compatibility_plan["requested_mode"],
+        "runtime_fingerprint": compatibility_plan["runtime_fingerprint"],
+        "candidate_signatures": sorted(compatibility_plan["local_decisions"].keys()),
+        "local_decisions": compatibility_plan["local_decisions"],
+        "local_probe_results": compatibility_plan["local_probe_results"],
     }
 
 
-def _find_unverified_conv3d_modules(
-    model: nn.Module,
-    target_inspections: List[Dict[str, Any]],
-) -> List[Dict[str, str]]:
-    verified_projection_paths = {
-        _join_module_path(
-            module_path=inspection["path"],
-            child_path=inspection["projection_path"],
+def _gather_rank_evidence(
+    local_summary: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    environment_world_size = int(
+        os.environ.get(
+            "WORLD_SIZE",
+            1,
         )
-        for inspection in target_inspections
-    }
-    return [
+    )
+    if environment_world_size > 1 and not dist.is_initialized():
+        raise RuntimeError(
+            "Vision patch embedding distributed resolution requires an initialized "
+            "torch process group."
+        )
+    if not dist.is_available() or not dist.is_initialized():
+        return [local_summary]
+
+    gathered_summaries: List[Optional[Dict[str, Any]]] = [None] * dist.get_world_size()
+    dist.all_gather_object(
+        gathered_summaries,
+        local_summary,
+    )
+    return [summary for summary in gathered_summaries if summary is not None]
+
+
+def _validate_rank_candidate_consistency(
+    rank_evidence: List[Dict[str, Any]],
+) -> None:
+    reference = rank_evidence[0]
+    mismatched_ranks = [
+        evidence["rank"]
+        for evidence in rank_evidence[1:]
+        if evidence["scope"] != reference["scope"]
+        or evidence["requested_mode"] != reference["requested_mode"]
+        or evidence["candidate_signatures"] != reference["candidate_signatures"]
+    ]
+    if len(mismatched_ranks) > 0:
+        raise RuntimeError(
+            "Vision patch embedding candidates differ across distributed ranks: "
+            f"mismatched_ranks={mismatched_ranks}."
+        )
+
+
+def _raise_for_probe_failures(
+    rank_evidence: List[Dict[str, Any]],
+) -> None:
+    failures = [
         {
-            "path": module_path,
-            "class": _get_module_class_path(module=module),
+            "rank": evidence["rank"],
+            "signature": signature,
+            "result": result,
         }
-        for module_path, module in model.named_modules()
-        if isinstance(module, nn.Conv3d)
-        and module_path not in verified_projection_paths
+        for evidence in rank_evidence
+        for signature, result in evidence["local_probe_results"].items()
+        if result["decision"] == "error"
     ]
-
-
-def _join_module_path(
-    module_path: str,
-    child_path: str,
-) -> str:
-    if module_path == "":
-        return child_path
-    return f"{module_path}.{child_path}"
-
-
-def _resolve_mode(
-    requested_mode: str,
-    matched_runtime_rules: List[str],
-    target_inspections: List[Dict[str, Any]],
-    unverified_conv3d_modules: List[Dict[str, str]],
-    warnings_payload: List[str],
-) -> Tuple[str, str]:
-    validation_errors = [
-        (
-            inspection["path"],
-            inspection["class"],
-            inspection["validation_error"],
+    if len(failures) > 0:
+        raise RuntimeError(
+            "Vision patch embedding auto probe failed without valid native or "
+            f"linear evidence: {failures}"
         )
-        for inspection in target_inspections
-        if inspection["validation_error"] is not None
-    ]
-    if requested_mode == "linear":
-        if len(target_inspections) == 0:
-            raise ValueError(
-                "vision_patch_embedding.mode=linear found no certified target modules."
+
+
+def _resolve_global_decisions(
+    rank_evidence: List[Dict[str, Any]],
+) -> Dict[str, str]:
+    signatures = rank_evidence[0]["candidate_signatures"]
+    return {
+        signature: (
+            "linear"
+            if any(
+                evidence["local_decisions"][signature] == "linear"
+                for evidence in rank_evidence
             )
-        if len(validation_errors) > 0:
-            raise ValueError(
-                "vision_patch_embedding.mode=linear found invalid target structures: "
-                f"{validation_errors}"
-            )
-        return "linear", "explicit_linear"
-
-    if len(matched_runtime_rules) == 0:
-        return "conv3d", "runtime_rule_not_matched"
-
-    if len(target_inspections) == 0:
-        warnings_payload.append(
-            "Vision patch embedding matched known-risk runtime rules "
-            f"{matched_runtime_rules}, but no certified target module was found; "
-            "continuing with the original Conv3d implementation. Unverified Conv3d "
-            f"modules: {unverified_conv3d_modules}"
+            else "native"
         )
-        return "conv3d", "certified_target_not_found"
-
-    if len(validation_errors) > 0:
-        warnings_payload.append(
-            "Vision patch embedding matched known-risk runtime rules "
-            f"{matched_runtime_rules}, but certified target validation failed "
-            f"with {validation_errors}; continuing with the original Conv3d implementation."
-        )
-        return "conv3d", "target_structure_validation_failed"
-
-    if requested_mode == "conv3d":
-        warnings_payload.append(
-            "Vision patch embedding matched known-risk runtime rules "
-            f"{matched_runtime_rules}, but mode=conv3d keeps the original Conv3d implementation."
-        )
-        return "conv3d", "explicit_conv3d"
-
-    return "linear", "matched_runtime_and_target_rules"
+        for signature in signatures
+    }
 
 
 def _apply_linear_strategy(
-    target_inspections: List[Dict[str, Any]],
+    module: nn.Module,
+    signature_key: str,
 ) -> None:
-    changed_modules: List[nn.Module] = []
-    try:
-        for inspection in target_inspections:
-            module = inspection["module"]
-            projection = inspection["projection"]
-            if _is_linear_strategy_applied(
-                module=module,
-                projection=projection,
-            ):
-                continue
-            setattr(
-                module,
-                "_vision_patch_embedding_original_forward",
-                module.forward,
-            )
-            changed_modules.append(module)
-            setattr(
-                module,
-                "_vision_patch_embedding_projection_path",
-                inspection["projection_path"],
-            )
-            setattr(
-                projection,
-                "_vision_patch_embedding_original_forward",
-                projection.forward,
-            )
-            changed_modules.append(projection)
-            projection.forward = MethodType(
-                _flattened_full_patch_projection_forward,
-                projection,
-            )
-            module.forward = MethodType(
-                _flattened_full_patch_forward,
-                module,
-            )
-    except Exception:
-        for module in changed_modules:
-            _restore_original_forward(module=module)
-        raise
-
-
-def _restore_original_forwards(
-    target_inspections: List[Dict[str, Any]],
-) -> None:
-    for inspection in target_inspections:
-        _restore_original_forward(module=inspection["module"])
-        _restore_original_forward(module=inspection["projection"])
+    setattr(
+        module,
+        "_vision_patch_embedding_original_forward",
+        module.forward,
+    )
+    setattr(
+        module,
+        "_vision_patch_embedding_signature_key",
+        signature_key,
+    )
+    module.forward = MethodType(
+        _full_patch_convolution_forward,
+        module,
+    )
 
 
 def _restore_original_forward(
@@ -796,17 +818,16 @@ def _restore_original_forward(
     )
     if hasattr(
         module,
-        "_vision_patch_embedding_projection_path",
+        "_vision_patch_embedding_signature_key",
     ):
         delattr(
             module,
-            "_vision_patch_embedding_projection_path",
+            "_vision_patch_embedding_signature_key",
         )
 
 
 def _is_linear_strategy_applied(
     module: nn.Module,
-    projection: nn.Conv3d,
 ) -> bool:
     return (
         getattr(
@@ -814,108 +835,82 @@ def _is_linear_strategy_applied(
             "__func__",
             None,
         )
-        is _flattened_full_patch_forward
-        and getattr(
-            projection.forward,
-            "__func__",
-            None,
-        )
-        is _flattened_full_patch_projection_forward
+        is _full_patch_convolution_forward
     )
 
 
-def _flattened_full_patch_forward(
+def _full_patch_convolution_forward(
     module: nn.Module,
     hidden_states: torch.Tensor,
 ) -> torch.Tensor:
     if not isinstance(hidden_states, torch.Tensor):
-        raise ValueError("Vision patch embedding input must be a torch.Tensor.")
-    if hidden_states.ndim != 2:
-        raise ValueError("Vision patch embedding input must have rank 2.")
-    projection = getattr(
-        module,
-        module._vision_patch_embedding_projection_path,
-    )
-    expected_features = (
-        projection.in_channels
-        * projection.kernel_size[0]
-        * projection.kernel_size[1]
-        * projection.kernel_size[2]
-    )
-    if hidden_states.shape[-1] != expected_features:
-        raise ValueError(
-            "Vision patch embedding input feature dimension does not match the "
-            f"full patch volume: expected={expected_features}, "
-            f"observed={hidden_states.shape[-1]}."
-        )
-    return module._vision_patch_embedding_original_forward(hidden_states)
-
-
-def _flattened_full_patch_projection_forward(
-    projection: nn.Conv3d,
-    hidden_states: torch.Tensor,
-) -> torch.Tensor:
-    if not isinstance(hidden_states, torch.Tensor):
-        raise ValueError("Vision patch embedding input must be a torch.Tensor.")
-    if hidden_states.ndim != 5:
-        raise ValueError("Vision patch embedding projection input must have rank 5.")
-    expected_shape = (
-        projection.in_channels,
-        *projection.kernel_size,
-    )
-    if tuple(hidden_states.shape[1:]) != expected_shape:
-        raise ValueError(
-            "Vision patch embedding projection input shape does not match the "
-            f"full patch volume: expected={expected_shape}, "
-            f"observed={tuple(hidden_states.shape[1:])}."
-        )
-    if projection.weight.ndim != 5:
+        return module._vision_patch_embedding_original_forward(hidden_states)
+    dimension = _get_convolution_dimension(module=module)
+    if dimension is None or hidden_states.ndim != dimension + 2:
+        return module._vision_patch_embedding_original_forward(hidden_states)
+    if hidden_states.shape[1] != module.in_channels:
+        return module._vision_patch_embedding_original_forward(hidden_states)
+    if tuple(hidden_states.shape[2:]) != tuple(module.kernel_size):
+        return module._vision_patch_embedding_original_forward(hidden_states)
+    if module.weight.ndim != dimension + 2:
         raise RuntimeError(
-            "Vision patch embedding projection weight was not materialized before "
+            "Vision patch embedding convolution weight was not materialized before "
             "the linear forward."
         )
+
     projected_states = F.linear(
-        hidden_states.flatten(1).to(dtype=projection.weight.dtype),
-        projection.weight.flatten(1),
-        projection.bias,
+        hidden_states.flatten(1),
+        module.weight.flatten(1),
+        module.bias,
     )
     return projected_states.view(
-        -1,
-        projection.out_channels,
-        1,
-        1,
-        1,
+        projected_states.shape[0],
+        module.out_channels,
+        *((1,) * dimension),
     )
+
+
+def _resolve_applied_mode(
+    global_decisions: Dict[str, str],
+) -> str:
+    decisions = set(global_decisions.values())
+    if len(decisions) == 0 or decisions == {"native"}:
+        return "native"
+    if decisions == {"linear"}:
+        return "linear"
+    return "mixed"
+
+
+def _build_selection_reason(
+    requested_mode: str,
+    resolved_mode: str,
+    candidate_count: int,
+) -> str:
+    if candidate_count == 0:
+        return "no_full_patch_candidates"
+    if requested_mode == "native":
+        return "explicit_native"
+    if requested_mode == "linear":
+        return "explicit_linear"
+    if resolved_mode == "native":
+        return "auto_native"
+    if resolved_mode == "linear":
+        return "auto_linear"
+    return "auto_mixed"
 
 
 def _build_module_metadata(
-    target_inspections: List[Dict[str, Any]],
-    resolved_mode: str,
+    candidates: List[Dict[str, Any]],
+    global_decisions: Dict[str, str],
 ) -> List[Dict[str, Any]]:
     return [
         {
-            "path": inspection["path"],
-            "class": inspection["class"],
-            "target_rule": inspection["target_rule"],
-            "strategy": inspection["strategy"],
-            "projection_path": inspection["projection_path"],
-            "structure": inspection["structure"],
-            "validation_error": inspection["validation_error"],
-            "applied": resolved_mode == "linear",
+            "path": candidate["path"],
+            "class": candidate["class"],
+            "signature": candidate["signature"],
+            "structure": candidate["structure"],
+            "decision": global_decisions[candidate["signature_key"]],
+            "applied": global_decisions[candidate["signature_key"]] == "linear",
         }
-        for inspection in target_inspections
+        for candidate in candidates
     ]
-
-
-def _build_distributed_summary(
-    compatibility_result: Dict[str, Any],
-) -> Dict[str, Any]:
-    return {
-        "scope": compatibility_result["scope"],
-        "resolved_mode": compatibility_result["resolved_mode"],
-        "selection_reason": compatibility_result["selection_reason"],
-        "matched_runtime_rules": compatibility_result["matched_runtime_rules"],
-        "runtime_fingerprint": compatibility_result["runtime_fingerprint"],
-        "modules": compatibility_result["modules"],
-        "warnings": compatibility_result["warnings"],
-    }
