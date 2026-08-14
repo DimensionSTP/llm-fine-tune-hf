@@ -698,6 +698,13 @@ def _build_local_summary(
         "requested_mode": compatibility_plan["requested_mode"],
         "runtime_fingerprint": compatibility_plan["runtime_fingerprint"],
         "candidate_signatures": sorted(compatibility_plan["local_decisions"].keys()),
+        "candidate_inventory": [
+            {
+                "path": candidate["path"],
+                "signature": candidate["signature_key"],
+            }
+            for candidate in compatibility_plan["_candidates"]
+        ],
         "local_decisions": compatibility_plan["local_decisions"],
         "local_probe_results": compatibility_plan["local_probe_results"],
     }
@@ -738,6 +745,7 @@ def _validate_rank_candidate_consistency(
         if evidence["scope"] != reference["scope"]
         or evidence["requested_mode"] != reference["requested_mode"]
         or evidence["candidate_signatures"] != reference["candidate_signatures"]
+        or evidence["candidate_inventory"] != reference["candidate_inventory"]
     ]
     if len(mismatched_ranks) > 0:
         raise RuntimeError(
