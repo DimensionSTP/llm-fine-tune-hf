@@ -1,21 +1,22 @@
 # @package _global_
 vision_patch_embedding:
-  mode: conv3d
-  target_rules:
-    - name: qwen3_full_patch_transformers_5_13_1
-      strategy: flattened_full_patch
-      projection_path: proj
-      package_name: transformers
-      package_version: "==5.13.1"
-      module_classes:
-        - transformers.models.qwen3_vl.modeling_qwen3_vl.Qwen3VLVisionPatchEmbed
-        - transformers.models.qwen3_5.modeling_qwen3_5.Qwen3_5VisionPatchEmbed
-        - transformers.models.qwen3_5_moe.modeling_qwen3_5_moe.Qwen3_5MoeVisionPatchEmbed
-  runtime_rules:
-    - name: h100_torch_2_10_cu128_cudnn_9_10_2_driver_535_161_08
-      torch_version: "==2.10.0+cu128"
-      cuda_version: "==12.8"
-      cudnn_version: "==9.10.2"
-      driver_version: "==535.161.08"
-      compute_capabilities:
-        - "9.0"
+  mode: native
+  dimensions:
+    - 2
+    - 3
+  auto_probe:
+    startup_timeout_seconds: 60
+    operation_timeout_seconds: 30
+    warmup_iterations: 1
+    measurement_iterations: 3
+    patch_counts:
+      - 1
+      - 256
+      - 1024
+      - 4096
+    slowdown_ratio: 2.0
+    minimum_slowdown_milliseconds: 10.0
+    fp32_equivalence_atol: 1.0e-3
+    fp32_equivalence_rtol: 1.0e-3
+    runtime_equivalence_atol: 1.0e-2
+    runtime_equivalence_rtol: 1.0e-2
