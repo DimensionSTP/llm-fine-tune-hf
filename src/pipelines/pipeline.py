@@ -373,12 +373,15 @@ def test(
 
     data_encoder = setup.get_data_encoder()
     model = setup.get_model()
-    vision_patch_embedding_result = setup.get_vision_patch_embedding_result()
-    if vision_patch_embedding_result is not None:
-        vision_patch_embedding_result = (
-            validate_distributed_vision_patch_embedding_result(
-                compatibility_result=vision_patch_embedding_result,
-            )
+    vision_patch_embedding_result = None
+    if config.modality != "text":
+        vision_patch_embedding_plan = prepare_vision_patch_embedding_compatibility(
+            model=model,
+            config=config,
+            model_role="hf_primary_model",
+        )
+        vision_patch_embedding_result = apply_vision_patch_embedding_compatibility(
+            compatibility_plan=vision_patch_embedding_plan,
         )
 
     model.to(rank)
@@ -465,12 +468,15 @@ def test_large(
 
     data_encoder = setup.get_data_encoder()
     model = setup.get_model()
-    vision_patch_embedding_result = setup.get_vision_patch_embedding_result()
-    if vision_patch_embedding_result is not None:
-        vision_patch_embedding_result = (
-            validate_distributed_vision_patch_embedding_result(
-                compatibility_result=vision_patch_embedding_result,
-            )
+    vision_patch_embedding_result = None
+    if config.modality != "text":
+        vision_patch_embedding_plan = prepare_vision_patch_embedding_compatibility(
+            model=model,
+            config=config,
+            model_role="hf_primary_model",
+        )
+        vision_patch_embedding_result = apply_vision_patch_embedding_compatibility(
+            compatibility_plan=vision_patch_embedding_plan,
         )
 
     try:
