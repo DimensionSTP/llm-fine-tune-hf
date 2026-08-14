@@ -12,9 +12,11 @@ from .memory_preflight import (
 from .model_loading import ModelLoadPlan, ModelLoadPlanner
 from .vision_patch_embedding import (
     validate_vision_patch_embedding_config,
+    prepare_vision_patch_embedding_compatibility,
     apply_vision_patch_embedding_compatibility,
-    validate_distributed_vision_patch_embedding_result,
+    apply_trainer_vision_patch_embedding_compatibility,
 )
+from .vision_patch_embedding_probe import run_vision_patch_embedding_probe
 from .peft_initialization import (
     initialize_peft_model,
     build_peft_initialization_metadata,
@@ -86,8 +88,10 @@ __all__ = [
     "ModelLoadPlan",
     "ModelLoadPlanner",
     "validate_vision_patch_embedding_config",
+    "prepare_vision_patch_embedding_compatibility",
     "apply_vision_patch_embedding_compatibility",
-    "validate_distributed_vision_patch_embedding_result",
+    "apply_trainer_vision_patch_embedding_compatibility",
+    "run_vision_patch_embedding_probe",
     "initialize_peft_model",
     "build_peft_initialization_metadata",
     "is_peft_continue_from_adapter",
