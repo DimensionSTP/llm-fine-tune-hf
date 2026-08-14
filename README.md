@@ -210,7 +210,7 @@ sft_loss_type={nll or chunked_nll}
 
 `nll` is the default SFT loss type and is the supported default for assistant-only SFT (`is_sft=True`).
 
-`chunked_nll` is an optional SFT-only loss path that reduces peak VRAM for long-context SFT while keeping the NLL objective. Use it for non-assistant-only long-context SFT when VRAM pressure is the bottleneck. Do not use it with `training_arguments.use_liger_kernel=True` or assistant-only SFT (`is_sft=True`). Smoke tests on both LLM and VLM paths showed that `chunked_nll + is_sft=True` can stall at the first training step. The likely reason is that `chunked_nll` drops `labels == -100` tokens before the LM head, while assistant-only masking makes valid label positions sparse and non-contiguous, causing the hidden-state gather/compaction path to become the bottleneck. `dynamic` padding is independent of the loss choice and is compatible with both `nll` and `chunked_nll`. The unsupported combination is only `chunked_nll + is_sft=True`.
+`chunked_nll` is an optional SFT-only loss path that reduces peak VRAM for long-context SFT while keeping the NLL objective. Use it for non-assistant-only long-context SFT when VRAM pressure is the bottleneck. Disable the default Liger kernel with `training_arguments.use_liger_kernel=False` before selecting `chunked_nll`, and do not use it with assistant-only SFT (`is_sft=True`). Smoke tests on both LLM and VLM paths showed that `chunked_nll + is_sft=True` can stall at the first training step. The likely reason is that `chunked_nll` drops `labels == -100` tokens before the LM head, while assistant-only masking makes valid label positions sparse and non-contiguous, causing the hidden-state gather/compaction path to become the bottleneck. `dynamic` padding is independent of the loss choice and is compatible with both `nll` and `chunked_nll`. The unsupported combinations are `chunked_nll + is_sft=True` and `chunked_nll + Liger`.
 
 * SFT padding strategy
 
@@ -218,7 +218,7 @@ sft_loss_type={nll or chunked_nll}
 sft_padding_strategy={max_length or dynamic}
 ```
 
-`max_length` preserves the existing sample-level fixed padding path. `dynamic` keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
+`dynamic` is the default. It keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. `max_length` selects sample-level fixed padding. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
 
 * Memory preflight
 
@@ -262,7 +262,7 @@ python main.py --config-name={method}.yaml mode=train
 | A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
 | GOLD | `gold.yaml` | GKD-style teacher | Uses the upstream TRL experimental trainer. |
 
-Liger remains opt-in through `training_arguments.use_liger_kernel=True` and is disabled by default.
+Liger is enabled by default for SFT through `training_arguments.use_liger_kernel=True`. Set it to `False` when selecting `chunked_nll` or when native model execution is required.
 
 * Use preprocessed tokenizer option
 

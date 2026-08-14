@@ -104,8 +104,9 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - Data/tokenization: `is_sft`, `is_preprocessed`, `left_padding`, `max_length`, `response_end_template`, `truncation_mode`, `pad_to_multiple_of`
 - Dataset paths: `data_path`, `dataset_subdir`, `dataset_file_path`, `test_dataset_subdir`, `test_dataset_file_path`
 - SFT label mask validation: `sft_label_mask.validation_enabled`, `sft_label_mask.validation_mode`
-- SFT loss: `sft_loss_type`
-- SFT padding: `sft_padding_strategy`
+- SFT loss: `sft_loss_type=nll`; set `training_arguments.use_liger_kernel=false` before selecting `chunked_nll`
+- SFT padding: `sft_padding_strategy=dynamic`; use `max_length` for fixed padding
+- SFT Liger kernel: `training_arguments.use_liger_kernel=true`
 - Training strategy: `strategy=deepspeed`
 - Distributed launch: `distributed.enabled`, `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, `distributed.main_process_port`
 - Tracking backend: `tracking=wandb`, `tracking=mlflow`, `tracking=mlflow_server`
