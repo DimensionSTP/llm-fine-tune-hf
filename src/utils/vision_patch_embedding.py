@@ -364,7 +364,6 @@ def _validate_auto_probe_config(
         "measurement_iterations",
         "patch_counts",
         "slowdown_ratio",
-        "minimum_slowdown_milliseconds",
         "fp32_equivalence_atol",
         "fp32_equivalence_rtol",
         "runtime_equivalence_atol",
@@ -392,11 +391,6 @@ def _validate_auto_probe_config(
             raise ValueError(
                 f"vision_patch_embedding.auto_probe.{key} must be positive."
             )
-    if float(auto_probe_config.minimum_slowdown_milliseconds) < 0:
-        raise ValueError(
-            "vision_patch_embedding.auto_probe.minimum_slowdown_milliseconds "
-            "must be greater than or equal to zero."
-        )
     patch_counts = auto_probe_config.patch_counts
     if not isinstance(patch_counts, (list, ListConfig)) or len(patch_counts) == 0:
         raise ValueError(
