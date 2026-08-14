@@ -2,6 +2,23 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.9.0] - 2026-08-14
+
+- Replace implicit multi-file dataset naming with an explicit `dataset_namespace` contract shared by every training method, while retaining `dataset_name` as the fallback artifact namespace.
+- Narrow and synchronize dataset input metadata so complete source lineage remains in resolved metadata without leaking file composition details into artifact paths.
+- Expand training manifests into a complete `prepared`, `running`, `completed`, `failed`, or `interrupted` lifecycle with stage, failure, runtime, PEFT, dataset, and relative artifact evidence.
+- Bind memory-preflight evidence to its parent training run, preserve dataset metadata for probe subsets, and prevent preflight execution from allocating an independent run or tracking identity.
+- Persist and validate the selected tracking backend alongside the backend run id so resumed runs cannot silently switch tracking systems.
+- Preserve canonical `${dataset_name}` inference result names, remove the redundant `test_output_name` setting, and simplify inference and dense-LoRA companion manifests around full resolved config plus observed runtime evidence.
+- Add structural Conv2d and Conv3d vision patch embedding compatibility with `native`, `linear`, and isolated `auto` probe modes for supported Hugging Face VLM training and test paths.
+- Validate vision patch candidates, output and gradient equivalence, distributed candidate inventories, probe timeouts, and slowdown-ratio decisions before applying compatible linear projections.
+- Record vision patch compatibility plans, decisions, model roles, runtime fingerprints, applied modules, warnings, and probe evidence in training and inference manifests.
+- Preserve VLM image tensors and auxiliary processor fields through fixed and dynamic SFT collation.
+- Enable dynamic padding and the Liger kernel by default for SFT while retaining explicit fixed-padding and native-kernel overrides and rejecting unsupported `chunked_nll` combinations.
+- Align DeepSpeed checkpoint behavior with standard save and resume operation by disabling universal checkpoint loading and removing universal checkpoint saving.
+- Add `nvidia-ml-py==13.595.45` for NVIDIA runtime inspection and keep project and requirements dependency pins synchronized.
+- Update the README, usage guide, and training/evaluation contract for dataset namespaces, artifact lifecycle, canonical inference names, vision patch modes, SFT defaults, DeepSpeed behavior, and the release-validated VLM method matrix.
+
 ## [v2.8.1] - 2026-08-12
 
 - Register the repository's custom Hydra resolvers before composing configuration in the LoRA merge and Hugging Face Hub upload entrypoints, restoring postprocessing execution for configs that reference `dataset_effective_name` or `reward_save_suffix`.
