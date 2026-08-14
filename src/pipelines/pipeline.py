@@ -158,7 +158,7 @@ def train(
             rank=rank,
         )
 
-        vision_patch_embedding_result = None
+        vision_patch_embedding_plan = None
         if config.fine_tune_method == "async_grpo":
             model = config.pretrained_model_name
             if config.is_preprocessed:
@@ -170,7 +170,14 @@ def train(
                     model = merged_model_path
         else:
             model = setup.get_model()
-            vision_patch_embedding_result = setup.get_vision_patch_embedding_result()
+            if config.modality != "text":
+                vision_patch_embedding_plan = (
+                    prepare_vision_patch_embedding_compatibility(
+                        model=model,
+                        config=config,
+                        model_role="hf_primary_model",
+                    )
+                )
 
         trainer_config = OmegaConf.to_container(
             config.trainer,
@@ -206,10 +213,11 @@ def train(
         trainer = TrainerClass(
             **trainer_kwargs,
         )
-        if vision_patch_embedding_result is not None:
+        if vision_patch_embedding_plan is not None:
             vision_patch_embedding_result = (
-                validate_distributed_vision_patch_embedding_result(
-                    compatibility_result=vision_patch_embedding_result,
+                apply_trainer_vision_patch_embedding_compatibility(
+                    trainer=trainer,
+                    compatibility_plan=vision_patch_embedding_plan,
                 )
             )
             write_vision_patch_embedding_metadata(

@@ -29,10 +29,7 @@ from ..datasets import *
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import resolve_dataloader_runtime
 from .model_loading import ModelLoadPlanner
-from .vision_patch_embedding import (
-    apply_vision_patch_embedding_compatibility,
-    validate_vision_patch_embedding_config,
-)
+from .vision_patch_embedding import validate_vision_patch_embedding_config
 from .config_validation import validate_training_arguments_config
 from .peft_initialization import initialize_peft_model
 from .collate_fns import SFTDynamicPaddingCollator, collate_fn_vlm
@@ -71,7 +68,6 @@ class SetUp:
             torch_dtype=self.torch_dtype,
         )
         self.hf_deepspeed_config = None
-        self.vision_patch_embedding_result = None
 
     def get_train_datasets(self) -> Dict[str, Optional[Union[Dataset, HFDataset]]]:
         if self.config.fine_tune_method == "sft":
@@ -257,16 +253,6 @@ class SetUp:
                 device_map=model_load_plan.device_map,
                 revision=self.revision,
             )
-            self.vision_patch_embedding_result = (
-                apply_vision_patch_embedding_compatibility(
-                    model=model,
-                    config=self.config,
-                    rank=self.distributed_runtime_snapshot["distributed"]["observed"][
-                        "rank"
-                    ],
-                    model_role="hf_primary_model",
-                )
-            )
 
         if is_inference:
             model.eval()
@@ -371,9 +357,6 @@ class SetUp:
             )
 
         return model
-
-    def get_vision_patch_embedding_result(self) -> Optional[Dict[str, Any]]:
-        return self.vision_patch_embedding_result
 
     def get_reward_manager(self) -> RewardManager:
         reward_manager: RewardManager = instantiate(
