@@ -25,7 +25,6 @@ wall_clock_breakdown: false
 memory_breakdown: false
 checkpoint:
   tag_validation: ignore
-  load_universal: true
-  save_universal: true
+  load_universal: false
 save_16bit_model: false
 save_full_weights: false
