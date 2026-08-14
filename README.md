@@ -455,15 +455,16 @@ GRPO and SDPO expose `steps_per_generation` as an optional generation cadence co
 
 VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
 
-VLM dataset inputs use the image controls listed below where the selected dataset loader supports image fields. The default modality remains `text`.
+The table below records VLM training support for the pinned dependency stack. Config overrides remain available, but methods marked text-only are not release-validated for VLM training. The default modality remains `text`.
 
-| Dataset family | Image-capable | Image controls |
+| Training method | VLM training | Image controls or limitation |
 | --- | --- | --- |
 | SFT | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `dataset_image` |
 | DPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
-| GRPO / async GRPO / SDPO / A2PO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| GRPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
 | KTO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
-| GKD / GOLD | No | Text-only dataset contract |
+| async GRPO / SDPO / A2PO | No | Text-only with the pinned TRL trainer paths |
+| GKD / GOLD | No | Text-only repository dataset contract |
 
 * Reward embedding vLLM environment isolation
 
