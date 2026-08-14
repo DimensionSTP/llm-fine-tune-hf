@@ -3,7 +3,7 @@ dataset_text_field: null
 dataset_kwargs:
   skip_prepare_dataset: true
 chat_template_path: ${chat_template_path}
-use_liger_kernel: false
+use_liger_kernel: true
 loss_type: ${sft_loss_type}
 packing: false
 truncation_mode: ${truncation_mode}
