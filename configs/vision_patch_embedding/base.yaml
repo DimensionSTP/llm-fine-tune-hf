@@ -15,7 +15,6 @@ vision_patch_embedding:
       - 1024
       - 4096
     slowdown_ratio: 2.0
-    minimum_slowdown_milliseconds: 10.0
     fp32_equivalence_atol: 1.0e-3
     fp32_equivalence_rtol: 1.0e-3
     runtime_equivalence_atol: 1.0e-2
