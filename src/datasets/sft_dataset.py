@@ -1,4 +1,10 @@
 from typing import Dict, List, Tuple, Optional, Any
+
+import importlib
+
+datasets = importlib.import_module("datasets")
+HFDataset = datasets.Dataset
+
 import io
 import math
 
@@ -231,6 +237,11 @@ class StructuralDataset(Dataset):
             encoded["labels"] = encoded["input_ids"]
 
         return encoded
+
+    def to_hf_dataset(self) -> HFDataset:
+        return HFDataset.from_dict({"_index": range(len(self))}).with_transform(
+            _SFTDatasetTransform(dataset=self)
+        )
 
     def get_dataset(self) -> Dict[str, List[Any]]:
         val_data_specs = resolve_optional_dataset_file_specs(
@@ -1084,3 +1095,18 @@ class ConversationalDataset(StructuralDataset):
             **chat_template_kwargs,
         )
         return prompt
+
+
+class _SFTDatasetTransform:
+    def __init__(
+        self,
+        dataset: Dataset,
+    ) -> None:
+        self.dataset = dataset
+
+    def __call__(
+        self,
+        batch: Dict[str, List[int]],
+    ) -> Dict[str, List[Any]]:
+        examples = [self.dataset[index] for index in batch["_index"]]
+        return {key: [example[key] for example in examples] for key in examples[0]}

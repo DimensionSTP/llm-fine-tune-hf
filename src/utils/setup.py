@@ -375,25 +375,29 @@ class SetUp:
             "dataloader_prefetch_factor": self.dataloader_runtime["prefetch_factor"],
         }
 
-    def _get_train_dataset(self) -> Dataset:
-        train_dataset: Dataset = instantiate(
+    def _get_train_dataset(self) -> HFDataset:
+        train_dataset: _SFTDataset = instantiate(
             self.config.dataset[self.data_type],
             split=self.config.split.train,
         )
-        return train_dataset
+        return train_dataset.to_hf_dataset()
 
-    def _get_val_dataset(self) -> Dataset:
-        val_dataset: Dataset = instantiate(
+    def _get_val_dataset(self) -> HFDataset:
+        val_dataset: _SFTDataset = instantiate(
             self.config.dataset[self.data_type],
             split=self.config.split.val,
         )
-        return val_dataset
+        return val_dataset.to_hf_dataset()
 
     def _get_dataset(self) -> Dict[str, HFDataset]:
         dataset: _DatasetBuilder = instantiate(
             self.config.dataset[self.data_type],
         )
         return dataset()
+
+
+class _SFTDataset(Protocol):
+    def to_hf_dataset(self) -> HFDataset: ...
 
 
 class _DatasetBuilder(Protocol):
