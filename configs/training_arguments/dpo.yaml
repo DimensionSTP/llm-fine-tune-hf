@@ -23,7 +23,7 @@ optim: ${optim}
 learning_rate: ${lr}
 weight_decay: ${weight_decay}
 lr_scheduler_type: ${scheduler_type}
-warmup_ratio: ${warmup_ratio}
+warmup_steps: ${warmup_steps}
 lr_scheduler_kwargs: {}
 logging_steps: ${logging_steps}
 save_steps: ${step}
