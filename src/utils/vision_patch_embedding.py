@@ -117,6 +117,7 @@ def prepare_vision_patch_embedding_compatibility(
         "_model": model,
         "_probe_cache": probe_cache,
         "_probe_config": probe_config,
+        "_requires_output_gradients": _requires_output_gradients(config=config),
         "scope": model_role,
         "requested_mode": compatibility_config.mode,
         "runtime_fingerprint": runtime_fingerprint,
@@ -206,8 +207,62 @@ def apply_trainer_vision_patch_embedding_compatibility(
         raise
 
     primary_result = compatibility_results[0]
+    primary_result["output_gradient_modules"] = _enable_output_gradients(
+        compatibility_plan=compatibility_plan,
+    )
     primary_result["related_models"] = compatibility_results[1:]
     return primary_result
+
+
+def _requires_output_gradients(
+    config: DictConfig,
+) -> bool:
+    if (
+        config.modality == "text"
+        or not config.is_peft
+        or not config.gradient_checkpointing
+    ):
+        return False
+    if config.gradient_checkpointing_kwargs.use_reentrant:
+        return True
+    return (
+        config.strategy == "deepspeed"
+        and int(config.deepspeed.zero_optimization.stage) == 3
+    )
+
+
+def _enable_output_gradients(
+    compatibility_plan: Dict[str, Any],
+) -> List[str]:
+    if not compatibility_plan["_requires_output_gradients"]:
+        return []
+    module_paths = []
+    for candidate in compatibility_plan["_candidates"]:
+        module = candidate["module"]
+        if not hasattr(
+            module,
+            "_vision_patch_embedding_output_gradient_hook",
+        ):
+            handle = module.register_forward_hook(
+                _require_output_gradients,
+            )
+            setattr(
+                module,
+                "_vision_patch_embedding_output_gradient_hook",
+                handle,
+            )
+        module_paths.append(candidate["path"])
+    return module_paths
+
+
+def _require_output_gradients(
+    module: nn.Module,
+    inputs: Tuple[Any, ...],
+    output: torch.Tensor,
+) -> torch.Tensor:
+    if output.is_floating_point():
+        output.requires_grad_(True)
+    return output
 
 
 def _prepare_trainer_related_plans(
@@ -412,6 +467,7 @@ def _build_not_applicable_plan(
 ) -> Dict[str, Any]:
     return {
         "_candidates": [],
+        "_requires_output_gradients": False,
         "scope": model_role,
         "requested_mode": "not_applicable",
         "runtime_fingerprint": {},
