@@ -203,7 +203,7 @@ def train(
             reward_manager = setup.get_reward_manager()
             trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
 
-        if config.fine_tune_method in {"gkd", "gold"}:
+        if config.fine_tune_method in {"gkd", "gold", "distillation"}:
             trainer_config["teacher_model"] = config.teacher.model
 
         trainer_kwargs = {
