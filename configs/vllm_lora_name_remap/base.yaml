@@ -16,8 +16,8 @@ vllm_lora_name_remap:
       modalities: [text]
       package_versions:
         peft: ==0.18.1
-        transformers: ==5.13.1
-        trl: ==1.8.0
+        transformers: ==5.15.0
+        trl: ==1.10.0
         vllm: ==0.19.1
       profile: qwen_text_causal_to_conditional
   resolved_profile: null
