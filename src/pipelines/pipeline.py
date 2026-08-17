@@ -95,7 +95,15 @@ def train(
                 config=config,
                 runtime_snapshot=None,
             )
+            validate_notifications_config(config=config)
             init_train_tracking(config=config)
+            send_notification_preserving_error(
+                config=config,
+                title="Training Started",
+                text=f"Training process on {config.dataset_name} has started.",
+                level="INFO",
+                status="RUNNING",
+            )
 
         current_stage = "preflight"
         update_run_metadata(
@@ -295,11 +303,12 @@ def train(
                 error=None,
                 rank=rank,
             )
-            alert_tracking_preserving_error(
+            send_notification_preserving_error(
                 config=config,
                 title="Training Complete",
                 text=f"Training process on {config.dataset_name} has successfully finished.",
                 level="INFO",
+                status="FINISHED",
             )
     except (KeyboardInterrupt, SystemExit) as error:
         update_run_metadata_preserving_error(
@@ -309,6 +318,14 @@ def train(
             error=error,
             rank=rank,
         )
+        if rank == 0:
+            send_notification_preserving_error(
+                config=config,
+                title="Training Interrupted",
+                text=f"Training process on {config.dataset_name} was interrupted: {error}",
+                level="WARN",
+                status="KILLED",
+            )
         raise
     except Exception as e:
         update_run_metadata_preserving_error(
@@ -319,11 +336,12 @@ def train(
             rank=rank,
         )
         if rank == 0:
-            alert_tracking_preserving_error(
+            send_notification_preserving_error(
                 config=config,
                 title="Training Error",
                 text=f"An error occurred during training on {config.dataset_name}: {e}",
                 level="ERROR",
+                status="FAILED",
             )
         raise
     finally:
@@ -348,6 +366,7 @@ def test(
         rank = 0
 
     if rank == 0:
+        validate_notifications_config(config=config)
         init_eval_tracking(config=config)
 
     if "seed" in config:
@@ -427,19 +446,21 @@ def test(
                 dataframe=result_artifact["dataframe"],
             )
 
-            alert_tracking(
+            send_notification_preserving_error(
                 config=config,
                 title="Testing Complete",
                 text=f"Testing process on {config.dataset_name} has successfully finished.",
                 level="INFO",
+                status="FINISHED",
             )
     except Exception as e:
         if rank == 0:
-            alert_tracking_preserving_error(
+            send_notification_preserving_error(
                 config=config,
                 title="Testing Error",
                 text=f"An error occurred during testing on {config.dataset_name}: {e}",
                 level="ERROR",
+                status="FAILED",
             )
         raise e
     finally:
@@ -451,6 +472,7 @@ def test(
 def test_large(
     config: DictConfig,
 ) -> None:
+    validate_notifications_config(config=config)
     init_eval_tracking(config=config)
 
     if "seed" in config:
@@ -508,18 +530,20 @@ def test_large(
             dataframe=result_artifact["dataframe"],
         )
 
-        alert_tracking(
+        send_notification_preserving_error(
             config=config,
             title="Large Model Testing Complete",
             text=f"Testing process on {config.dataset_name} has successfully finished.",
             level="INFO",
+            status="FINISHED",
         )
     except Exception as e:
-        alert_tracking_preserving_error(
+        send_notification_preserving_error(
             config=config,
             title="Large Model Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
+            status="FAILED",
         )
         raise e
 
@@ -528,6 +552,7 @@ def test_large(
 def test_vllm(
     config: DictConfig,
 ) -> None:
+    validate_notifications_config(config=config)
     init_eval_tracking(config=config)
 
     if "seed" in config:
@@ -699,18 +724,20 @@ def test_vllm(
             dataframe=df,
         )
 
-        alert_tracking(
+        send_notification_preserving_error(
             config=config,
             title="vLLM Testing Complete",
             text=f"Testing process on {config.dataset_name} has successfully finished.",
             level="INFO",
+            status="FINISHED",
         )
     except Exception as e:
-        alert_tracking_preserving_error(
+        send_notification_preserving_error(
             config=config,
             title="vLLM Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
+            status="FAILED",
         )
         raise e
 
@@ -719,6 +746,7 @@ def test_vllm(
 def test_vllm_multi_turn(
     config: DictConfig,
 ) -> None:
+    validate_notifications_config(config=config)
     init_eval_tracking(config=config)
 
     if "seed" in config:
@@ -913,18 +941,20 @@ def test_vllm_multi_turn(
             key="test_results",
             dataframe=result_df,
         )
-        alert_tracking(
+        send_notification_preserving_error(
             config=config,
             title="vLLM Multi-Turn Testing Complete",
             text=f"Testing process on {config.dataset_name} has successfully finished.",
             level="INFO",
+            status="FINISHED",
         )
 
     except Exception as e:
-        alert_tracking_preserving_error(
+        send_notification_preserving_error(
             config=config,
             title="vLLM Multi-Turn Testing Error",
             text=f"An error occurred during testing on {config.dataset_name}: {e}",
             level="ERROR",
+            status="FAILED",
         )
         raise e
