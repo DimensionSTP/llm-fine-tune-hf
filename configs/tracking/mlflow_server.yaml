@@ -3,3 +3,7 @@ report_to: mlflow
 tracking_uri: ${oc.env:MLFLOW_TRACKING_URI}
 artifact_location: null
 require_tracking_uri: true
+system_metrics:
+  enabled: true
+  sampling_interval_seconds: 10
+  samples_before_logging: 1
