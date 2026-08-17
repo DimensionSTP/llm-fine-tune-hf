@@ -1,0 +1,3 @@
+backend: wandb
+webhook_url: null
+timeout_seconds: 10

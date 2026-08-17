@@ -1,0 +1,3 @@
+backend: slack
+webhook_url: ${oc.env:SLACK_WEBHOOK_URL,null}
+timeout_seconds: 10
