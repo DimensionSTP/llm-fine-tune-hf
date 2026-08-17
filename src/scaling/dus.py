@@ -47,13 +47,13 @@ def depth_upscale(
 
     if config.precision == 32 or config.precision == "32":
         safetensors_dtype = torch.float32
-        torch_dtype = "float32"
+        dtype = "float32"
     elif config.precision == 16 or config.precision == "16":
         safetensors_dtype = torch.float16
-        torch_dtype = "float16"
+        dtype = "float16"
     elif config.precision == "bf16":
         safetensors_dtype = torch.bfloat16
-        torch_dtype = "bfloat16"
+        dtype = "bfloat16"
     else:
         raise ValueError(f"Invalid precision type: {config.precision}")
 
@@ -63,7 +63,7 @@ def depth_upscale(
     original_hidden_layers = model_config.num_hidden_layers
 
     model_config._name_or_path = repo_id
-    model_config.torch_dtype = torch_dtype
+    model_config.torch_dtype = dtype
     model_config.num_hidden_layers = dus_hiddens
     model_config.save_pretrained(save_dir)
 
