@@ -170,6 +170,14 @@ python main.py --config-name=async_grpo.yaml mode=train
 # script/main runtime stops managed server automatically on exit
 ```
 
+* stable distillation train
+
+```shell
+bash scripts/train/distillation_train.sh
+```
+
+Stable Distillation loads the teacher locally and uses vLLM for student completion generation. The default is colocate mode with tensor parallel size 1; `vllm_mode=server` changes only the student generation backend, not the teacher location.
+
 * test
 
 ```shell
@@ -262,11 +270,12 @@ python main.py --config-name={method}.yaml mode=train
 | DPO | `dpo.yaml` | DPO | Preference-pair training. |
 | KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
 | GKD | `gkd.yaml` | GKD | Distillation with `loss_type=nll`. |
+| GOLD | `gold.yaml` | GKD-style teacher | Uses the upstream TRL experimental trainer. |
+| Distillation | `distillation.yaml` | Prompt-only | Stable on-policy distillation with a local teacher and student vLLM generation. |
 | GRPO | `grpo.yaml` | GRPO | vLLM importance-sampling correction is enabled by default. |
 | async GRPO | `async_grpo.yaml` | GRPO | Requires the trainer/vLLM split runtime. |
 | SDPO | `sdpo.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
 | A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
-| GOLD | `gold.yaml` | GKD-style teacher | Uses the upstream TRL experimental trainer. |
 
 Liger is enabled by default for SFT through `training_arguments.use_liger_kernel=True`. Set it to `False` when selecting `chunked_nll` or when native model execution is required.
 
@@ -469,10 +478,11 @@ The table below records VLM training support for the pinned dependency stack. Co
 | --- | --- | --- |
 | SFT | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `dataset_image` |
 | DPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
-| GRPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
 | KTO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
-| async GRPO / SDPO / A2PO | No | Text-only with the pinned TRL trainer paths |
 | GKD / GOLD | No | Text-only repository dataset contract |
+| Distillation | Yes | Prompt-only LLM/VLM data with `image` or `images`; student and teacher must share a vocabulary and compatible multimodal inputs. |
+| GRPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| async GRPO / SDPO / A2PO | No | Text-only with the pinned TRL trainer paths |
 
 * Reward embedding vLLM environment isolation
 
