@@ -8,6 +8,8 @@ HFDataset = datasets.Dataset
 import io
 import math
 
+import numpy as np
+
 from sklearn.model_selection import train_test_split
 from PIL import Image
 
@@ -300,7 +302,10 @@ class StructuralDataset(Dataset):
             if self.split == "val":
                 data = val_data
 
-        datas = data[self.data_column_name].tolist()
+        datas = [
+            _normalize_sft_nested_value(value=value)
+            for value in data[self.data_column_name].tolist()
+        ]
         labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
         return {
             "datas": datas,
@@ -763,13 +768,18 @@ class StructuralDataset(Dataset):
         self,
         image: Any,
     ) -> Any:
-        return normalize_image_source(
+        normalized_image = normalize_image_source(
             image=image,
             image_root_dir=self.image_root_dir,
             convert_unsupported_extensions=self.convert_unsupported_extensions,
             unsupported_path_extensions=self.unsupported_path_extensions,
             converted_image_mode=self.converted_image_mode,
         )
+        if isinstance(normalized_image, (bytes, bytearray, dict)):
+            loaded_image = self._load_image(image=normalized_image)
+            if loaded_image is not None:
+                return loaded_image
+        return normalized_image
 
     def _process_single_image(
         self,
@@ -1067,7 +1077,10 @@ class ConversationalDataset(StructuralDataset):
             if self.split == "val":
                 data = val_data
 
-        conversations = data[self.conversation_column_name].tolist()
+        conversations = [
+            _normalize_sft_nested_value(value=value)
+            for value in data[self.conversation_column_name].tolist()
+        ]
         return {
             "conversations": conversations,
         }
@@ -1095,6 +1108,22 @@ class ConversationalDataset(StructuralDataset):
             **chat_template_kwargs,
         )
         return prompt
+
+
+def _normalize_sft_nested_value(
+    value: Any,
+) -> Any:
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    if isinstance(value, list):
+        return [_normalize_sft_nested_value(value=item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _normalize_sft_nested_value(value=item)
+            for key, item in value.items()
+            if item is not None
+        }
+    return value
 
 
 class _SFTDatasetTransform:
