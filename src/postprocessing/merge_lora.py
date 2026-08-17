@@ -68,7 +68,7 @@ def merge_lora(
         exist_ok=True,
     )
 
-    torch_dtype = _torch_dtype_from_precision(
+    dtype = _dtype_from_precision(
         precision=config.precision,
     )
 
@@ -86,14 +86,14 @@ def merge_lora(
     if config.modality == "text":
         base_model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=base_model_name_or_path,
-            torch_dtype=torch_dtype,
+            dtype=dtype,
             device_map=None,
             revision=str(config.revision),
         )
     else:
         base_model = AutoModelForImageTextToText.from_pretrained(
             pretrained_model_name_or_path=base_model_name_or_path,
-            torch_dtype=torch_dtype,
+            dtype=dtype,
             device_map=None,
             revision=str(config.revision),
         )
@@ -157,7 +157,7 @@ def merge_lora(
         print(f"[OK] packed Qwen MoE expert groups: {packed_expert_groups}")
 
 
-def _torch_dtype_from_precision(
+def _dtype_from_precision(
     precision: object,
 ) -> torch.dtype:
     if precision in [32, "32"]:

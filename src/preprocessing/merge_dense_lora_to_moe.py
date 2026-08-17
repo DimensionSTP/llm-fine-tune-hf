@@ -42,13 +42,13 @@ def merge_dense_lora_to_moe(
         exist_ok=True,
     )
 
-    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
     moe_model = AutoModelForCausalLM.from_pretrained(
         moe_model_dir,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=trust_remote_code,
     ).to(device)
@@ -259,7 +259,7 @@ def merge_dense_lora_to_moe(
     )
 
 
-def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+def _dtype_from_str(dtype_str: str) -> torch.dtype:
     dtype_str = str(dtype_str).lower()
     if dtype_str in ("fp16", "float16"):
         return torch.float16

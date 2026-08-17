@@ -47,7 +47,7 @@ def dense_to_moe(
         exist_ok=True,
     )
 
-    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
@@ -58,7 +58,7 @@ def dense_to_moe(
 
     dense_model = AutoModelForCausalLM.from_pretrained(
         config.pretrained_model_name,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=trust_remote_code,
     ).to(device)
@@ -135,7 +135,7 @@ def dense_to_moe(
     )
 
 
-def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+def _dtype_from_str(dtype_str: str) -> torch.dtype:
     dtype_str = str(dtype_str).lower()
     if dtype_str in ("bf16", "bfloat16"):
         return torch.bfloat16

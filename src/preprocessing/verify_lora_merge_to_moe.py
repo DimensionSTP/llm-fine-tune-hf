@@ -36,13 +36,13 @@ def verify_lora_merge(
     base_moe_dir = str(d2m_cfg.moe_model_dir)
     merged_dir = str(d2m_cfg.merged_moe_model_dir)
 
-    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
     base_model = AutoModelForCausalLM.from_pretrained(
         base_moe_dir,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=trust_remote_code,
     ).to(device)
@@ -51,7 +51,7 @@ def verify_lora_merge(
 
     merged_model = AutoModelForCausalLM.from_pretrained(
         merged_dir,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=trust_remote_code,
     ).to(device)
@@ -438,7 +438,7 @@ def verify_lora_merge(
     print(f"[OK] LoRA merge verification report saved to: {out_path}")
 
 
-def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+def _dtype_from_str(dtype_str: str) -> torch.dtype:
     dtype_str = str(dtype_str).lower()
     if dtype_str in ("fp16", "float16"):
         return torch.float16

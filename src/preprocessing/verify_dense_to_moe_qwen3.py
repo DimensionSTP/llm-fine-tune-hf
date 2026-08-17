@@ -35,13 +35,13 @@ def verify_dense_to_moe(
     moe_dir = str(d2m_cfg.moe_model_dir)
     dense_id = str(config.pretrained_model_name)
 
-    dtype = _torch_dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
+    dtype = _dtype_from_str(dtype_str=d2m_cfg.runtime.dtype)
     device = torch.device(str(d2m_cfg.runtime.device))
     trust_remote_code = bool(d2m_cfg.runtime.trust_remote_code)
 
     dense_model = Qwen3ForCausalLM.from_pretrained(
         dense_id,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=trust_remote_code,
     ).to(device)
@@ -50,7 +50,7 @@ def verify_dense_to_moe(
 
     moe_model = AutoModelForCausalLM.from_pretrained(
         moe_dir,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=trust_remote_code,
     ).to(device)
@@ -326,7 +326,7 @@ def verify_dense_to_moe(
     print(f"[OK] Verification report saved to: {out_path}")
 
 
-def _torch_dtype_from_str(dtype_str: str) -> torch.dtype:
+def _dtype_from_str(dtype_str: str) -> torch.dtype:
     dtype_str = str(dtype_str).lower()
     if dtype_str in ("bf16", "bfloat16"):
         return torch.bfloat16
