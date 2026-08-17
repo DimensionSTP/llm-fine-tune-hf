@@ -24,7 +24,6 @@ def validate_training_arguments_config(
 
     ModelLoadPlanner(
         config=config,
-        torch_dtype="auto",
     ).validate()
     validate_dataloader_runtime_config(config=config)
     validate_memory_preflight_config(config=config)

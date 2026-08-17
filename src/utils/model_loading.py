@@ -29,10 +29,8 @@ class ModelLoadPlanner:
     def __init__(
         self,
         config: DictConfig,
-        torch_dtype: Union[torch.dtype, str],
     ) -> None:
         self.config = config
-        self.torch_dtype = torch_dtype
 
     def build(self) -> ModelLoadPlan:
         self.validate()
@@ -119,10 +117,8 @@ class ModelLoadPlanner:
             resolve=True,
         )
         if self.should_use_qlora_deepspeed_zero3():
-            quantization_config_dict["bnb_4bit_quant_storage"] = (
-                self.resolve_torch_dtype(
-                    dtype_name=self.config.model_loading.qlora.quant_storage_dtype,
-                )
+            quantization_config_dict["bnb_4bit_quant_storage"] = self.resolve_dtype(
+                dtype_name=self.config.model_loading.qlora.quant_storage_dtype,
             )
 
         return BitsAndBytesConfig(**quantization_config_dict)
@@ -293,7 +289,7 @@ class ModelLoadPlanner:
     def is_inference(self) -> bool:
         return self.config.mode in ["test", "test_large"]
 
-    def resolve_torch_dtype(
+    def resolve_dtype(
         self,
         dtype_name: Union[torch.dtype, str],
     ) -> Union[torch.dtype, str]:

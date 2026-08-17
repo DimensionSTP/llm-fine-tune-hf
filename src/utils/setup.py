@@ -55,17 +55,16 @@ class SetUp:
         )
 
         if config.precision in [32, "32"]:
-            self.torch_dtype = torch.float32
+            self.dtype = torch.float32
         elif config.precision in [16, "16"]:
-            self.torch_dtype = torch.float16
+            self.dtype = torch.float16
         elif config.precision == "bf16":
-            self.torch_dtype = torch.bfloat16
+            self.dtype = torch.bfloat16
         else:
-            self.torch_dtype = "auto"
+            self.dtype = "auto"
 
         self.model_load_planner = ModelLoadPlanner(
             config=self.config,
-            torch_dtype=self.torch_dtype,
         )
         self.hf_deepspeed_config = None
 
@@ -237,7 +236,7 @@ class SetUp:
             model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_name_or_path=model_load_plan.pretrained_model_name,
                 config=model_load_plan.pretrained_config,
-                torch_dtype=self.torch_dtype,
+                dtype=self.dtype,
                 attn_implementation=self.config.attn_implementation,
                 quantization_config=model_load_plan.quantization_config,
                 device_map=model_load_plan.device_map,
@@ -247,7 +246,7 @@ class SetUp:
             model = AutoModelForImageTextToText.from_pretrained(
                 pretrained_model_name_or_path=model_load_plan.pretrained_model_name,
                 config=model_load_plan.pretrained_config,
-                torch_dtype=self.torch_dtype,
+                dtype=self.dtype,
                 attn_implementation=self.config.attn_implementation,
                 quantization_config=model_load_plan.quantization_config,
                 device_map=model_load_plan.device_map,

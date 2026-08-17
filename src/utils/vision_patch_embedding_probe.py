@@ -237,7 +237,7 @@ def _run_probe_child(
         atol=float(probe_config["fp32_equivalence_atol"]),
         rtol=float(probe_config["fp32_equivalence_rtol"]),
     )
-    runtime_dtype = _resolve_torch_dtype(dtype_name=signature["dtype"])
+    runtime_dtype = _resolve_dtype(dtype_name=signature["dtype"])
     runtime_correctness = (
         fp32_correctness
         if runtime_dtype == torch.float32
@@ -402,7 +402,7 @@ def _measure_operators(
     device: torch.device,
     state_path: str,
 ) -> List[Dict[str, float]]:
-    dtype = _resolve_torch_dtype(dtype_name=signature["dtype"])
+    dtype = _resolve_dtype(dtype_name=signature["dtype"])
     convolution = _build_convolution(
         signature=signature,
         device=device,
@@ -524,7 +524,7 @@ def _build_input_shape(
     )
 
 
-def _resolve_torch_dtype(
+def _resolve_dtype(
     dtype_name: str,
 ) -> torch.dtype:
     dtype_by_name = {
