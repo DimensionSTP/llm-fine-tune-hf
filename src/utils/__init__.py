@@ -46,9 +46,15 @@ from .tracking import (
     init_train_tracking,
     init_eval_tracking,
     log_tracking_table,
+    get_tracking_context,
     alert_tracking,
     alert_tracking_preserving_error,
     finish_tracking,
+)
+from .notifications import (
+    validate_notifications_config,
+    send_notification,
+    send_notification_preserving_error,
 )
 from .test_utils import (
     build_test_dataloader,
@@ -115,9 +121,13 @@ __all__ = [
     "init_train_tracking",
     "init_eval_tracking",
     "log_tracking_table",
+    "get_tracking_context",
     "alert_tracking",
     "alert_tracking_preserving_error",
     "finish_tracking",
+    "validate_notifications_config",
+    "send_notification",
+    "send_notification_preserving_error",
     "build_test_dataloader",
     "generate_test_results",
     "build_generation_inputs",
