@@ -47,8 +47,6 @@ from .tracking import (
     init_eval_tracking,
     log_tracking_table,
     get_tracking_context,
-    alert_tracking,
-    alert_tracking_preserving_error,
     finish_tracking,
 )
 from .notifications import (
@@ -122,8 +120,6 @@ __all__ = [
     "init_eval_tracking",
     "log_tracking_table",
     "get_tracking_context",
-    "alert_tracking",
-    "alert_tracking_preserving_error",
     "finish_tracking",
     "validate_notifications_config",
     "send_notification",
