@@ -389,6 +389,8 @@ vllm_importance_sampling_cap={null or float}
 
 GRPO vLLM importance-sampling correction is enabled by default with `sequence_mask` mode, `clip_max=3.0`, and no min/cap.
 
+GRPO also enables KL bias correction when `beta` is nonzero. Multimodal completion logging is disabled by default and can be enabled with `log_multimodal=true` when image artifact upload is intended.
+
 * SDPO teacher server mode
 
 ```shell
