@@ -5,7 +5,8 @@ defaults:
   - image_augmentation: base
   - dataloader_runtime: auto
   - memory_preflight: base
-  - tracking: wandb
+  - tracking: mlflow
+  - notifications: slack
   - training_arguments: grpo
   - trainer: grpo
   - vllm_lora_name_remap: base

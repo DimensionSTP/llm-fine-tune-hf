@@ -4,7 +4,8 @@ defaults:
   - dataset_artifact: base
   - dataloader_runtime: auto
   - memory_preflight: base
-  - tracking: wandb
+  - tracking: mlflow
+  - notifications: slack
   - training_arguments: gold
   - trainer: gold
   - deepspeed: ds_config
