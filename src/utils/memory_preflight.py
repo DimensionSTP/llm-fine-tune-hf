@@ -242,6 +242,7 @@ def _validate_supported_memory_preflight_method(
         "kto",
         "gkd",
         "gold",
+        "distillation",
         "grpo",
         "sdpo",
         "a2po",
@@ -249,10 +250,10 @@ def _validate_supported_memory_preflight_method(
     if config.fine_tune_method not in supported_methods:
         raise ValueError(
             "memory_preflight strict_subprocess currently supports "
-            "sft, dpo, kto, gkd, gold, grpo, sdpo, and a2po."
+            "sft, dpo, kto, gkd, gold, distillation, grpo, sdpo, and a2po."
         )
     if (
-        config.fine_tune_method in {"gold", "grpo", "sdpo"}
+        config.fine_tune_method in {"gold", "distillation", "grpo", "sdpo"}
         and config.use_vllm
         and config.vllm_mode != "colocate"
     ):
