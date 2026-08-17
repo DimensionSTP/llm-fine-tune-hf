@@ -110,52 +110,6 @@ def get_tracking_context(
     raise ValueError(f"Unsupported tracking backend: {backend}.")
 
 
-def alert_tracking(
-    config: DictConfig,
-    title: str,
-    text: str,
-    level: str,
-) -> None:
-    backend = config.tracking.backend
-    if backend == "wandb":
-        wandb = _import_wandb()
-        if wandb.run is not None:
-            wandb.run.alert(
-                title=title,
-                text=text,
-                level=level,
-            )
-        return
-    if backend == "mlflow":
-        mlflow = _import_mlflow()
-        if mlflow.active_run() is not None:
-            mlflow.set_tag(
-                key=f"alert.{level.lower()}.{_normalize_tracking_key(value=title)}",
-                value=text,
-            )
-        return
-    raise ValueError(f"Unsupported tracking backend: {backend}.")
-
-
-def alert_tracking_preserving_error(
-    config: DictConfig,
-    title: str,
-    text: str,
-    level: str,
-) -> None:
-    try:
-        alert_tracking(
-            config=config,
-            title=title,
-            text=text,
-            level=level,
-        )
-    except Exception as error:
-        logging.getLogger(__name__).exception(
-            f"Failed to send tracking alert while preserving the pipeline error: {error}"
-        )
-
-
 def finish_tracking(
     config: DictConfig,
     status: str,
@@ -508,12 +462,6 @@ def _write_json(
         temp_path,
         path,
     )
-
-
-def _normalize_tracking_key(
-    value: str,
-) -> str:
-    return "_".join(value.lower().split())
 
 
 def _import_wandb() -> Any:
