@@ -54,7 +54,7 @@ scale_rewards=group
 is_answer_tag=True
 lr=5e-7
 weight_decay=1e-1
-warmup_ratio=5e-2
+warmup_steps=5e-2
 epoch=2
 step=250
 
@@ -146,6 +146,6 @@ accelerate launch \
     "${reward_weight_args[@]}" \
     lr=$lr \
     weight_decay=$weight_decay \
-    warmup_ratio=$warmup_ratio \
+    warmup_steps=$warmup_steps \
     epoch=$epoch \
     step=$step

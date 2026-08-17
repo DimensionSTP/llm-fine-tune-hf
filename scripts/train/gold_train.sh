@@ -43,7 +43,7 @@ gpu_memory_utilization=0.9
 vllm_sync_frequency=1
 lr=5e-6
 weight_decay=1e-1
-warmup_ratio=5e-2
+warmup_steps=5e-2
 epoch=2
 step=250
 
@@ -91,6 +91,6 @@ accelerate launch main.py --config-name=gold.yaml mode=train \
     vllm_sync_frequency=$vllm_sync_frequency \
     lr=$lr \
     weight_decay=$weight_decay \
-    warmup_ratio=$warmup_ratio \
+    warmup_steps=$warmup_steps \
     epoch=$epoch \
     step=$step
