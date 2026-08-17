@@ -68,6 +68,48 @@ def log_tracking_table(
     raise ValueError(f"Unsupported tracking backend: {backend}.")
 
 
+def get_tracking_context(
+    config: DictConfig,
+) -> Dict[str, Any]:
+    backend = config.tracking.backend
+    if backend == "wandb":
+        wandb = _import_wandb()
+        if wandb.run is None:
+            return {
+                "backend": backend,
+                "tracking_run_id": None,
+                "run_url": None,
+            }
+        return {
+            "backend": backend,
+            "tracking_run_id": wandb.run.id,
+            "run_url": wandb.run.url,
+        }
+    if backend == "mlflow":
+        mlflow = _import_mlflow()
+        active_run = mlflow.active_run()
+        if active_run is None:
+            return {
+                "backend": backend,
+                "tracking_run_id": None,
+                "run_url": None,
+            }
+        tracking_uri = str(mlflow.get_tracking_uri())
+        run_url = None
+        if tracking_uri.startswith(("http://", "https://")):
+            run_url = (
+                f"{tracking_uri.rstrip('/')}"
+                f"/#/experiments/{active_run.info.experiment_id}"
+                f"/runs/{active_run.info.run_id}"
+            )
+        return {
+            "backend": backend,
+            "tracking_run_id": active_run.info.run_id,
+            "run_url": run_url,
+        }
+    raise ValueError(f"Unsupported tracking backend: {backend}.")
+
+
 def alert_tracking(
     config: DictConfig,
     title: str,
@@ -282,7 +324,10 @@ def _init_mlflow_train_tracking(
                 "resume_training is true. Refusing to start a new MLflow run "
                 "because it can split a resumed training run across tracking runs."
             )
-        active_run = mlflow.start_run(run_id=tracking_run_id)
+        active_run = mlflow.start_run(
+            run_id=tracking_run_id,
+            log_system_metrics=config.tracking.system_metrics.enabled,
+        )
     else:
         if "tracking_run_id" in metadata:
             raise ValueError(
@@ -293,6 +338,7 @@ def _init_mlflow_train_tracking(
         active_run = mlflow.start_run(
             run_name=config.logging_name,
             tags=_build_mlflow_train_tags(config=config),
+            log_system_metrics=config.tracking.system_metrics.enabled,
         )
     _write_tracking_metadata(
         config=config,
@@ -308,6 +354,7 @@ def _init_mlflow_eval_tracking(
     mlflow.start_run(
         run_name=config.model_detail,
         tags=_build_mlflow_eval_tags(config=config),
+        log_system_metrics=config.tracking.system_metrics.enabled,
     )
 
 
@@ -324,6 +371,7 @@ def _configure_mlflow(
         )
     if tracking_uri is not None:
         mlflow.set_tracking_uri(tracking_uri)
+    _configure_mlflow_system_metrics(config=config)
     client = mlflow.tracking.MlflowClient()
     experiment = client.get_experiment_by_name(config.project_name)
     if experiment is None:
@@ -334,6 +382,20 @@ def _configure_mlflow(
     else:
         experiment_id = experiment.experiment_id
     mlflow.set_experiment(experiment_id=experiment_id)
+
+
+def _configure_mlflow_system_metrics(
+    config: DictConfig,
+) -> None:
+    if not config.tracking.system_metrics.enabled:
+        return
+    mlflow = _import_mlflow()
+    mlflow.set_system_metrics_sampling_interval(
+        config.tracking.system_metrics.sampling_interval_seconds,
+    )
+    mlflow.set_system_metrics_samples_before_logging(
+        config.tracking.system_metrics.samples_before_logging,
+    )
 
 
 def _build_mlflow_train_tags(
