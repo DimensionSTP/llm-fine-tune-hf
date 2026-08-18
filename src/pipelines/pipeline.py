@@ -233,6 +233,10 @@ def train(
         trainer = TrainerClass(
             **trainer_kwargs,
         )
+        attach_train_completion_tracking(
+            config=config,
+            trainer=trainer,
+        )
         if vision_patch_embedding_plan is not None:
             vision_patch_embedding_result = (
                 apply_trainer_vision_patch_embedding_compatibility(
