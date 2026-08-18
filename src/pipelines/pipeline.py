@@ -203,6 +203,18 @@ def train(
             reward_manager = setup.get_reward_manager()
             trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
 
+        if config.fine_tune_method in {"grpo", "async_grpo"}:
+            trainer_config.update(
+                setup.get_agentic_trainer_kwargs(
+                    model=model,
+                    train_dataset=train_dataset,
+                    training_arguments=training_arguments,
+                    data_encoder=data_encoder,
+                    reward_funcs=trainer_config["reward_funcs"],
+                    rank=rank,
+                )
+            )
+
         if config.fine_tune_method in {"gkd", "gold", "distillation"}:
             trainer_config["teacher_model"] = config.teacher.model
 

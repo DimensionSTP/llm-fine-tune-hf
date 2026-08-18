@@ -1,8 +1,8 @@
-from typing import Dict, Union, Optional, Protocol, Callable, Any
+from typing import Dict, List, Union, Optional, Protocol, Callable, Any
 import re
 
 from omegaconf import DictConfig, OmegaConf
-from hydra.utils import instantiate
+from hydra.utils import instantiate, get_method
 
 import importlib
 
@@ -75,6 +75,15 @@ class SetUp:
         validate_training_arguments_config(
             config=self.config,
         )
+        if (
+            self.config.fine_tune_method in {"grpo", "async_grpo"}
+            and self.config.agentic.enabled
+            and self.config.agentic.data_source == "environment"
+        ):
+            return {
+                "train": None,
+                "val": None,
+            }
         if self.config.fine_tune_method == "sft":
             return {
                 "train": self._get_train_dataset(),
@@ -369,6 +378,45 @@ class SetUp:
         )
         return reward_manager
 
+    def get_agentic_trainer_kwargs(
+        self,
+        model: Union[str, PreTrainedModel],
+        train_dataset: Optional[Union[HFDataset, HFIterableDataset]],
+        training_arguments: TrainingArguments,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+        reward_funcs: List[Callable[..., List[float]]],
+        rank: int,
+    ) -> Dict[str, Any]:
+        if (
+            self.config.fine_tune_method not in {"grpo", "async_grpo"}
+            or not self.config.agentic.enabled
+        ):
+            return {}
+
+        tools = self._get_agentic_tools()
+        environment_factory = self._get_agentic_environment_factory()
+        trainer_kwargs = {
+            "tools": tools,
+            "environment_factory": environment_factory,
+        }
+        if self.config.agentic.rollout_worker is None or rank != 0:
+            return trainer_kwargs
+        if not isinstance(model, str):
+            raise TypeError("Async agentic rollout workers require a model identifier.")
+        if train_dataset is None:
+            raise ValueError("Async agentic rollout workers require a train dataset.")
+
+        trainer_kwargs["rollout_worker"] = self._get_agentic_rollout_worker(
+            model=model,
+            train_dataset=train_dataset,
+            training_arguments=training_arguments,
+            data_encoder=data_encoder,
+            reward_funcs=reward_funcs,
+            tools=tools,
+            environment_factory=environment_factory,
+        )
+        return trainer_kwargs
+
     def _build_dataloader_training_kwargs(self) -> Dict[str, Any]:
         return {
             "dataloader_num_workers": self.dataloader_runtime[
@@ -402,6 +450,80 @@ class SetUp:
             self.config.dataset[self.data_type],
         )
         return dataset()
+
+    def _get_agentic_tools(self) -> List[Callable[..., Any]]:
+        return [
+            get_method(path=str(tool_path)) for tool_path in self.config.agentic.tools
+        ]
+
+    def _get_agentic_environment_factory(
+        self,
+    ) -> Optional[Union[Callable[..., Any], Dict[str, Callable[..., Any]]]]:
+        factory_config = self.config.agentic.environment_factory
+        if factory_config is None:
+            return None
+        if "_target_" in factory_config:
+            return instantiate(
+                factory_config,
+                _partial_=True,
+                _convert_="all",
+            )
+        return {
+            str(name): instantiate(
+                configured_factory,
+                _partial_=True,
+                _convert_="all",
+            )
+            for name, configured_factory in factory_config.items()
+        }
+
+    def _get_agentic_rollout_worker(
+        self,
+        model: str,
+        train_dataset: Union[HFDataset, HFIterableDataset],
+        training_arguments: TrainingArguments,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+        reward_funcs: List[Callable[..., List[float]]],
+        tools: List[Callable[..., Any]],
+        environment_factory: Optional[
+            Union[Callable[..., Any], Dict[str, Callable[..., Any]]]
+        ],
+    ) -> Any:
+        max_inflight_tasks = training_arguments.max_inflight_tasks
+        if max_inflight_tasks < 0:
+            max_inflight_tasks = (
+                training_arguments.max_staleness
+                * training_arguments.per_device_train_batch_size
+                * training_arguments.gradient_accumulation_steps
+                * self.distributed_runtime_snapshot["world_size"]
+            )
+
+        return instantiate(
+            self.config.agentic.rollout_worker,
+            model_name=model,
+            dataset=train_dataset,
+            reward_funcs=reward_funcs,
+            processing_class=data_encoder,
+            tools=tools,
+            environment_factory=environment_factory,
+            num_generations=training_arguments.num_generations,
+            max_inflight_tasks=max_inflight_tasks,
+            queue_maxsize=training_arguments.queue_maxsize,
+            vllm_server_url=training_arguments.vllm_server_base_url,
+            max_tokens=training_arguments.max_completion_length,
+            temperature=training_arguments.temperature,
+            top_p=training_arguments.top_p,
+            top_k=training_arguments.top_k,
+            min_p=training_arguments.min_p,
+            repetition_penalty=training_arguments.repetition_penalty,
+            request_timeout=training_arguments.request_timeout,
+            chat_template_kwargs=training_arguments.chat_template_kwargs,
+            max_tool_calling_iterations=training_arguments.max_tool_calling_iterations,
+            log_completions=training_arguments.log_completions,
+            num_completions_to_print=training_arguments.num_completions_to_print,
+            fork_threshold_tokens=training_arguments.fork_threshold_tokens,
+            _convert_="all",
+        )
 
 
 class _SFTDataset(Protocol):
