@@ -445,6 +445,8 @@ agentic:
 
 Install the task's OpenEnv client or `openenv[core]>=0.3.1` only for this optional path. The external package owns session construction, task rewards, turn selection, and agent-trace filtering; the repository supplies the configured dataset, tokenizer, reward functions, generation settings, and worker lifecycle inputs.
 
+Async GRPO takes `temperature`, `top_p`, `top_k`, `min_p`, and `repetition_penalty` from `generation_config`. GRPO and Async GRPO use `agentic.max_tool_calling_iterations` for the agentic turn limit, while Async GRPO alone uses `async_agentic.fork_threshold_tokens` for prefix reconciliation. TRL reports reward, completion, throughput, step-time, and queue-time scalar metrics to the selected tracking backend. Raw interactive traces remain task-owned because TRL 1.10 exposes its built-in trace logger only through Trackio.
+
 * SDPO teacher server mode
 
 ```shell
