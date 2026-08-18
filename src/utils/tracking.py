@@ -1,6 +1,9 @@
-from typing import Dict, Callable, Any
+from typing import Dict, List, Callable, Any
 import os
+import base64
+from collections.abc import Collection
 from functools import partial, update_wrapper
+import io
 import json
 import logging
 import uuid
@@ -8,6 +11,8 @@ import uuid
 from omegaconf import DictConfig
 
 import pandas as pd
+
+from transformers import TrainerCallback
 
 
 def tracking_lifecycle(
@@ -66,6 +71,26 @@ def log_tracking_table(
         )
         return
     raise ValueError(f"Unsupported tracking backend: {backend}.")
+
+
+def attach_train_completion_tracking(
+    config: DictConfig,
+    trainer: Any,
+) -> None:
+    if (
+        config.fine_tune_method != "grpo"
+        or not config.log_completions
+        or config.tracking.backend != "mlflow"
+        or config.memory_preflight.is_probe
+        or not _is_tracking_owner()
+    ):
+        return
+    trainer.add_callback(
+        _MLflowCompletionArtifactCallback(
+            config=config,
+            completion_logs=trainer._logs,
+        ),
+    )
 
 
 def get_tracking_context(
@@ -155,6 +180,124 @@ def _run_tracking_lifecycle(
         status="FINISHED",
     )
     return result
+
+
+class _MLflowCompletionArtifactCallback(TrainerCallback):
+    def __init__(
+        self,
+        config: DictConfig,
+        completion_logs: Dict[str, Any],
+    ) -> None:
+        self.config = config
+        self.completion_logs = completion_logs
+
+    def on_log(
+        self,
+        args: Any,
+        state: Any,
+        control: Any,
+        **kwargs: Any,
+    ) -> None:
+        _log_mlflow_completion_artifacts(
+            config=self.config,
+            completion_logs=self.completion_logs,
+            global_step=state.global_step,
+            log_index=len(state.log_history),
+        )
+
+
+def _log_mlflow_completion_artifacts(
+    config: DictConfig,
+    completion_logs: Dict[str, Any],
+    global_step: int,
+    log_index: int,
+) -> None:
+    prompts = completion_logs["prompt"]
+    if len(prompts) == 0:
+        return
+
+    table = {
+        "step": [global_step] * len(prompts),
+        "prompt": prompts,
+        "completion": completion_logs["completion"],
+        **completion_logs["rewards"],
+        **completion_logs["extra"],
+        "advantage": completion_logs["advantages"],
+    }
+    if config.log_multimodal:
+        table["image_artifacts"] = _log_mlflow_completion_images(
+            image_rows=completion_logs["images"],
+            num_rows=len(prompts),
+            global_step=global_step,
+            log_index=log_index,
+        )
+
+    mlflow = _import_mlflow()
+    mlflow.log_table(
+        data=pd.DataFrame(table),
+        artifact_file=f"completions/tables/step_{global_step:05d}_log_{log_index:05d}.json",
+    )
+
+
+def _log_mlflow_completion_images(
+    image_rows: Collection[Any],
+    num_rows: int,
+    global_step: int,
+    log_index: int,
+) -> List[str]:
+    if len(image_rows) == 0:
+        return ["[]"] * num_rows
+    if len(image_rows) != num_rows:
+        raise ValueError("GRPO completion image rows must match completion table rows.")
+
+    mlflow = _import_mlflow()
+    row_artifact_paths = []
+    for row_index, images in enumerate(image_rows):
+        artifact_paths = []
+        for image_index, image in enumerate(images or []):
+            artifact_path = (
+                "completions/images/"
+                f"step_{global_step:05d}_log_{log_index:05d}_"
+                f"row_{row_index:05d}_image_{image_index:03d}.png"
+            )
+            mlflow.log_image(
+                image=mlflow.Image(_resolve_mlflow_completion_image(image=image)),
+                artifact_file=artifact_path,
+                synchronous=True,
+            )
+            artifact_paths.append(artifact_path)
+        row_artifact_paths.append(
+            json.dumps(
+                artifact_paths,
+                ensure_ascii=False,
+            )
+        )
+    return row_artifact_paths
+
+
+def _resolve_mlflow_completion_image(
+    image: Any,
+) -> Any:
+    if not isinstance(image, str) or os.path.isfile(image):
+        return image
+
+    encoded_image = (
+        image.split(
+            ",",
+            1,
+        )[1]
+        if image.startswith("data:")
+        else image
+    )
+    image_bytes = base64.b64decode(
+        encoded_image,
+        validate=True,
+    )
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(image_bytes)) as decoded_image:
+        return decoded_image.copy()
 
 
 def _finish_tracking_preserving_error(
