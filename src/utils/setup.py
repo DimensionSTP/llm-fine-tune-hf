@@ -8,6 +8,7 @@ import importlib
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
+HFIterableDataset = datasets.IterableDataset
 
 import torch
 from torch.utils.data import Dataset
@@ -68,7 +69,9 @@ class SetUp:
         )
         self.hf_deepspeed_config = None
 
-    def get_train_datasets(self) -> Dict[str, Optional[Union[Dataset, HFDataset]]]:
+    def get_train_datasets(
+        self,
+    ) -> Dict[str, Optional[Union[Dataset, HFDataset, HFIterableDataset]]]:
         if self.config.fine_tune_method == "sft":
             return {
                 "train": self._get_train_dataset(),
@@ -389,7 +392,9 @@ class SetUp:
         )
         return val_dataset.to_hf_dataset()
 
-    def _get_dataset(self) -> Dict[str, HFDataset]:
+    def _get_dataset(
+        self,
+    ) -> Dict[str, Optional[Union[HFDataset, HFIterableDataset]]]:
         dataset: _DatasetBuilder = instantiate(
             self.config.dataset[self.data_type],
         )
@@ -401,4 +406,6 @@ class _SFTDataset(Protocol):
 
 
 class _DatasetBuilder(Protocol):
-    def __call__(self) -> Dict[str, HFDataset]: ...
+    def __call__(
+        self,
+    ) -> Dict[str, Optional[Union[HFDataset, HFIterableDataset]]]: ...

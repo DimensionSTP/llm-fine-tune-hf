@@ -1,9 +1,11 @@
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Union, Optional, Any
 
 import importlib
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
+HFIterableDataset = datasets.IterableDataset
+_HFDataset = Union[HFDataset, HFIterableDataset]
 
 import math
 
@@ -16,6 +18,7 @@ from ..helpers.dataset_paths import (
 from .dataset_loading import (
     load_hf_dataset_specs,
     load_hf_train_val_dataset_specs,
+    load_streaming_hf_train_val_dataset_specs,
     load_weighted_hf_dataset_specs,
 )
 from .image_io import (
@@ -57,6 +60,7 @@ class StructuralDataset:
         val_dataset_files: Optional[List[Dict[str, Any]]],
         allow_val_dataset_file_name_mismatch: bool,
         dataset_resampling: Dict[str, Any],
+        dataset_streaming: Dict[str, Any],
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
@@ -70,6 +74,7 @@ class StructuralDataset:
         self.val_dataset_files = val_dataset_files
         self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
         self.dataset_resampling = dataset_resampling
+        self.dataset_streaming = dataset_streaming
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -92,7 +97,7 @@ class StructuralDataset:
             seed=seed,
         )
 
-    def __call__(self) -> Dict[str, HFDataset]:
+    def __call__(self) -> Dict[str, Optional[_HFDataset]]:
         train_data_specs = resolve_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
@@ -116,7 +121,14 @@ class StructuralDataset:
             path_label="val_dataset",
             allow_weight=False,
         )
-        if self.dataset_resampling.enabled:
+        if self.dataset_streaming.enabled:
+            loaded_datasets = load_streaming_hf_train_val_dataset_specs(
+                train_dataset_file_specs=train_data_specs,
+                val_dataset_file_specs=val_data_specs,
+            )
+            dataset = loaded_datasets["train"]
+            val_dataset = loaded_datasets["val"]
+        elif self.dataset_resampling.enabled:
             dataset = load_weighted_hf_dataset_specs(
                 dataset_file_specs=train_data_specs,
                 dataset_resampling=self.dataset_resampling,
@@ -177,7 +189,9 @@ class StructuralDataset:
             if val_dataset is not None:
                 val_dataset = val_dataset.map(self._resize_image_columns)
 
-        if val_dataset is None:
+        if self.dataset_streaming.enabled:
+            train_dataset = dataset
+        elif val_dataset is None:
             split_dataset = dataset.train_test_split(
                 test_size=self.split_ratio,
                 seed=self.seed,
@@ -195,10 +209,11 @@ class StructuralDataset:
                 dataset=train_dataset,
                 apply_image_augmentation=self.image_augmenter is not None,
             )
-            val_dataset = self._decode_image_paths(
-                dataset=val_dataset,
-                apply_image_augmentation=False,
-            )
+            if val_dataset is not None:
+                val_dataset = self._decode_image_paths(
+                    dataset=val_dataset,
+                    apply_image_augmentation=False,
+                )
 
         return {
             "train": train_dataset,
@@ -474,9 +489,13 @@ class StructuralDataset:
 
     def _decode_image_paths(
         self,
-        dataset: HFDataset,
+        dataset: _HFDataset,
         apply_image_augmentation: bool,
-    ) -> HFDataset:
+    ) -> _HFDataset:
+        if isinstance(dataset, HFIterableDataset):
+            if apply_image_augmentation:
+                return dataset.map(self._decode_train_image_columns)
+            return dataset.map(self._decode_eval_image_columns)
         if apply_image_augmentation:
             return dataset.with_transform(self._decode_train_image_columns)
         return dataset.with_transform(self._decode_eval_image_columns)
@@ -509,6 +528,7 @@ class ConversationalDataset(StructuralDataset):
         val_dataset_files: Optional[List[Dict[str, Any]]],
         allow_val_dataset_file_name_mismatch: bool,
         dataset_resampling: Dict[str, Any],
+        dataset_streaming: Dict[str, Any],
         dataset_image: Optional[Dict[str, Any]],
     ) -> None:
         self.data_path = data_path
@@ -522,6 +542,7 @@ class ConversationalDataset(StructuralDataset):
         self.val_dataset_files = val_dataset_files
         self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
         self.dataset_resampling = dataset_resampling
+        self.dataset_streaming = dataset_streaming
         self.split_ratio = split_ratio
         self.is_strict_split = is_strict_split
         self.seed = seed
@@ -542,7 +563,7 @@ class ConversationalDataset(StructuralDataset):
             seed=seed,
         )
 
-    def __call__(self) -> Dict[str, HFDataset]:
+    def __call__(self) -> Dict[str, Optional[_HFDataset]]:
         train_data_specs = resolve_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
@@ -566,7 +587,14 @@ class ConversationalDataset(StructuralDataset):
             path_label="val_dataset",
             allow_weight=False,
         )
-        if self.dataset_resampling.enabled:
+        if self.dataset_streaming.enabled:
+            loaded_datasets = load_streaming_hf_train_val_dataset_specs(
+                train_dataset_file_specs=train_data_specs,
+                val_dataset_file_specs=val_data_specs,
+            )
+            dataset = loaded_datasets["train"]
+            val_dataset = loaded_datasets["val"]
+        elif self.dataset_resampling.enabled:
             dataset = load_weighted_hf_dataset_specs(
                 dataset_file_specs=train_data_specs,
                 dataset_resampling=self.dataset_resampling,
@@ -630,7 +658,9 @@ class ConversationalDataset(StructuralDataset):
             if val_dataset is not None:
                 val_dataset = val_dataset.map(self._resize_image_columns)
 
-        if val_dataset is None:
+        if self.dataset_streaming.enabled:
+            train_dataset = dataset
+        elif val_dataset is None:
             split_dataset = dataset.train_test_split(
                 test_size=self.split_ratio,
                 seed=self.seed,
@@ -648,10 +678,11 @@ class ConversationalDataset(StructuralDataset):
                 dataset=train_dataset,
                 apply_image_augmentation=self.image_augmenter is not None,
             )
-            val_dataset = self._decode_image_paths(
-                dataset=val_dataset,
-                apply_image_augmentation=False,
-            )
+            if val_dataset is not None:
+                val_dataset = self._decode_image_paths(
+                    dataset=val_dataset,
+                    apply_image_augmentation=False,
+                )
 
         return {
             "train": train_dataset,

@@ -1,10 +1,12 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Union, Optional, Any
 import random
 
 import importlib
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
+HFIterableDataset = datasets.IterableDataset
+_HFDataset = Union[HFDataset, HFIterableDataset]
 concatenate_datasets = datasets.concatenate_datasets
 load_dataset = datasets.load_dataset
 
@@ -106,6 +108,23 @@ def load_hf_dataset_file(
     )["train"]
 
 
+def load_streaming_hf_dataset_specs(
+    dataset_file_specs: List[Dict[str, Any]],
+) -> HFIterableDataset:
+    datasets_by_spec = [
+        _load_streaming_hf_dataset_file(
+            dataset_format=dataset_file_spec["format"],
+            dataset_file_path=dataset_file_spec["path"],
+        )
+        for dataset_file_spec in dataset_file_specs
+    ]
+    if len(datasets_by_spec) == 1:
+        return datasets_by_spec[0]
+    return concatenate_datasets(
+        dsets=_align_hf_dataset_features(datasets=datasets_by_spec)
+    )
+
+
 def load_hf_train_val_datasets(
     dataset_format: str,
     train_dataset_file_paths: List[str],
@@ -148,6 +167,26 @@ def load_hf_train_val_dataset_specs(
         None
         if val_dataset_file_specs is None
         else load_hf_dataset_specs(
+            dataset_file_specs=val_dataset_file_specs,
+        )
+    )
+    return {
+        "train": train_dataset,
+        "val": val_dataset,
+    }
+
+
+def load_streaming_hf_train_val_dataset_specs(
+    train_dataset_file_specs: List[Dict[str, Any]],
+    val_dataset_file_specs: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Optional[HFIterableDataset]]:
+    train_dataset = load_streaming_hf_dataset_specs(
+        dataset_file_specs=train_dataset_file_specs,
+    )
+    val_dataset = (
+        None
+        if val_dataset_file_specs is None
+        else load_streaming_hf_dataset_specs(
             dataset_file_specs=val_dataset_file_specs,
         )
     )
@@ -267,6 +306,19 @@ def resolve_hf_dataset_format(
     return dataset_format
 
 
+def _load_streaming_hf_dataset_file(
+    dataset_format: str,
+    dataset_file_path: str,
+) -> HFIterableDataset:
+    hf_dataset_format = resolve_hf_dataset_format(dataset_format=dataset_format)
+    return load_dataset(
+        hf_dataset_format,
+        data_files=dataset_file_path,
+        split="train",
+        streaming=True,
+    )
+
+
 def _sample_hf_dataset(
     dataset: HFDataset,
     sample_count: int,
@@ -281,8 +333,8 @@ def _sample_hf_dataset(
 
 
 def _align_hf_dataset_features(
-    datasets: List[HFDataset],
-) -> List[HFDataset]:
+    datasets: List[_HFDataset],
+) -> List[_HFDataset]:
     reference_features = datasets[0].features
     return [dataset.cast(reference_features) for dataset in datasets]
 
