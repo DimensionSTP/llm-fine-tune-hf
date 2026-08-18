@@ -400,6 +400,51 @@ GRPO vLLM importance-sampling correction is enabled by default with `sequence_ma
 
 GRPO also enables KL bias correction when `beta` is nonzero. Multimodal completion logging is disabled by default and can be enabled with `log_multimodal=true` when image artifact upload is intended.
 
+* GRPO streaming and agentic training
+
+GRPO keeps map-style local dataset loading by default. Local JSONL, JSON, Parquet, CSV, and TSV files can be streamed without materializing the full dataset by enabling streaming and setting a positive step limit:
+
+```shell
+dataset_streaming.enabled=True
+max_steps=1000
+use_validation=False
+```
+
+Streaming is GRPO-only, does not support weighted offline resampling or memory preflight, and requires an explicit validation dataset when `use_validation=True`. TRL preserves each `num_generations` prompt group and uses zero dataset workers for the iterable train stream.
+
+Agentic training is disabled by default. Define task-specific tools and environment factories outside this repository and connect them through Hydra targets:
+
+```yaml
+agentic:
+  enabled: true
+  data_source: environment
+  tools: [external_package.tools.lookup]
+  environment_factory:
+    _target_: external_package.environments.TaskEnvironment
+  rollout_worker: null
+dataset_namespace: task-environment
+max_steps: 1000
+use_validation: false
+```
+
+`data_source=dataset` keeps the configured GRPO dataset and permits one factory or a name-to-factory mapping. `data_source=environment` skips dataset loading, accepts one factory whose `reset()` owns prompt generation, and requires `dataset_namespace` for artifact isolation, a positive `max_steps`, and disabled validation.
+
+Async GRPO can inject TRL's OpenEnv harness worker through the same config without importing OpenEnv on normal runs:
+
+```yaml
+agentic:
+  enabled: true
+  data_source: dataset
+  tools: []
+  environment_factory: null
+  rollout_worker:
+    _target_: trl.experimental.async_grpo.openenv_harness.HarnessRolloutWorker
+    harness_session_factory:
+      _target_: external_package.openenv.build_session_factory
+```
+
+Install the task's OpenEnv client or `openenv[core]>=0.3.1` only for this optional path. The external package owns session construction, task rewards, turn selection, and agent-trace filtering; the repository supplies the configured dataset, tokenizer, reward functions, generation settings, and worker lifecycle inputs.
+
 * SDPO teacher server mode
 
 ```shell
