@@ -5,3 +5,4 @@ agentic:
   tools: []
   environment_factory: null
   rollout_worker: null
+  max_tool_calling_iterations: null

@@ -147,6 +147,9 @@ distributed:
 chat_template_kwargs:
   enable_thinking: ${is_enable_thinking}
 
+async_agentic:
+  fork_threshold_tokens: 1024
+
 epsilon: 0.2
 epsilon_high: 0.2
 num_generations: 16

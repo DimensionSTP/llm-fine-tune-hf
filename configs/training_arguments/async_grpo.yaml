@@ -36,6 +36,8 @@ top_p: ${generation_config.top_p}
 top_k: ${generation_config.top_k}
 min_p: ${generation_config.min_p}
 repetition_penalty: ${generation_config.repetition_penalty}
+max_tool_calling_iterations: ${agentic.max_tool_calling_iterations}
+fork_threshold_tokens: ${async_agentic.fork_threshold_tokens}
 epsilon: ${epsilon}
 epsilon_high: ${epsilon_high}
 vllm_server_base_url: ${vllm_server_base_url}
