@@ -1,0 +1,7 @@
+# @package _global_
+agentic:
+  enabled: false
+  data_source: dataset
+  tools: []
+  environment_factory: null
+  rollout_worker: null
