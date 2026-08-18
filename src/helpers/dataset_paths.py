@@ -316,7 +316,22 @@ def build_train_dataset_input_metadata(
     allow_val_dataset_file_name_mismatch: bool,
     use_validation: bool,
     dataset_resampling: DictConfig,
+    dataset_streaming_enabled: bool,
+    data_source: str,
 ) -> Dict[str, Any]:
+    if data_source == "environment":
+        return {
+            "train": {
+                "mode": "environment",
+                "files": [],
+            },
+            "validation": {
+                "mode": "disabled",
+                "files": None,
+                "from_train_split": False,
+            },
+        }
+
     train_specs = resolve_dataset_file_specs(
         dataset_name=dataset_name,
         dataset_format=dataset_format,
@@ -340,21 +355,29 @@ def build_train_dataset_input_metadata(
         path_label="val_dataset",
         allow_weight=False,
     )
+    train_mode = _get_train_input_mode(
+        specs=train_specs,
+        dataset_resampling=dataset_resampling,
+    )
+    validation_mode = _get_validation_input_mode(
+        specs=val_specs,
+        use_validation=use_validation,
+    )
+    if dataset_streaming_enabled:
+        train_mode = f"streaming_{train_mode}"
+        if validation_mode != "disabled":
+            validation_mode = f"streaming_{validation_mode}"
     return {
         "train": {
-            "mode": _get_train_input_mode(
-                specs=train_specs,
-                dataset_resampling=dataset_resampling,
-            ),
+            "mode": train_mode,
             "files": train_specs,
         },
         "validation": {
-            "mode": _get_validation_input_mode(
-                specs=val_specs,
-                use_validation=use_validation,
-            ),
+            "mode": validation_mode,
             "files": val_specs,
-            "from_train_split": use_validation and val_specs is None,
+            "from_train_split": (
+                use_validation and val_specs is None and not dataset_streaming_enabled
+            ),
         },
     }
 

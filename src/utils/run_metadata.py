@@ -514,6 +514,20 @@ def _build_input_section(
         allow_val_dataset_file_name_mismatch=config.allow_val_dataset_file_name_mismatch,
         use_validation=config.use_validation,
         dataset_resampling=config.dataset_resampling,
+        dataset_streaming_enabled=bool(
+            OmegaConf.select(
+                config,
+                "dataset_streaming.enabled",
+                default=False,
+            )
+        ),
+        data_source=str(
+            OmegaConf.select(
+                config,
+                "agentic.data_source",
+                default="dataset",
+            )
+        ),
     )
 
 

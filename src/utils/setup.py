@@ -72,6 +72,9 @@ class SetUp:
     def get_train_datasets(
         self,
     ) -> Dict[str, Optional[Union[Dataset, HFDataset, HFIterableDataset]]]:
+        validate_training_arguments_config(
+            config=self.config,
+        )
         if self.config.fine_tune_method == "sft":
             return {
                 "train": self._get_train_dataset(),

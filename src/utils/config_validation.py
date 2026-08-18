@@ -15,6 +15,8 @@ def validate_training_arguments_config(
     config: DictConfig,
 ) -> None:
     _validate_dataset_input_config(config=config)
+    _validate_grpo_dataset_streaming_config(config=config)
+    _validate_agentic_config(config=config)
 
     if config.fine_tune_method == "async_grpo" and config.strategy == "deepspeed":
         raise ValueError(
@@ -203,6 +205,135 @@ def _validate_dataset_input_config(
         return
 
     raise ValueError("val_dataset_file_path(s) require use_validation=true.")
+
+
+def _validate_grpo_dataset_streaming_config(
+    config: DictConfig,
+) -> None:
+    if config.fine_tune_method not in {"grpo", "async_grpo", "sdpo", "a2po"}:
+        return
+    if not config.dataset_streaming.enabled:
+        return
+    if config.fine_tune_method != "grpo":
+        raise ValueError("dataset_streaming is supported only for grpo.")
+    if config.dataset_resampling.enabled:
+        raise ValueError(
+            "dataset_streaming is not compatible with weighted offline resampling."
+        )
+    if config.max_steps <= 0:
+        raise ValueError("dataset_streaming requires max_steps to be positive.")
+    if config.memory_preflight.enabled:
+        raise ValueError("dataset_streaming does not support memory preflight.")
+    if config.use_validation and (
+        config.val_dataset_file_path is None
+        and config.val_dataset_file_paths is None
+        and config.val_dataset_files is None
+    ):
+        raise ValueError(
+            "dataset_streaming with use_validation=true requires an explicit validation dataset."
+        )
+
+
+def _validate_agentic_config(
+    config: DictConfig,
+) -> None:
+    if config.fine_tune_method not in {"grpo", "async_grpo"}:
+        return
+
+    agentic = config.agentic
+    if agentic.data_source not in {"dataset", "environment"}:
+        raise ValueError("agentic.data_source must be dataset or environment.")
+    if not agentic.enabled:
+        if (
+            agentic.data_source != "dataset"
+            or len(agentic.tools) > 0
+            or agentic.environment_factory is not None
+            or agentic.rollout_worker is not None
+        ):
+            raise ValueError(
+                "agentic settings require agentic.enabled=true when configured."
+            )
+        return
+
+    if (
+        len(agentic.tools) == 0
+        and agentic.environment_factory is None
+        and agentic.rollout_worker is None
+    ):
+        raise ValueError(
+            "agentic.enabled=true requires tools, environment_factory, or rollout_worker."
+        )
+    _validate_agentic_targets(agentic=agentic)
+
+    if agentic.data_source == "environment":
+        if config.dataset_namespace is None:
+            raise ValueError(
+                "environment-owned agentic training requires dataset_namespace."
+            )
+        if agentic.environment_factory is None:
+            raise ValueError(
+                "agentic.data_source=environment requires environment_factory."
+            )
+        if "_target_" not in agentic.environment_factory:
+            raise ValueError(
+                "environment-owned agentic training requires one environment_factory."
+            )
+        if config.max_steps <= 0:
+            raise ValueError(
+                "environment-owned agentic training requires max_steps to be positive."
+            )
+        if config.use_validation:
+            raise ValueError(
+                "environment-owned agentic training requires use_validation=false."
+            )
+        if config.memory_preflight.enabled:
+            raise ValueError(
+                "environment-owned agentic training does not support memory preflight."
+            )
+        if config.dataset_streaming.enabled:
+            raise ValueError(
+                "environment-owned agentic training does not use dataset_streaming."
+            )
+
+    if agentic.rollout_worker is None:
+        return
+    if config.fine_tune_method != "async_grpo":
+        raise ValueError("agentic.rollout_worker is supported only for async_grpo.")
+    if agentic.data_source != "dataset":
+        raise ValueError(
+            "agentic.rollout_worker currently requires agentic.data_source=dataset."
+        )
+
+
+def _validate_agentic_targets(
+    agentic: DictConfig,
+) -> None:
+    for tool in agentic.tools:
+        if not isinstance(tool, str) or not tool.strip() or tool != tool.strip():
+            raise ValueError(
+                "agentic.tools must contain trimmed module-level function paths."
+            )
+
+    environment_factory = agentic.environment_factory
+    if environment_factory is not None:
+        factory_configs = (
+            [environment_factory]
+            if "_target_" in environment_factory
+            else list(environment_factory.values())
+        )
+        if not all(
+            isinstance(factory_config, DictConfig) and "_target_" in factory_config
+            for factory_config in factory_configs
+        ):
+            raise ValueError(
+                "agentic.environment_factory entries must define Hydra _target_."
+            )
+
+    if agentic.rollout_worker is not None and (
+        not isinstance(agentic.rollout_worker, DictConfig)
+        or "_target_" not in agentic.rollout_worker
+    ):
+        raise ValueError("agentic.rollout_worker must define a Hydra _target_.")
 
 
 def _validate_exclusive_dataset_inputs(
