@@ -46,6 +46,7 @@ from .tracking import (
     init_train_tracking,
     init_eval_tracking,
     log_tracking_table,
+    attach_train_completion_tracking,
     get_tracking_context,
     finish_tracking,
 )
@@ -119,6 +120,7 @@ __all__ = [
     "init_train_tracking",
     "init_eval_tracking",
     "log_tracking_table",
+    "attach_train_completion_tracking",
     "get_tracking_context",
     "finish_tracking",
     "validate_notifications_config",
