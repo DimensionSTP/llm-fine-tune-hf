@@ -32,6 +32,10 @@ run_name: ${logging_name}
 chat_template_kwargs: ${chat_template_kwargs}
 num_generations: ${num_generations}
 temperature: ${generation_config.temperature}
+top_p: ${generation_config.top_p}
+top_k: ${generation_config.top_k}
+min_p: ${generation_config.min_p}
+repetition_penalty: ${generation_config.repetition_penalty}
 epsilon: ${epsilon}
 epsilon_high: ${epsilon_high}
 vllm_server_base_url: ${vllm_server_base_url}
