@@ -60,6 +60,8 @@ dataset_resampling:
   strategy: weighted_offline
   replacement: false
   target_size: null
+dataset_streaming:
+  enabled: false
 test_dataset_subdir: ${test_data_dir}
 test_dataset_file_path: null
 test_dataset_file_paths: null
@@ -182,6 +184,7 @@ gradient_accumulation_steps: 4
 max_grad_norm: 1
 epoch: 2
 step: 250
+max_steps: -1
 
 model_name: CausalLM-AsyncGRPO
 mode: train

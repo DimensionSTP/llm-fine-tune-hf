@@ -16,6 +16,7 @@ structural:
   val_dataset_files: ${val_dataset_files}
   allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
   dataset_resampling: ${dataset_resampling}
+  dataset_streaming: ${dataset_streaming}
   data_column_name: ${data_column_name}
   solution_column_name: ${solution_column_name}
   reward_categories_column_name: ${reward_categories_column_name}
@@ -46,6 +47,7 @@ conversational:
   val_dataset_files: ${val_dataset_files}
   allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
   dataset_resampling: ${dataset_resampling}
+  dataset_streaming: ${dataset_streaming}
   prompt_column_name: ${prompt_column_name}
   solution_column_name: ${solution_column_name}
   reward_categories_column_name: ${reward_categories_column_name}

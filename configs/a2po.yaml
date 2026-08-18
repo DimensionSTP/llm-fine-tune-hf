@@ -60,6 +60,8 @@ dataset_resampling:
   strategy: weighted_offline
   replacement: false
   target_size: null
+dataset_streaming:
+  enabled: false
 test_dataset_subdir: ${test_data_dir}
 test_dataset_file_path: null
 test_dataset_file_paths: null
