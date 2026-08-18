@@ -249,6 +249,7 @@ def _validate_agentic_config(
             or len(agentic.tools) > 0
             or agentic.environment_factory is not None
             or agentic.rollout_worker is not None
+            or agentic.max_tool_calling_iterations is not None
         ):
             raise ValueError(
                 "agentic settings require agentic.enabled=true when configured."
