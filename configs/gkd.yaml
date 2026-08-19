@@ -134,6 +134,11 @@ teacher:
   model_init_kwargs:
     dtype: auto
 
+lmbda: 0.5
+beta: 0.5
+disable_dropout: true
+seq_kd: false
+
 distributed:
   enabled: false
   num_machines: 1
