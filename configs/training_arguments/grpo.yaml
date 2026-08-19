@@ -48,6 +48,7 @@ importance_sampling_level: ${importance_sampling_level}
 loss_type: ${loss_type}
 use_vllm: ${use_vllm}
 vllm_mode: ${vllm_mode}
+vllm_max_model_length: ${vllm_max_model_length}
 vllm_tensor_parallel_size: ${vllm_tensor_parallel_size}
 vllm_gpu_memory_utilization: ${gpu_memory_utilization}
 vllm_importance_sampling_correction: ${vllm_importance_sampling_correction}

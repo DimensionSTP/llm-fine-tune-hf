@@ -161,6 +161,7 @@ importance_sampling_level: token
 loss_type: sapo
 use_vllm: true
 vllm_mode: colocate
+vllm_max_model_length: null
 vllm_sync_strategy: default
 vllm_tensor_parallel_size: 1
 vllm_importance_sampling_correction: true
