@@ -515,7 +515,7 @@ image_augmentation.probability=1.0
 image_augmentation.albumentations.seasoning.probability=1.0
 ```
 
-For Qwen3-VL GRPO with colocated vLLM, small smoke runs may need an explicit `training_arguments.vllm_max_model_length` because the model advertises a very long context window and vLLM sizes KV cache from that value.
+For Qwen3-VL GRPO with colocated vLLM, small smoke runs may need an explicit `vllm_max_model_length` because the model advertises a very long context window and vLLM sizes KV cache from that value.
 
 GRPO and SDPO expose `steps_per_generation` as an optional generation cadence control. The default `null` preserves TRL behavior, which resolves it to `gradient_accumulation_steps`. Lower values reduce the generation batch size and can reduce peak generation/buffer VRAM, but they usually increase generation frequency and may reduce throughput. Async GRPO does not expose this option in the current TRL API, and GOLD keeps its separate `generation_batch_size` contract because TRL's GOLDConfig does not expose `steps_per_generation`.
 
