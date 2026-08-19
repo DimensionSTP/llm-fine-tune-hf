@@ -233,6 +233,11 @@ def train(
         trainer = TrainerClass(
             **trainer_kwargs,
         )
+        for trainer_runtime_patch in patch_trl_trainer_runtime(
+            trainer=trainer,
+            config=config,
+        ):
+            print(f"[patch] Applied {trainer_runtime_patch}.")
         attach_train_completion_tracking(
             config=config,
             trainer=trainer,
