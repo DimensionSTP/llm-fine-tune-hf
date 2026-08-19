@@ -131,6 +131,9 @@ def _resolve_num_workers_per_process(
     cpu_count: Optional[int],
     local_world_size: int,
 ) -> int:
+    if "dataset_streaming" in config and config.dataset_streaming.enabled:
+        return 0
+
     configured_workers = config.dataloader_runtime.num_workers_per_process
     if configured_workers is not None:
         return int(configured_workers)
