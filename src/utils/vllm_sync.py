@@ -19,12 +19,12 @@ import deepspeed
 def resolve_lora_streaming_name_remap_config(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    if (
-        config.fine_tune_method != "grpo"
-        or not config.use_vllm
-        or not config.is_peft
-        or config.vllm_sync_strategy != "lora_streaming"
-    ):
+    should_resolve = config.fine_tune_method == "distillation" or (
+        config.fine_tune_method == "grpo"
+        and config.is_peft
+        and config.vllm_sync_strategy == "lora_streaming"
+    )
+    if not should_resolve or not config.use_vllm:
         return {}
 
     remap_config = config.vllm_lora_name_remap
@@ -47,6 +47,35 @@ def resolve_lora_streaming_name_remap_config(
         "runtime_package_versions": runtime_package_versions,
         "prefix_rules": remap_config.profiles[resolved["profile"]].prefix_rules,
     }
+
+
+def patch_distillation_vllm_sync(
+    trainer: Any,
+    config: DictConfig,
+) -> bool:
+    should_patch = (
+        config.fine_tune_method == "distillation"
+        and config.use_vllm
+        and hasattr(
+            trainer,
+            "vllm_generation",
+        )
+    )
+    if not should_patch:
+        return False
+
+    resolve_lora_streaming_name_remap_config(config=config)
+    trainer.vllm_generation._distillation_name_remapper = (
+        _get_lora_streaming_name_remapper(config=config)
+    )
+    trainer.vllm_generation._push_param_to_vllm_original = (
+        trainer.vllm_generation._push_param_to_vllm
+    )
+    trainer.vllm_generation._push_param_to_vllm = MethodType(
+        _push_distillation_param_to_vllm,
+        trainer.vllm_generation,
+    )
+    return True
 
 
 def patch_qwen_packed_moe_vllm_sync(
@@ -144,6 +173,18 @@ def _build_router_with_lora_sync(
     return partial(
         _sync_weights_router_with_lora,
         remap_name=remap_name,
+    )
+
+
+def _push_distillation_param_to_vllm(
+    self: Any,
+    name: str,
+    param: torch.Tensor,
+) -> None:
+    remapped_name = self._distillation_name_remapper(name)
+    self._push_param_to_vllm_original(
+        remapped_name,
+        param,
     )
 
 
