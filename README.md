@@ -269,13 +269,15 @@ python main.py --config-name={method}.yaml mode=train
 | SFT | `sft.yaml` | SFT | `nll` is the default loss type; `chunked_nll` is opt-in for non-assistant-only long-context SFT. |
 | DPO | `dpo.yaml` | DPO | Preference-pair training. |
 | KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
-| GKD | `gkd.yaml` | GKD | Distillation with `loss_type=nll`. |
+| GKD | `gkd.yaml` | GKD | Text-only distillation with config-driven on-policy ratio, divergence, sequence KD, and dropout policy. |
 | GOLD | `gold.yaml` | GKD-style teacher | Uses the upstream TRL experimental trainer. |
 | Distillation | `distillation.yaml` | Prompt-only | Stable on-policy distillation with a local teacher and student vLLM generation. |
 | GRPO | `grpo.yaml` | GRPO | vLLM importance-sampling correction is enabled by default. |
 | async GRPO | `async_grpo.yaml` | GRPO | Requires the trainer/vLLM split runtime. |
 | SDPO | `sdpo.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
-| A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
+| A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer with ZeRO-2 because its reference-model construction does not support ZeRO-3. |
+
+Distillation resolves its configured version/model-specific vLLM parameter-name profile for both full and PEFT training before the first student weight sync.
 
 Liger is enabled by default for SFT through `training_arguments.use_liger_kernel=True`. Set it to `False` when selecting `chunked_nll` or when native model execution is required.
 
