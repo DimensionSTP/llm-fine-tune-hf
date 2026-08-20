@@ -49,10 +49,8 @@ def resolve_async_runtime_state(
         state["stop_signal_path"] = str(config.async_runtime.stop_signal_path)
 
         visible_gpu_list = _resolve_visible_gpu_list()
-        visible_gpu_ids = ",".join(visible_gpu_list)
         if rank == 1:
             state["rank_is_inference"] = True
-            os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
             config.devices = len(visible_gpu_list)
             return state
 
@@ -62,7 +60,6 @@ def resolve_async_runtime_state(
             )
 
         state["server_managed_by_rank1"] = True
-        os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpu_ids
         os.environ["RANK"] = "0"
         os.environ["WORLD_SIZE"] = "1"
         os.environ["LOCAL_RANK"] = "0"
@@ -70,8 +67,10 @@ def resolve_async_runtime_state(
         config.async_runtime.vllm_server.auto_start = False
         return state
 
-    gpu_partition = _resolve_async_half_gpu_partition()
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_partition["trainer_gpu_ids"]
+    gpu_partition = _resolve_prepared_async_gpu_partition()
+    if gpu_partition is None:
+        gpu_partition = _resolve_async_half_gpu_partition()
+        _restart_async_trainer_with_gpu_partition(gpu_partition=gpu_partition)
     config.devices = gpu_partition["trainer_gpu_count"]
     config.vllm_server_base_url = (
         f"http://{config.async_runtime.vllm_server.host}:"
@@ -201,6 +200,38 @@ def stop_async_training_runtime(
         )
 
 
+def _resolve_prepared_async_gpu_partition() -> Optional[Dict[str, Union[str, int]]]:
+    vllm_gpu_ids = os.environ.get("ASYNC_GRPO_VLLM_CUDA_VISIBLE_DEVICES")
+    trainer_gpu_ids = os.environ.get("ASYNC_GRPO_TRAINER_CUDA_VISIBLE_DEVICES")
+    if vllm_gpu_ids is None and trainer_gpu_ids is None:
+        return None
+    if vllm_gpu_ids is None or trainer_gpu_ids is None:
+        raise ValueError("Async GRPO GPU partition environment is incomplete.")
+    if os.environ.get("CUDA_VISIBLE_DEVICES") != trainer_gpu_ids:
+        raise ValueError(
+            "Async GRPO trainer CUDA_VISIBLE_DEVICES does not match its prepared partition."
+        )
+
+    vllm_gpu_list = [
+        gpu_id.strip() for gpu_id in vllm_gpu_ids.split(",") if gpu_id.strip()
+    ]
+    trainer_gpu_list = [
+        gpu_id.strip() for gpu_id in trainer_gpu_ids.split(",") if gpu_id.strip()
+    ]
+    if len(vllm_gpu_list) == 0 or len(trainer_gpu_list) == 0:
+        raise ValueError("Async GRPO GPU partition must assign both runtime roles.")
+    if set(vllm_gpu_list) & set(trainer_gpu_list):
+        raise ValueError("Async GRPO trainer and vLLM GPU partitions must not overlap.")
+
+    return {
+        "visible_gpu_count": len(vllm_gpu_list) + len(trainer_gpu_list),
+        "vllm_gpu_ids": vllm_gpu_ids,
+        "trainer_gpu_ids": trainer_gpu_ids,
+        "vllm_gpu_count": len(vllm_gpu_list),
+        "trainer_gpu_count": len(trainer_gpu_list),
+    }
+
+
 def _resolve_visible_gpu_list() -> List[str]:
     visible_devices = os.environ.get(
         "CUDA_VISIBLE_DEVICES",
@@ -253,6 +284,22 @@ def _resolve_async_half_gpu_partition() -> Dict[str, Union[str, int]]:
         "vllm_gpu_count": len(vllm_gpu_list),
         "trainer_gpu_count": len(trainer_gpu_list),
     }
+
+
+def _restart_async_trainer_with_gpu_partition(
+    gpu_partition: Dict[str, Union[str, int]],
+) -> None:
+    environment = os.environ.copy()
+    environment["ASYNC_GRPO_VLLM_CUDA_VISIBLE_DEVICES"] = gpu_partition["vllm_gpu_ids"]
+    environment["ASYNC_GRPO_TRAINER_CUDA_VISIBLE_DEVICES"] = gpu_partition[
+        "trainer_gpu_ids"
+    ]
+    environment["CUDA_VISIBLE_DEVICES"] = gpu_partition["trainer_gpu_ids"]
+    os.execvpe(
+        sys.executable,
+        [sys.executable, *sys.argv],
+        environment,
+    )
 
 
 def _resolve_vllm_tensor_parallel_size(
