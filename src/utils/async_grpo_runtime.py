@@ -70,7 +70,10 @@ def resolve_async_runtime_state(
     gpu_partition = _resolve_prepared_async_gpu_partition()
     if gpu_partition is None:
         gpu_partition = _resolve_async_half_gpu_partition()
-        _restart_async_trainer_with_gpu_partition(gpu_partition=gpu_partition)
+        _restart_async_trainer_with_gpu_partition(
+            gpu_partition=gpu_partition,
+            work_dir=config.work_dir,
+        )
     config.devices = gpu_partition["trainer_gpu_count"]
     config.vllm_server_base_url = (
         f"http://{config.async_runtime.vllm_server.host}:"
@@ -288,6 +291,7 @@ def _resolve_async_half_gpu_partition() -> Dict[str, Union[str, int]]:
 
 def _restart_async_trainer_with_gpu_partition(
     gpu_partition: Dict[str, Union[str, int]],
+    work_dir: str,
 ) -> None:
     environment = os.environ.copy()
     environment["ASYNC_GRPO_VLLM_CUDA_VISIBLE_DEVICES"] = gpu_partition["vllm_gpu_ids"]
@@ -295,9 +299,13 @@ def _restart_async_trainer_with_gpu_partition(
         "trainer_gpu_ids"
     ]
     environment["CUDA_VISIBLE_DEVICES"] = gpu_partition["trainer_gpu_ids"]
+    entrypoint_path = os.path.join(
+        work_dir,
+        sys.argv[0],
+    )
     os.execvpe(
         sys.executable,
-        [sys.executable, *sys.argv],
+        [sys.executable, entrypoint_path, *sys.argv[1:]],
         environment,
     )
 
