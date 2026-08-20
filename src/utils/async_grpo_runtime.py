@@ -3,6 +3,7 @@ import os
 import json
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
 
@@ -369,7 +370,7 @@ def _start_async_vllm_server(
         encoding="utf-8",
     )
     command = [
-        "python",
+        sys.executable,
         "-m",
         "vllm.entrypoints.openai.api_server",
         "--model",
