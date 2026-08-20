@@ -390,7 +390,7 @@ strategy=deepspeed
 vllm_sync_strategy={default or lora_streaming}
 ```
 
-GOLD, GRPO, SDPO, and Distillation vLLM weight sync resolve parameter-name remapping from `vllm_lora_name_remap`. The default `auto` selection uses model identifiers, modality, and installed package versions, then falls back to the `passthrough` profile. Set `vllm_lora_name_remap.selection` to a configured profile name to force that profile. Each profile may contain multiple non-overlapping prefix rules; unmatched parameter names pass through unchanged.
+GOLD, GRPO, Async GRPO, SDPO, and Distillation vLLM weight sync resolve parameter-name remapping from `vllm_lora_name_remap`. The default `auto` selection uses model identifiers, modality, and installed package versions, then falls back to the `passthrough` profile. Set `vllm_lora_name_remap.selection` to a configured profile name to force that profile. Each profile may contain multiple non-overlapping prefix rules; unmatched parameter names pass through unchanged.
 
 ```yaml
 selection: auto
