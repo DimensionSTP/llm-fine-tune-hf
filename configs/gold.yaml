@@ -8,6 +8,7 @@ defaults:
   - notifications: slack
   - training_arguments: gold
   - trainer: gold
+  - vllm_lora_name_remap: base
   - deepspeed: ds_config
   - model_loading: train_runtime
   - vision_patch_embedding: base
