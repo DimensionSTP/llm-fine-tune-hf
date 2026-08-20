@@ -67,17 +67,11 @@ def _patch_sdpo_peft_ema(
     callback = _find_peft_ema_callback(trainer=trainer)
     if callback is None:
         return False
-    if hasattr(callback, "_trl_runtime_initialize_teacher_adapter"):
+    if hasattr(callback, "_trl_runtime_get_student_state_dict"):
         return False
 
-    callback._trl_runtime_initialize_teacher_adapter = (
-        callback._initialize_teacher_adapter
-    )
     callback._trl_runtime_get_student_state_dict = callback._get_student_state_dict
-    callback._initialize_teacher_adapter = MethodType(
-        _initialize_sdpo_teacher_adapter,
-        callback,
-    )
+    _initialize_sdpo_teacher_adapter(callback=callback)
     callback._get_student_state_dict = MethodType(
         _get_sdpo_student_state_dict,
         callback,
@@ -129,7 +123,7 @@ def _initialize_sdpo_teacher_adapter(
     callback: TrainerCallback,
 ) -> None:
     with _gather_sdpo_student_parameters(callback=callback):
-        callback._trl_runtime_initialize_teacher_adapter()
+        callback._initialize_teacher_adapter()
 
 
 def _get_sdpo_student_state_dict(
