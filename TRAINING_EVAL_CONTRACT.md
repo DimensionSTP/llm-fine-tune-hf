@@ -39,8 +39,8 @@ Dependency notes:
 
 ## Tracking Contract
 
-- The portable default is `tracking=wandb`.
-- `tracking=mlflow` uses local SQLite and file artifacts.
+- The portable default is `tracking=mlflow`, which uses local SQLite and file artifacts.
+- `tracking=wandb` uses W&B.
 - `tracking=mlflow_server` requires `MLFLOW_TRACKING_URI`, uses the optional MLflow basic-auth environment variables, and does not set a client-side experiment artifact location.
 - Only rank 0 owns a tracking run during distributed execution.
 - MLflow normal completion, ordinary exceptions, and `KeyboardInterrupt` or `SystemExit` terminate as `FINISHED`, `FAILED`, and `KILLED`, respectively.
