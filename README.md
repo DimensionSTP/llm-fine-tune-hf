@@ -17,28 +17,54 @@ cd llm-fine-tune-hf
 conda create -n myenv python=3.12 -y
 conda activate myenv
 
+# install build requirements
+python -m pip install uv==0.10.12
+uv pip install "setuptools>=68" wheel
+
 # install requirements
-pip install --no-build-isolation -r requirements.txt
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    -r requirements.txt
 ```
+
+`requirements-overrides.txt` keeps Pandas 3.0.1 while overriding MLflow 3.13.0's `pandas<3` package metadata.
 
 ### Quick setup (pyproject.toml)
 
 ```bash
+# install build requirements
+python -m pip install uv==0.10.12
+uv pip install "setuptools>=68" wheel
+
 # install project dependencies from pyproject.toml
-pip install --no-build-isolation .
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    .
 
 # [OPTIONAL] editable install for development
-pip install --no-build-isolation -e .
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    -e .
 ```
 
 ### Optional GPU dependency (flash-attn)
 
 ```bash
 # Option A: install optional GPU extra from pyproject
-pip install ".[gpu]"
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    ".[gpu]"
 
 # Option B: install directly from pinned Git commit
-python -m pip install "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
+python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
 ```
 
 ### Execution contract

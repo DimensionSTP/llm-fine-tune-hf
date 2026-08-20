@@ -7,22 +7,42 @@ Practical runbook for training and inference flows in `llm-fine-tune-hf`.
 ## Install
 
 ```bash
-pip install --no-build-isolation -r requirements.txt
+python -m pip install uv==0.10.12
+uv pip install "setuptools>=68" wheel
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    -r requirements.txt
 ```
 
 or
 
 ```bash
-pip install --no-build-isolation .
-pip install --no-build-isolation -e .
+python -m pip install uv==0.10.12
+uv pip install "setuptools>=68" wheel
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    .
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    -e .
 ```
 
 Optional GPU dependency (`flash-attn`):
 
 ```bash
-pip install ".[gpu]"
+uv pip install \
+    --override requirements-overrides.txt \
+    --torch-backend=cu129 \
+    --no-build-isolation \
+    ".[gpu]"
 # or
-python -m pip install "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
+python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
 ```
 
 ## Required Environment Variables

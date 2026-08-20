@@ -34,7 +34,7 @@ Dependency notes:
 
 - Base install excludes `flash-attn`.
 - Optional GPU install path:
-  - `pip install ".[gpu]"`
+  - `uv pip install --override requirements-overrides.txt --torch-backend=cu129 --no-build-isolation ".[gpu]"`
   - or pinned Git install command from README.
 
 ## Tracking Contract
