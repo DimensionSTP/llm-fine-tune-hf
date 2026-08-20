@@ -187,6 +187,7 @@ bash scripts/train/async_grpo_train.sh
 ```shell
 # config-only path (without script)
 # world_size=1: half GPUs for vLLM and half GPUs for trainer
+# the trainer process restarts once before CUDA initialization with only its half visible
 # world_size=2: rank0=trainer, rank1=vLLM server
 python main.py --config-name=async_grpo.yaml mode=train
 ```
