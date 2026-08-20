@@ -10,6 +10,7 @@ defaults:
   - notifications: slack
   - training_arguments: async_grpo
   - trainer: async_grpo
+  - vllm_lora_name_remap: base
   - reward: base
   - reward@reward_manager: manager
   - reward@reward_database: database
