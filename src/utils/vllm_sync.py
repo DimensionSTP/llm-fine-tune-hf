@@ -1,4 +1,4 @@
-from typing import Dict, List, Callable, Any
+from typing import Dict, List, Tuple, Callable, Iterator, Any
 import os
 from contextlib import nullcontext
 from fnmatch import fnmatchcase
@@ -50,10 +50,13 @@ def resolve_lora_streaming_name_remap_config(
     should_resolve = config.fine_tune_method in {
         "gold",
         "grpo",
+        "async_grpo",
         "sdpo",
         "distillation",
     }
-    if not should_resolve or not config.use_vllm:
+    if not should_resolve:
+        return {}
+    if config.fine_tune_method != "async_grpo" and not config.use_vllm:
         return {}
 
     remap_config = config.vllm_lora_name_remap
@@ -82,6 +85,12 @@ def patch_vllm_param_name_remap(
     trainer: Any,
     config: DictConfig,
 ) -> bool:
+    if config.fine_tune_method == "async_grpo":
+        return _patch_async_grpo_vllm_param_name_remap(
+            trainer=trainer,
+            config=config,
+        )
+
     should_patch = (
         (
             config.fine_tune_method in {"gold", "distillation"}
@@ -204,6 +213,37 @@ def patch_lora_streaming_vllm_sync(
         trainer.vllm_generation,
     )
     return True
+
+
+def _patch_async_grpo_vllm_param_name_remap(
+    trainer: Any,
+    config: DictConfig,
+) -> bool:
+    if trainer.weight_transfer is None:
+        return False
+    if hasattr(trainer, "_streaming_iter_original"):
+        return False
+
+    resolve_lora_streaming_name_remap_config(config=config)
+    remap_name = _get_lora_streaming_name_remapper(config=config)
+    weight_update_info = trainer.weight_transfer._weight_update_info
+    weight_update_info["names"] = [
+        remap_name(name) for name in weight_update_info["names"]
+    ]
+    trainer._vllm_param_name_remapper = remap_name
+    trainer._streaming_iter_original = trainer._streaming_iter
+    trainer._streaming_iter = MethodType(
+        _streaming_iter_with_name_remap,
+        trainer,
+    )
+    return True
+
+
+def _streaming_iter_with_name_remap(
+    self: Any,
+) -> Iterator[Tuple[str, torch.Tensor]]:
+    for name, parameter in self._streaming_iter_original():
+        yield self._vllm_param_name_remapper(name), parameter
 
 
 def _build_router_with_lora_sync(
