@@ -48,9 +48,7 @@ def resolve_lora_streaming_name_remap_config(
     config: DictConfig,
 ) -> Dict[str, Any]:
     should_resolve = config.fine_tune_method == "distillation" or (
-        config.fine_tune_method == "grpo"
-        and config.is_peft
-        and config.vllm_sync_strategy == "lora_streaming"
+        config.fine_tune_method == "grpo" and config.is_peft
     )
     if not should_resolve or not config.use_vllm:
         return {}
@@ -77,30 +75,41 @@ def resolve_lora_streaming_name_remap_config(
     }
 
 
-def patch_distillation_vllm_sync(
+def patch_vllm_param_name_remap(
     trainer: Any,
     config: DictConfig,
 ) -> bool:
     should_patch = (
-        config.fine_tune_method == "distillation"
-        and config.use_vllm
+        config.use_vllm
         and hasattr(
             trainer,
             "vllm_generation",
+        )
+        and not hasattr(
+            trainer.vllm_generation,
+            "_push_param_to_vllm_original",
+        )
+        and (
+            config.fine_tune_method == "distillation"
+            or (
+                config.fine_tune_method == "grpo"
+                and config.is_peft
+                and config.vllm_sync_strategy == "default"
+            )
         )
     )
     if not should_patch:
         return False
 
     resolve_lora_streaming_name_remap_config(config=config)
-    trainer.vllm_generation._distillation_name_remapper = (
-        _get_lora_streaming_name_remapper(config=config)
+    trainer.vllm_generation._param_name_remapper = _get_lora_streaming_name_remapper(
+        config=config,
     )
     trainer.vllm_generation._push_param_to_vllm_original = (
         trainer.vllm_generation._push_param_to_vllm
     )
     trainer.vllm_generation._push_param_to_vllm = MethodType(
-        _push_distillation_param_to_vllm,
+        _push_param_to_vllm_with_name_remap,
         trainer.vllm_generation,
     )
     return True
@@ -204,12 +213,12 @@ def _build_router_with_lora_sync(
     )
 
 
-def _push_distillation_param_to_vllm(
+def _push_param_to_vllm_with_name_remap(
     self: Any,
     name: str,
     param: torch.Tensor,
 ) -> None:
-    remapped_name = self._distillation_name_remapper(name)
+    remapped_name = self._param_name_remapper(name)
     self._push_param_to_vllm_original(
         remapped_name,
         param,

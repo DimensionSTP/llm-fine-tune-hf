@@ -274,11 +274,11 @@ def train(
             config=config,
         ):
             print("[patch] Applied streaming LoRA vLLM sync for GRPO.")
-        if patch_distillation_vllm_sync(
+        if patch_vllm_param_name_remap(
             trainer=trainer,
             config=config,
         ):
-            print("[patch] Applied vLLM parameter-name remapping for Distillation.")
+            print("[patch] Applied vLLM parameter-name remapping.")
         if patch_grpo_completion_termination(
             trainer=trainer,
             config=config,
