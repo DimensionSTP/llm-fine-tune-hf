@@ -47,7 +47,12 @@ def prepare_vllm_server_accelerator_device(
 def resolve_lora_streaming_name_remap_config(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    should_resolve = config.fine_tune_method in {"grpo", "sdpo", "distillation"}
+    should_resolve = config.fine_tune_method in {
+        "gold",
+        "grpo",
+        "sdpo",
+        "distillation",
+    }
     if not should_resolve or not config.use_vllm:
         return {}
 
@@ -79,7 +84,7 @@ def patch_vllm_param_name_remap(
 ) -> bool:
     should_patch = (
         (
-            config.fine_tune_method == "distillation"
+            config.fine_tune_method in {"gold", "distillation"}
             or (
                 config.fine_tune_method == "grpo"
                 and config.vllm_sync_strategy == "default"
