@@ -80,7 +80,15 @@ def patch_vllm_param_name_remap(
     config: DictConfig,
 ) -> bool:
     should_patch = (
-        config.use_vllm
+        (
+            config.fine_tune_method == "distillation"
+            or (
+                config.fine_tune_method == "grpo"
+                and config.is_peft
+                and config.vllm_sync_strategy == "default"
+            )
+        )
+        and config.use_vllm
         and hasattr(
             trainer,
             "vllm_generation",
@@ -88,14 +96,6 @@ def patch_vllm_param_name_remap(
         and not hasattr(
             trainer.vllm_generation,
             "_push_param_to_vllm_original",
-        )
-        and (
-            config.fine_tune_method == "distillation"
-            or (
-                config.fine_tune_method == "grpo"
-                and config.is_peft
-                and config.vllm_sync_strategy == "default"
-            )
         )
     )
     if not should_patch:
