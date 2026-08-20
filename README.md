@@ -250,7 +250,7 @@ dataloader_runtime.mode={auto or manual}
 tracking={wandb or mlflow or mlflow_server}
 ```
 
-`mlflow` is the default. It uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts`, records system metrics, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume. MLflow line charts provide exponential moving average smoothing from 0 to 100 without storing duplicate smoothed metrics. `mlflow_server` requires `MLFLOW_TRACKING_URI` and leaves experiment artifact location selection to the server; set `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD` when the endpoint uses MLflow basic authentication. Resume requires existing tracking metadata for both tracking backends.
+`mlflow` is the default. It uses `sqlite:///${connected_dir}/mlflow.db` and `file://${connected_dir}/mlflow-artifacts`, records system metrics, and writes `tracking_metadata.json` under each train `output_dir` so checkpoint artifact `run_id` can map to the MLflow run UUID on resume. GPU system metrics follow `CUDA_VISIBLE_DEVICES` instead of collecting unrelated physical GPUs on the same node. MLflow line charts provide exponential moving average smoothing from 0 to 100 without storing duplicate smoothed metrics. `mlflow_server` requires `MLFLOW_TRACKING_URI` and leaves experiment artifact location selection to the server; set `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD` when the endpoint uses MLflow basic authentication. Resume requires existing tracking metadata for both tracking backends.
 
 ```shell
 notifications={slack or disabled or wandb}
