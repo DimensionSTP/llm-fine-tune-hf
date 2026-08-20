@@ -1,8 +1,9 @@
-from typing import Dict, List, Callable, Any
+from typing import Dict, List, Callable, Iterator, Any
 import os
 import base64
 from collections.abc import Collection
-from functools import partial, update_wrapper
+from contextlib import contextmanager
+from functools import partial, partialmethod, update_wrapper
 import io
 import json
 import logging
@@ -421,10 +422,13 @@ def _init_mlflow_train_tracking(
                 "resume_training is true. Refusing to start a new MLflow run "
                 "because it can split a resumed training run across tracking runs."
             )
-        active_run = mlflow.start_run(
-            run_id=tracking_run_id,
-            log_system_metrics=config.tracking.system_metrics.enabled,
-        )
+        with _patch_mlflow_visible_gpu_monitor(
+            enabled=config.tracking.system_metrics.enabled,
+        ):
+            active_run = mlflow.start_run(
+                run_id=tracking_run_id,
+                log_system_metrics=config.tracking.system_metrics.enabled,
+            )
     else:
         if "tracking_run_id" in metadata:
             raise ValueError(
@@ -432,11 +436,14 @@ def _init_mlflow_train_tracking(
                 "Use resume_training=true for interrupted-run resume, or allocate "
                 "a new artifact run directory."
             )
-        active_run = mlflow.start_run(
-            run_name=config.logging_name,
-            tags=_build_mlflow_train_tags(config=config),
-            log_system_metrics=config.tracking.system_metrics.enabled,
-        )
+        with _patch_mlflow_visible_gpu_monitor(
+            enabled=config.tracking.system_metrics.enabled,
+        ):
+            active_run = mlflow.start_run(
+                run_name=config.logging_name,
+                tags=_build_mlflow_train_tags(config=config),
+                log_system_metrics=config.tracking.system_metrics.enabled,
+            )
     _write_tracking_metadata(
         config=config,
         tracking_run_id=active_run.info.run_id,
@@ -448,11 +455,14 @@ def _init_mlflow_eval_tracking(
 ) -> None:
     mlflow = _import_mlflow()
     _configure_mlflow(config=config)
-    mlflow.start_run(
-        run_name=config.model_detail,
-        tags=_build_mlflow_eval_tags(config=config),
-        log_system_metrics=config.tracking.system_metrics.enabled,
-    )
+    with _patch_mlflow_visible_gpu_monitor(
+        enabled=config.tracking.system_metrics.enabled,
+    ):
+        mlflow.start_run(
+            run_name=config.model_detail,
+            tags=_build_mlflow_eval_tags(config=config),
+            log_system_metrics=config.tracking.system_metrics.enabled,
+        )
 
 
 def _configure_mlflow(
@@ -493,6 +503,75 @@ def _configure_mlflow_system_metrics(
     mlflow.set_system_metrics_samples_before_logging(
         config.tracking.system_metrics.samples_before_logging,
     )
+
+
+@contextmanager
+def _patch_mlflow_visible_gpu_monitor(
+    enabled: bool,
+) -> Iterator[None]:
+    if not enabled:
+        yield
+        return
+
+    visible_gpu_identifiers = _resolve_visible_gpu_identifiers()
+    if visible_gpu_identifiers is None:
+        yield
+        return
+
+    from mlflow.system_metrics.metrics.gpu_monitor import GPUMonitor
+
+    original_init = GPUMonitor.__init__
+    GPUMonitor.__init__ = partialmethod(
+        _initialize_visible_gpu_monitor,
+        original_init=original_init,
+    )
+    try:
+        yield
+    finally:
+        GPUMonitor.__init__ = original_init
+
+
+def _initialize_visible_gpu_monitor(
+    monitor: Any,
+    original_init: Callable[[Any], None],
+) -> None:
+    original_init(monitor)
+    visible_gpu_identifiers = _resolve_visible_gpu_identifiers()
+    if visible_gpu_identifiers is None:
+        return
+
+    import pynvml
+
+    monitor.gpu_handles = [
+        _resolve_visible_gpu_handle(
+            gpu_identifier=gpu_identifier,
+            pynvml=pynvml,
+        )
+        for gpu_identifier in visible_gpu_identifiers
+    ]
+    monitor.num_gpus = len(monitor.gpu_handles)
+
+
+def _resolve_visible_gpu_identifiers() -> List[str] | None:
+    cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cuda_visible_devices is None:
+        return None
+    if cuda_visible_devices.strip() == "-1":
+        return []
+    return [
+        gpu_identifier.strip()
+        for gpu_identifier in cuda_visible_devices.split(",")
+        if gpu_identifier.strip()
+    ]
+
+
+def _resolve_visible_gpu_handle(
+    gpu_identifier: str,
+    pynvml: Any,
+) -> Any:
+    if gpu_identifier.isdigit():
+        return pynvml.nvmlDeviceGetHandleByIndex(int(gpu_identifier))
+    return pynvml.nvmlDeviceGetHandleByUUID(gpu_identifier)
 
 
 def _build_mlflow_train_tags(
