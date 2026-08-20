@@ -72,6 +72,7 @@ def train(
                     config.devices,
                 )
             )
+    prepare_vllm_server_accelerator_device(config=config)
 
     prepare_train_artifact_config(
         config=config,

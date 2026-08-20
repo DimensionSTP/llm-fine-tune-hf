@@ -1,4 +1,5 @@
 from typing import Dict, List, Callable, Any
+import os
 from contextlib import nullcontext
 from fnmatch import fnmatchcase
 from functools import partial
@@ -14,6 +15,33 @@ import torch
 import bitsandbytes as bnb
 
 import deepspeed
+
+
+def prepare_vllm_server_accelerator_device(
+    config: DictConfig,
+) -> bool:
+    world_size = os.environ.get(
+        "WORLD_SIZE",
+        "1",
+    )
+    should_prepare = (
+        "use_vllm" in config
+        and config.use_vllm
+        and config.vllm_mode == "server"
+        and world_size == "1"
+        and torch.cuda.is_available()
+    )
+    if not should_prepare:
+        return False
+
+    configured_device = os.environ.get("ACCELERATE_TORCH_DEVICE")
+    if configured_device is not None:
+        device = torch.device(configured_device)
+        if device.type != "cuda" or device.index is not None:
+            return False
+
+    os.environ["ACCELERATE_TORCH_DEVICE"] = f"cuda:{torch.cuda.current_device()}"
+    return True
 
 
 def resolve_lora_streaming_name_remap_config(
