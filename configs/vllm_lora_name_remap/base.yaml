@@ -18,7 +18,7 @@ vllm_lora_name_remap:
         peft: ==0.18.1
         transformers: ==5.14.1
         trl: ==1.10.0
-        vllm: ==0.19.1
+        vllm: ==0.26.0
       profile: qwen_text_causal_to_conditional
   resolved_profile: null
   resolved_selector: null
