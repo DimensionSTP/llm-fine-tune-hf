@@ -35,6 +35,7 @@ baseline/
 /wandb
 tmp*
 !requirements.txt
+!requirements-overrides.txt
 !packages.txt
 .skills/
 SKILLS.md
