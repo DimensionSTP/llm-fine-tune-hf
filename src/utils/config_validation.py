@@ -431,7 +431,7 @@ def _validate_dataset_files_without_weight(
 def _validate_vllm_lora_name_remap_config(
     config: DictConfig,
 ) -> None:
-    if config.fine_tune_method not in {"grpo", "distillation"}:
+    if config.fine_tune_method not in {"grpo", "sdpo", "distillation"}:
         return
 
     remap_config = config.vllm_lora_name_remap
