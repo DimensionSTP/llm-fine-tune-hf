@@ -76,6 +76,7 @@ flash-attn-4==4.0.0b7
 flash-linear-attention==0.5.0
 flash_attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab
 flashinfer-cubin @ https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.14/flashinfer_cubin-0.6.14-py3-none-any.whl#sha256=7bbed9f3851b59f3f6f6cb344810775bbce8a1c012ecf9a502bebd91cfb6433e
+flashinfer-jit-cache==0.6.14+cu129
 flashinfer-python==0.6.14
 Flask==3.1.3
 flask-cors==6.0.5
