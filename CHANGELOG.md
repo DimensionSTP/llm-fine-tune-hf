@@ -2,6 +2,27 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.0] - 2026-08-21
+
+- Update the validated training stack to PyTorch 2.11.0 with CUDA 12.9, Transformers 5.14.1, TRL 1.10.0, vLLM 0.26.0+cu129, MLflow 3.13.0, W&B 0.25.1, FlashInfer 0.6.14, and the synchronized candidate environment freeze.
+- Add a reproducible CUDA 12.9 installation path, preserve pandas 3.0.1 through an explicit requirements override, and keep project, requirements, and package-freeze dependency records synchronized.
+- Make MLflow the default tracking backend while preserving config-only switching to W&B, shared run identity, lifecycle finalization, train/eval metrics, completion artifacts, and backend-specific resume behavior.
+- Add backend-neutral lifecycle notifications with Slack as the default notification profile and keep W&B alerts available as an explicit notification backend.
+- Scope MLflow GPU system metrics to `CUDA_VISIBLE_DEVICES`, attach GRPO completion tables and images to tracking runs, and prevent immutable training parameters from being re-logged when resuming an existing MLflow run.
+- Add stable TRL Distillation training with dedicated datasets, configs, trainer wiring, memory preflight, single-node and multi-node launchers, teacher-model controls, and colocated or external vLLM inference support.
+- Add config-driven agentic GRPO and Async GRPO inputs with optional tools, environments, turn limits, queue controls, sampling settings, validation, runtime metadata, and disabled-by-default compatibility.
+- Add streaming GRPO dataset support that preserves completion groups, enforces explicit validation data, disables incompatible workers and memory preflight, and terminates correctly under `max_steps`.
+- Expose TRL 1.10 GRPO controls for bias correction, importance sampling, multimodal completion logging, sampling, and maximum vLLM model length.
+- Adapt SFT datasets to the updated TRL dataset contract while preserving nested multimodal fields, image tensors, vision patch embedding gradients, fixed and dynamic padding behavior, and actual visual-parameter updates.
+- Add targeted TRL runtime compatibility patches for GKD gradient checkpointing, SDPO ZeRO-3 EMA adapters, A2PO ZeRO-2 reference training, and supported trainer argument surfaces.
+- Generalize config-driven vLLM parameter-name remapping across GOLD, GRPO, Async GRPO, SDPO, and Distillation while retaining passthrough behavior for unmatched models and runtimes.
+- Remap Qwen3.5 text-model weights to the `language_model.model.*` vLLM namespace for colocated, server, streaming, and packed Async GRPO weight-transfer paths.
+- Isolate Async GRPO trainer and managed vLLM GPUs before CUDA initialization, restart with the active Python interpreter when required, preserve non-main training ranks, and cleanly coordinate server readiness and shutdown.
+- Replace deprecated warmup-ratio trainer wiring with the unified `warmup_steps` contract while preserving fractional warmup ratios and absolute integer warmup steps.
+- Preserve explicitly selected physical GPUs during distributed memory-preflight subprocess launches instead of remapping inherited `CUDA_VISIBLE_DEVICES` values to unrelated local indices.
+- Synchronize training configs, launchers, public exports, README guidance, usage documentation, and the training/evaluation contract with the updated tracking, Distillation, GRPO, vLLM, and runtime behavior.
+- Validate the release stack through single-GPU coverage plus a final 13-case acceptance matrix covering memory preflight, two-node training, checkpoint resume, multi-GPU VLM GRPO, MLflow, W&B switching, and agentic Async GRPO with no failed cases.
+
 ## [v2.9.0] - 2026-08-14
 
 - Replace implicit multi-file dataset naming with an explicit `dataset_namespace` contract shared by every training method, while retaining `dataset_name` as the fallback artifact namespace.
