@@ -2,6 +2,12 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.2] - 2026-08-21
+
+- Add the pinned cuRAND runtime and development packages required to build DeepSpeed CPUAdam with the CUDA 12.9 environment.
+- Update Flash Linear Attention to 0.5.2 to apply the Blackwell Gated DeltaNet backward autotune restriction and prevent CUDA misaligned-address failures.
+- Synchronize the project metadata, requirements, environment freeze, and installation guidance without changing the validated PyTorch, Transformers, TRL, vLLM, or FlashInfer runtime versions.
+
 ## [v2.10.1] - 2026-08-21
 
 - Add the CUDA 12.9 compiler installation contract and pinned FlashInfer 0.6.14 CUDA 12.9 JIT cache required for Blackwell sampler initialization when the system CUDA toolkit is older than CUDA 12.9.
