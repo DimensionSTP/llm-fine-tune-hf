@@ -422,6 +422,7 @@ def _init_mlflow_train_tracking(
                 "resume_training is true. Refusing to start a new MLflow run "
                 "because it can split a resumed training run across tracking runs."
             )
+        os.environ["MLFLOW_MAX_LOG_PARAMS"] = "0"
         with _patch_mlflow_visible_gpu_monitor(
             enabled=config.tracking.system_metrics.enabled,
         ):
