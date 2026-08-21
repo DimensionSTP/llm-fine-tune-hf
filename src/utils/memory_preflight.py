@@ -575,8 +575,14 @@ def _resolve_memory_preflight_cuda_visible_devices(
     if devices is None:
         return None
     if isinstance(devices, int):
-        if torch.cuda.device_count() <= 0 and os.environ.get("CUDA_VISIBLE_DEVICES"):
-            return os.environ["CUDA_VISIBLE_DEVICES"]
+        visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible_devices:
+            device_ids = [
+                device_id.strip()
+                for device_id in visible_devices.split(",")
+                if device_id.strip()
+            ]
+            return ",".join(device_ids[:devices])
         num_gpus = min(
             devices,
             torch.cuda.device_count(),
