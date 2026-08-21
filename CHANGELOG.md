@@ -5,6 +5,7 @@ All notable changes to this repository are documented in this file.
 ## [v2.10.1] - 2026-08-21
 
 - Add the CUDA 12.9 compiler installation contract and pinned FlashInfer 0.6.14 CUDA 12.9 JIT cache required for Blackwell sampler initialization when the system CUDA toolkit is older than CUDA 12.9.
+- Add `SLACK_WEBHOOK_URL` to `.env.example` so the default Slack notification backend can be configured directly from the onboarding environment template.
 - Synchronize the project metadata, requirements, environment freeze, and installation guidance without changing the validated PyTorch, Transformers, TRL, vLLM, or FlashInfer runtime versions.
 
 ## [v2.10.0] - 2026-08-21
