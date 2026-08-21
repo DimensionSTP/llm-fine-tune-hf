@@ -7,6 +7,7 @@ Practical runbook for training and inference flows in `llm-fine-tune-hf`.
 ## Install
 
 ```bash
+conda install -c nvidia "cuda-nvcc=12.9" -y
 python -m pip install uv==0.10.12
 uv pip install "setuptools>=68" wheel
 uv pip install \
@@ -16,9 +17,12 @@ uv pip install \
     -r requirements.txt
 ```
 
+The CUDA 12.9 compiler and pinned FlashInfer CUDA 12.9 JIT cache keep Blackwell sampler initialization from falling back to an older system CUDA toolkit.
+
 or
 
 ```bash
+conda install -c nvidia "cuda-nvcc=12.9" -y
 python -m pip install uv==0.10.12
 uv pip install "setuptools>=68" wheel
 uv pip install \

@@ -16,6 +16,7 @@ cd llm-fine-tune-hf
 # [OPTIONAL] create conda environment
 conda create -n myenv python=3.12 -y
 conda activate myenv
+conda install -c nvidia "cuda-nvcc=12.9" -y
 
 # install build requirements
 python -m pip install uv==0.10.12
@@ -30,6 +31,7 @@ uv pip install \
 ```
 
 `requirements-overrides.txt` keeps Pandas 3.0.1 while overriding MLflow 3.13.0's `pandas<3` package metadata.
+The CUDA 12.9 compiler and pinned FlashInfer CUDA 12.9 JIT cache keep Blackwell sampler initialization from falling back to an older system CUDA toolkit.
 
 ### Quick setup (pyproject.toml)
 
