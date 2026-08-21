@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.1] - 2026-08-21
+
+- Add the CUDA 12.9 compiler installation contract and pinned FlashInfer 0.6.14 CUDA 12.9 JIT cache required for Blackwell sampler initialization when the system CUDA toolkit is older than CUDA 12.9.
+- Synchronize the project metadata, requirements, environment freeze, and installation guidance without changing the validated PyTorch, Transformers, TRL, vLLM, or FlashInfer runtime versions.
+
 ## [v2.10.0] - 2026-08-21
 
 - Update the validated training stack to PyTorch 2.11.0 with CUDA 12.9, Transformers 5.14.1, TRL 1.10.0, vLLM 0.26.0+cu129, MLflow 3.13.0, W&B 0.25.1, FlashInfer 0.6.14, and the synchronized candidate environment freeze.
