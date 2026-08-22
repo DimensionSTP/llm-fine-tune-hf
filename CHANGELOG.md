@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.3] - 2026-08-23
+
+- Propagate the existing `is_enable_thinking` policy through row-level chat-template arguments for DPO, KTO, GKD, GOLD, and A2PO training and validation datasets while preserving trainer-level handling for GRPO, SDPO, Async GRPO, and Distillation.
+- Filter row-level chat-template arguments against the active tokenizer or processor template while preserving DPO and KTO VLM image transforms and collator inputs.
+
 ## [v2.10.2] - 2026-08-21
 
 - Add the pinned cuRAND runtime and development packages required to build DeepSpeed CPUAdam with the CUDA 12.9 environment.
