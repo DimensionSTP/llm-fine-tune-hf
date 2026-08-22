@@ -160,6 +160,14 @@ def train(
             training_arguments=training_arguments,
             data_encoder=data_encoder,
         )
+        train_datasets = setup.finalize_train_datasets(
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            training_arguments=training_arguments,
+            data_encoder=data_encoder,
+        )
+        train_dataset = train_datasets["train"]
+        val_dataset = train_datasets["val"]
         resolve_lora_streaming_name_remap_config(config=config)
         write_training_metadata(
             config=config,

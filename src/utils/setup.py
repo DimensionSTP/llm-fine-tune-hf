@@ -242,6 +242,57 @@ class SetUp:
         )
         return training_arguments
 
+    def finalize_train_datasets(
+        self,
+        train_dataset: Optional[Union[HFDataset, HFIterableDataset]],
+        val_dataset: Optional[Union[HFDataset, HFIterableDataset]],
+        training_arguments: TrainingArguments,
+        data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
+    ) -> Dict[str, Optional[Union[HFDataset, HFIterableDataset]]]:
+        train_datasets = {
+            "train": train_dataset,
+            "val": val_dataset,
+        }
+        if "chat_template_kwargs" not in self.config:
+            return train_datasets
+
+        chat_template_kwargs = self.config.chat_template_kwargs
+        if chat_template_kwargs is None:
+            return train_datasets
+        if isinstance(chat_template_kwargs, DictConfig):
+            chat_template_kwargs = OmegaConf.to_container(
+                chat_template_kwargs,
+                resolve=True,
+            )
+        if not isinstance(chat_template_kwargs, dict):
+            raise ValueError("chat_template_kwargs must be a dict or null.")
+
+        if hasattr(
+            training_arguments,
+            "chat_template_kwargs",
+        ):
+            if training_arguments.chat_template_kwargs is None:
+                raise ValueError(
+                    "training_arguments.chat_template_kwargs must be wired from "
+                    "chat_template_kwargs."
+                )
+            return train_datasets
+
+        filtered_chat_template_kwargs = filter_chat_template_kwargs(
+            data_encoder=data_encoder,
+            chat_template_kwargs=chat_template_kwargs,
+        )
+        return {
+            "train": self._replace_dataset_chat_template_kwargs(
+                dataset=train_dataset,
+                chat_template_kwargs=filtered_chat_template_kwargs,
+            ),
+            "val": self._replace_dataset_chat_template_kwargs(
+                dataset=val_dataset,
+                chat_template_kwargs=filtered_chat_template_kwargs,
+            ),
+        }
+
     def get_model(self) -> PreTrainedModel:
         is_inference = self.config.mode in ["test", "test_large"]
         model_load_plan = self.model_load_planner.build()
@@ -450,6 +501,24 @@ class SetUp:
             self.config.dataset[self.data_type],
         )
         return dataset()
+
+    def _replace_dataset_chat_template_kwargs(
+        self,
+        dataset: Optional[Union[HFDataset, HFIterableDataset]],
+        chat_template_kwargs: Dict[str, Any],
+    ) -> Optional[Union[HFDataset, HFIterableDataset]]:
+        if dataset is None:
+            return None
+        if not isinstance(dataset, HFDataset):
+            raise ValueError(
+                "Row-level chat_template_kwargs require a non-streaming dataset."
+            )
+        if "chat_template_kwargs" in dataset.column_names:
+            dataset = dataset.remove_columns("chat_template_kwargs")
+        return dataset.add_column(
+            name="chat_template_kwargs",
+            column=[dict(chat_template_kwargs) for _ in range(len(dataset))],
+        )
 
     def _get_agentic_tools(self) -> List[Callable[..., Any]]:
         return [
