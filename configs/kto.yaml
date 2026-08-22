@@ -130,6 +130,9 @@ warmup_steps: 5e-2
 
 beta: 0.1
 
+chat_template_kwargs:
+  enable_thinking: ${is_enable_thinking}
+
 distributed:
   enabled: false
   num_machines: 1

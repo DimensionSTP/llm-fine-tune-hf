@@ -155,6 +155,9 @@ vllm_server_port: 8001
 vllm_group_port: 51216
 vllm_server_timeout: 240.0
 
+chat_template_kwargs:
+  enable_thinking: ${is_enable_thinking}
+
 distributed:
   enabled: false
   num_machines: 1

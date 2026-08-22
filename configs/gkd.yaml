@@ -139,6 +139,9 @@ beta: 0.5
 disable_dropout: true
 seq_kd: false
 
+chat_template_kwargs:
+  enable_thinking: ${is_enable_thinking}
+
 distributed:
   enabled: false
   num_machines: 1
