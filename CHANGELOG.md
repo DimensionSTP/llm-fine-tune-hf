@@ -2,6 +2,13 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.4] - 2026-08-24
+
+- Extend config-driven vLLM parameter-name remapping to offline PEFT `test_vllm` and `test_vllm_multi_turn` execution while preserving the existing training weight-sync behavior across all supported methods.
+- Validate immutable local safetensors adapters before vLLM model loading and create or reuse content-addressed remapped adapters without modifying the source checkpoint.
+- Record source adapter hashes and effective vLLM adapter path, hash, tensor counts, and materialization action in inference companion manifests.
+- Use a valid positive LoRA request ID for multi-turn vLLM inference and validate Qwen3.5 text PEFT adapter remapping, generation, artifact reuse, source immutability, and process cleanup through focused CPU and GPU gates.
+
 ## [v2.10.3] - 2026-08-23
 
 - Propagate the existing `is_enable_thinking` policy through row-level chat-template arguments for DPO, KTO, GKD, GOLD, and A2PO training and validation datasets while preserving trainer-level handling for GRPO, SDPO, Async GRPO, and Distillation.
