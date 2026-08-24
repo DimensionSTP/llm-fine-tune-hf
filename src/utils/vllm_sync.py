@@ -3,7 +3,11 @@ import os
 from contextlib import nullcontext
 from fnmatch import fnmatchcase
 from functools import partial
+import hashlib
 from importlib.metadata import version
+import json
+import shutil
+import tempfile
 from types import MethodType
 
 from omegaconf import DictConfig, ListConfig
@@ -15,6 +19,9 @@ import torch
 import bitsandbytes as bnb
 
 import deepspeed
+
+from safetensors import safe_open
+from safetensors.torch import save_file
 
 
 def prepare_vllm_server_accelerator_device(
@@ -86,6 +93,64 @@ def resolve_training_vllm_lora_name_remap_config(
     return resolve_vllm_lora_name_remap_config(
         config=config,
     )
+
+
+def prepare_vllm_lora_request(
+    config: DictConfig,
+    lora_int_id: int,
+) -> Dict[str, Any]:
+    resolved_remap = resolve_vllm_lora_name_remap_config(
+        config=config,
+    )
+    if not config.is_peft:
+        return {
+            "lora_request": None,
+            "runtime": None,
+        }
+
+    source_adapter = _load_vllm_lora_source_adapter(
+        adapter_path=str(config.peft_test.adapter_path),
+    )
+    prefix_rules = resolved_remap["prefix_rules"]
+    if len(prefix_rules) == 0:
+        effective_adapter_path = source_adapter["adapter_path"]
+        action = "passthrough"
+        remapped_tensor_count = 0
+        passthrough_tensor_count = source_adapter["total_tensor_count"]
+        effective_weights_sha256 = source_adapter["weights_sha256"]
+    else:
+        materialized_adapter = _materialize_vllm_lora_adapter(
+            source_adapter=source_adapter,
+            output_root=os.path.join(
+                str(config.test_output_dir),
+                "vllm_lora_adapters",
+            ),
+            resolved_profile=resolved_remap["resolved_profile"],
+            prefix_rules=prefix_rules,
+        )
+        effective_adapter_path = materialized_adapter["adapter_path"]
+        action = materialized_adapter["action"]
+        remapped_tensor_count = materialized_adapter["remapped_tensor_count"]
+        passthrough_tensor_count = materialized_adapter["passthrough_tensor_count"]
+        effective_weights_sha256 = materialized_adapter["weights_sha256"]
+
+    return {
+        "lora_request": _build_vllm_lora_request(
+            adapter_name=str(config.peft_test.adapter_name),
+            lora_int_id=lora_int_id,
+            adapter_path=effective_adapter_path,
+        ),
+        "runtime": {
+            "source_weights_sha256": source_adapter["weights_sha256"],
+            "source_config_sha256": source_adapter["config_sha256"],
+            "effective_adapter_path": effective_adapter_path,
+            "effective_weights_sha256": effective_weights_sha256,
+            "total_tensor_count": source_adapter["total_tensor_count"],
+            "remapped_tensor_count": remapped_tensor_count,
+            "passthrough_tensor_count": passthrough_tensor_count,
+            "action": action,
+        },
+    }
 
 
 def patch_vllm_param_name_remap(
@@ -220,6 +285,507 @@ def patch_lora_streaming_vllm_sync(
         trainer.vllm_generation,
     )
     return True
+
+
+def _load_vllm_lora_source_adapter(
+    adapter_path: str,
+) -> Dict[str, Any]:
+    adapter_path = os.path.abspath(adapter_path)
+    if not os.path.isdir(adapter_path):
+        raise ValueError(f"PEFT adapter path must be a local directory: {adapter_path}")
+
+    weights_path = os.path.join(
+        adapter_path,
+        "adapter_model.safetensors",
+    )
+    config_path = os.path.join(
+        adapter_path,
+        "adapter_config.json",
+    )
+    if not os.path.isfile(weights_path):
+        adapter_files = os.listdir(adapter_path)
+        has_unsupported_weights = "adapter_model.bin" in adapter_files or any(
+            file_name == "adapter_model.safetensors.index.json"
+            or (
+                file_name.startswith("adapter_model-")
+                and file_name.endswith(".safetensors")
+            )
+            for file_name in adapter_files
+        )
+        if has_unsupported_weights:
+            raise ValueError(
+                "Offline vLLM LoRA remap supports only adapter_model.safetensors."
+            )
+        raise FileNotFoundError(f"Missing PEFT adapter weights: {weights_path}")
+    if not os.path.isfile(config_path):
+        raise FileNotFoundError(f"Missing PEFT adapter config: {config_path}")
+
+    with open(
+        config_path,
+        encoding="utf-8",
+    ) as file:
+        adapter_config = json.load(file)
+    if not isinstance(adapter_config, dict):
+        raise ValueError("adapter_config.json must contain a JSON object.")
+
+    tensors, metadata = _load_vllm_lora_tensors(weights_path=weights_path)
+    return {
+        "adapter_path": adapter_path,
+        "weights_path": weights_path,
+        "config_path": config_path,
+        "weights_sha256": _hash_file(path=weights_path),
+        "config_sha256": _hash_file(path=config_path),
+        "tensors": tensors,
+        "metadata": metadata,
+        "total_tensor_count": len(tensors),
+    }
+
+
+def _materialize_vllm_lora_adapter(
+    source_adapter: Dict[str, Any],
+    output_root: str,
+    resolved_profile: str,
+    prefix_rules: ListConfig,
+) -> Dict[str, Any]:
+    output_root = os.path.abspath(output_root)
+    if (
+        resolved_profile in {".", ".."}
+        or os.path.basename(resolved_profile) != resolved_profile
+    ):
+        raise ValueError("Resolved vLLM LoRA profile must be a path-safe name.")
+
+    remapped_tensors, remapped_tensor_count = _remap_vllm_lora_adapter_tensors(
+        tensors=source_adapter["tensors"],
+        prefix_rules=prefix_rules,
+    )
+    if remapped_tensor_count == 0:
+        raise ValueError(
+            "Resolved vLLM LoRA profile did not remap any adapter tensors."
+        )
+
+    prefix_rule_signature = _build_vllm_lora_prefix_rule_signature(
+        prefix_rules=prefix_rules,
+    )
+    identity = _build_vllm_lora_adapter_identity(
+        source_weights_sha256=source_adapter["weights_sha256"],
+        source_config_sha256=source_adapter["config_sha256"],
+        resolved_profile=resolved_profile,
+        prefix_rules=prefix_rules,
+    )
+    destination_path = os.path.join(
+        output_root,
+        f"{resolved_profile}-{identity}",
+    )
+    expected_manifest = {
+        "source_weights_sha256": source_adapter["weights_sha256"],
+        "source_config_sha256": source_adapter["config_sha256"],
+        "resolved_profile": resolved_profile,
+        "prefix_rule_signature": prefix_rule_signature,
+        "total_tensor_count": source_adapter["total_tensor_count"],
+        "remapped_tensor_count": remapped_tensor_count,
+        "passthrough_tensor_count": (
+            source_adapter["total_tensor_count"] - remapped_tensor_count
+        ),
+    }
+    if os.path.exists(destination_path):
+        validated = _validate_vllm_lora_artifact(
+            artifact_path=destination_path,
+            expected_manifest=expected_manifest,
+            expected_tensors=remapped_tensors,
+            expected_metadata=source_adapter["metadata"],
+        )
+        _validate_vllm_lora_source_hashes(source_adapter=source_adapter)
+        return {
+            "adapter_path": destination_path,
+            "weights_sha256": validated["effective_weights_sha256"],
+            "remapped_tensor_count": remapped_tensor_count,
+            "passthrough_tensor_count": expected_manifest["passthrough_tensor_count"],
+            "action": "reused",
+        }
+
+    os.makedirs(
+        output_root,
+        exist_ok=True,
+    )
+    temp_path = tempfile.mkdtemp(
+        prefix=f".{resolved_profile}-{identity}.tmp.{os.getpid()}.",
+        dir=output_root,
+    )
+    try:
+        temp_weights_path = os.path.join(
+            temp_path,
+            "adapter_model.safetensors",
+        )
+        temp_config_path = os.path.join(
+            temp_path,
+            "adapter_config.json",
+        )
+        save_file(
+            tensors=remapped_tensors,
+            filename=temp_weights_path,
+            metadata=source_adapter["metadata"],
+        )
+        _canonicalize_vllm_lora_safetensors(path=temp_weights_path)
+        shutil.copyfile(
+            source_adapter["config_path"],
+            temp_config_path,
+        )
+        _validate_vllm_lora_source_hashes(source_adapter=source_adapter)
+        effective_weights_sha256 = _hash_file(path=temp_weights_path)
+        manifest = {
+            **expected_manifest,
+            "effective_weights_sha256": effective_weights_sha256,
+        }
+        _write_vllm_lora_manifest(
+            manifest_path=os.path.join(
+                temp_path,
+                "remap_manifest.json",
+            ),
+            manifest=manifest,
+        )
+        _validate_vllm_lora_artifact(
+            artifact_path=temp_path,
+            expected_manifest=expected_manifest,
+            expected_tensors=remapped_tensors,
+            expected_metadata=source_adapter["metadata"],
+        )
+        try:
+            os.rename(
+                temp_path,
+                destination_path,
+            )
+            action = "materialized"
+        except OSError:
+            if not os.path.exists(destination_path):
+                raise
+            validated = _validate_vllm_lora_artifact(
+                artifact_path=destination_path,
+                expected_manifest=expected_manifest,
+                expected_tensors=remapped_tensors,
+                expected_metadata=source_adapter["metadata"],
+            )
+            effective_weights_sha256 = validated["effective_weights_sha256"]
+            action = "reused"
+        _validate_vllm_lora_source_hashes(source_adapter=source_adapter)
+        return {
+            "adapter_path": destination_path,
+            "weights_sha256": effective_weights_sha256,
+            "remapped_tensor_count": remapped_tensor_count,
+            "passthrough_tensor_count": expected_manifest["passthrough_tensor_count"],
+            "action": action,
+        }
+    finally:
+        if os.path.isdir(temp_path):
+            shutil.rmtree(temp_path)
+
+
+def _load_vllm_lora_tensors(
+    weights_path: str,
+) -> Tuple[Dict[str, torch.Tensor], Optional[Dict[str, str]]]:
+    with safe_open(
+        filename=weights_path,
+        framework="pt",
+        device="cpu",
+    ) as file:
+        tensors = {key: file.get_tensor(key) for key in sorted(file.keys())}
+        metadata = file.metadata()
+    return tensors, metadata
+
+
+def _remap_vllm_lora_adapter_tensors(
+    tensors: Dict[str, torch.Tensor],
+    prefix_rules: ListConfig,
+) -> Tuple[Dict[str, torch.Tensor], int]:
+    remapped_tensors: Dict[str, torch.Tensor] = {}
+    remapped_tensor_count = 0
+    for source_key in sorted(tensors):
+        target_key = _remap_vllm_lora_adapter_key(
+            key=source_key,
+            prefix_rules=prefix_rules,
+        )
+        if target_key in remapped_tensors:
+            raise ValueError(f"vLLM LoRA remap key collision: {target_key}")
+        remapped_tensors[target_key] = tensors[source_key]
+        if target_key != source_key:
+            remapped_tensor_count += 1
+    return {
+        key: remapped_tensors[key] for key in sorted(remapped_tensors)
+    }, remapped_tensor_count
+
+
+def _remap_vllm_lora_adapter_key(
+    key: str,
+    prefix_rules: ListConfig,
+) -> str:
+    wrapper = "base_model.model."
+    if key.startswith(wrapper):
+        model_name = key.removeprefix(wrapper)
+        remapped_name = _remap_vllm_lora_name(
+            name=model_name,
+            prefix_rules=prefix_rules,
+        )
+        return f"{wrapper}{remapped_name}"
+    return _remap_vllm_lora_name(
+        name=key,
+        prefix_rules=prefix_rules,
+    )
+
+
+def _build_vllm_lora_adapter_identity(
+    source_weights_sha256: str,
+    source_config_sha256: str,
+    resolved_profile: str,
+    prefix_rules: ListConfig,
+) -> str:
+    payload = {
+        "source_weights_sha256": source_weights_sha256,
+        "source_config_sha256": source_config_sha256,
+        "resolved_profile": resolved_profile,
+        "prefix_rules": _build_vllm_lora_prefix_rule_payload(
+            prefix_rules=prefix_rules,
+        ),
+    }
+    return _hash_bytes(
+        value=_serialize_vllm_lora_identity(payload=payload),
+    )
+
+
+def _build_vllm_lora_prefix_rule_signature(
+    prefix_rules: ListConfig,
+) -> str:
+    return _hash_bytes(
+        value=_serialize_vllm_lora_identity(
+            payload=_build_vllm_lora_prefix_rule_payload(
+                prefix_rules=prefix_rules,
+            ),
+        ),
+    )
+
+
+def _build_vllm_lora_prefix_rule_payload(
+    prefix_rules: ListConfig,
+) -> List[Dict[str, str]]:
+    return [
+        {
+            "source_prefix": str(rule.source_prefix),
+            "target_prefix": str(rule.target_prefix),
+        }
+        for rule in prefix_rules
+    ]
+
+
+def _serialize_vllm_lora_identity(
+    payload: Any,
+) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def _hash_bytes(
+    value: bytes,
+) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _hash_file(
+    path: str,
+) -> str:
+    digest = hashlib.sha256()
+    with open(
+        path,
+        "rb",
+    ) as file:
+        while chunk := file.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonicalize_vllm_lora_safetensors(
+    path: str,
+) -> None:
+    with open(
+        path,
+        "rb",
+    ) as file:
+        payload = file.read()
+    if len(payload) < 8:
+        raise ValueError("Invalid vLLM LoRA safetensors payload.")
+
+    header_length = int.from_bytes(
+        payload[:8],
+        byteorder="little",
+    )
+    data_start = 8 + header_length
+    if data_start > len(payload):
+        raise ValueError("Invalid vLLM LoRA safetensors header length.")
+    header = json.loads(payload[8:data_start].decode("utf-8"))
+    if not isinstance(header, dict):
+        raise ValueError("Invalid vLLM LoRA safetensors header.")
+
+    metadata = header.pop(
+        "__metadata__",
+        None,
+    )
+    canonical_header: Dict[str, Any] = {}
+    if metadata is not None:
+        canonical_header["__metadata__"] = {
+            key: metadata[key] for key in sorted(metadata)
+        }
+
+    source_data = payload[data_start:]
+    canonical_data = bytearray()
+    for key in sorted(header):
+        tensor_header = header[key]
+        source_start, source_end = tensor_header["data_offsets"]
+        target_start = len(canonical_data)
+        canonical_data.extend(source_data[source_start:source_end])
+        canonical_header[key] = {
+            "dtype": tensor_header["dtype"],
+            "shape": tensor_header["shape"],
+            "data_offsets": [
+                target_start,
+                len(canonical_data),
+            ],
+        }
+
+    header_bytes = json.dumps(
+        canonical_header,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    header_bytes += b" " * (-len(header_bytes) % 8)
+    canonical_payload = (
+        len(header_bytes).to_bytes(
+            8,
+            byteorder="little",
+        )
+        + header_bytes
+        + canonical_data
+    )
+    temp_path = f"{path}.canonical.{os.getpid()}"
+    with open(
+        temp_path,
+        "wb",
+    ) as file:
+        file.write(canonical_payload)
+    os.replace(
+        temp_path,
+        path,
+    )
+
+
+def _write_vllm_lora_manifest(
+    manifest_path: str,
+    manifest: Dict[str, Any],
+) -> None:
+    with open(
+        manifest_path,
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            manifest,
+            file,
+            indent=2,
+            sort_keys=True,
+        )
+        file.write("\n")
+
+
+def _validate_vllm_lora_source_hashes(
+    source_adapter: Dict[str, Any],
+) -> None:
+    if (
+        _hash_file(path=source_adapter["weights_path"])
+        != source_adapter["weights_sha256"]
+    ):
+        raise ValueError("PEFT adapter weights changed during vLLM LoRA preparation.")
+    if (
+        _hash_file(path=source_adapter["config_path"])
+        != source_adapter["config_sha256"]
+    ):
+        raise ValueError("PEFT adapter config changed during vLLM LoRA preparation.")
+
+
+def _validate_vllm_lora_artifact(
+    artifact_path: str,
+    expected_manifest: Dict[str, Any],
+    expected_tensors: Dict[str, torch.Tensor],
+    expected_metadata: Optional[Dict[str, str]],
+) -> Dict[str, Any]:
+    if not os.path.isdir(artifact_path):
+        raise ValueError(f"Invalid vLLM LoRA artifact directory: {artifact_path}")
+    expected_file_names = {
+        "adapter_model.safetensors",
+        "adapter_config.json",
+        "remap_manifest.json",
+    }
+    if set(os.listdir(artifact_path)) != expected_file_names:
+        raise ValueError(f"Incomplete vLLM LoRA artifact: {artifact_path}")
+
+    weights_path = os.path.join(
+        artifact_path,
+        "adapter_model.safetensors",
+    )
+    config_path = os.path.join(
+        artifact_path,
+        "adapter_config.json",
+    )
+    manifest_path = os.path.join(
+        artifact_path,
+        "remap_manifest.json",
+    )
+    with open(
+        manifest_path,
+        encoding="utf-8",
+    ) as file:
+        manifest = json.load(file)
+    if not isinstance(manifest, dict):
+        raise ValueError("remap_manifest.json must contain a JSON object.")
+    if set(manifest) != set(expected_manifest) | {"effective_weights_sha256"}:
+        raise ValueError("vLLM LoRA artifact manifest fields do not match.")
+    if any(manifest[key] != value for key, value in expected_manifest.items()):
+        raise ValueError("vLLM LoRA artifact manifest does not match its source.")
+    if _hash_file(path=config_path) != expected_manifest["source_config_sha256"]:
+        raise ValueError("vLLM LoRA artifact config hash does not match its source.")
+    if _hash_file(path=weights_path) != manifest["effective_weights_sha256"]:
+        raise ValueError("vLLM LoRA artifact weights hash does not match its manifest.")
+
+    tensors, metadata = _load_vllm_lora_tensors(weights_path=weights_path)
+    if list(tensors) != list(expected_tensors):
+        raise ValueError("vLLM LoRA artifact tensor keys do not match.")
+    if metadata != expected_metadata:
+        raise ValueError("vLLM LoRA artifact metadata does not match.")
+    for key, expected_tensor in expected_tensors.items():
+        tensor = tensors[key]
+        if (
+            tensor.shape != expected_tensor.shape
+            or tensor.dtype != expected_tensor.dtype
+            or not torch.equal(
+                tensor,
+                expected_tensor,
+            )
+        ):
+            raise ValueError(f"vLLM LoRA artifact tensor does not match: {key}")
+    return manifest
+
+
+def _build_vllm_lora_request(
+    adapter_name: str,
+    lora_int_id: int,
+    adapter_path: str,
+) -> Any:
+    from vllm.lora.request import LoRARequest
+
+    return LoRARequest(
+        lora_name=adapter_name,
+        lora_int_id=lora_int_id,
+        lora_path=adapter_path,
+    )
 
 
 def _patch_async_grpo_vllm_param_name_remap(
