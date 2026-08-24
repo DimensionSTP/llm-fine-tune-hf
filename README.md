@@ -126,6 +126,8 @@ python main.py mode=test_vllm_multi_turn
 
 Test artifacts use the config-composed `${connected_dir}/tests/${model_detail}` directory. `test`, `test_large`, and `test_vllm` update the canonical `${dataset_name}.json` result and `${dataset_name}_manifest.json` companion. `test_vllm_multi_turn` writes `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json`. Each companion stores the full resolved config once, plus the active data encoder, resolved test files, runtime backend, effective device map or tensor-parallel size, and actual generation parameters.
 
+For PEFT `test_vllm` and `test_vllm_multi_turn`, `peft_test.adapter_path` remains the immutable source adapter. Before loading the vLLM model, the repository validates the local safetensors adapter and resolves the config-driven `vllm_lora_name_remap` profile. A passthrough profile uses the source adapter directly; a remapping profile creates or reuses a content-addressed adapter under `${test_output_dir}/vllm_lora_adapters/<profile>-<identity>/` without modifying the source. The companion manifest keeps source weights/config hashes in `resolved_input.peft_adapter` and records the effective adapter path/hash, tensor counts, and materialization action in `runtime.vllm_lora_adapter`. Legacy bin-only, sharded, incomplete, corrupt, zero-match, or colliding remap inputs fail before vLLM model loading. Offline PEFT results produced before this behavior with a selector/model/version combination that requires namespace remapping should be revalidated.
+
 ### Examples of shell scipts
 
 * full preprocessing
@@ -224,12 +226,6 @@ bash scripts/test/test_large.sh
 
 ```shell
 bash scripts/test/test_vllm.sh
-```
-
-* test_vllm_multi_turn
-
-```shell
-bash scripts/test/test_vllm_multi_turn.sh
 ```
 
 ### Additional Options

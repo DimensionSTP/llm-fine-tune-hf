@@ -60,6 +60,9 @@ Dependency notes:
 - `test`, `test_large`, and `test_vllm`: the canonical result and companion manifest must be written under `${connected_dir}/tests/${model_detail}` as `${dataset_name}.json` and `${dataset_name}_manifest.json`.
 - `test_vllm_multi_turn`: the result and companion manifest must be written under the same model-detail namespace as `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json`.
 - `test*`: companion manifests must store the full resolved config once and add the active data encoder, resolved test files, runtime backend, effective device map or tensor-parallel size, and actual generation parameters.
+- PEFT `test_vllm` and `test_vllm_multi_turn`: `peft_test.adapter_path` is the immutable source adapter, and adapter validation and configured vLLM parameter-name remapping must complete before vLLM model loading.
+- PEFT `test_vllm` and `test_vllm_multi_turn`: passthrough must use the source adapter without creating an artifact; non-passthrough must use a validated content-addressed adapter under `${test_output_dir}/vllm_lora_adapters/<profile>-<identity>/` without modifying the source.
+- PEFT `test_vllm` and `test_vllm_multi_turn`: the companion manifest must keep source weights/config hashes under `resolved_input.peft_adapter` and effective path/hash, tensor counts, and materialization action under `runtime.vllm_lora_adapter`; remap policy and source path remain in the resolved config and must not be duplicated in runtime metadata.
 - Runs must log enough metadata (model, dataset, key runtime options) for reproducibility.
 - Postprocessing scripts must keep `run_id` as a script-local variable, let the Python entrypoint resolve artifact paths from config-composed `output_base_dir`, and must not require command-line or environment overrides at execution time.
 
