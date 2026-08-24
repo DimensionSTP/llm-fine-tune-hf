@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from transformers import PreTrainedTokenizerBase, ProcessorMixin, PreTrainedModel
 
 from vllm import LLM, SamplingParams
-from vllm.lora.request import LoRARequest
 
 from huggingface_hub import snapshot_download
 
@@ -311,20 +310,6 @@ def build_sampling_params(
             "\n### End",
         ],
         **generation_config,
-    )
-
-
-def build_lora_request(
-    config: DictConfig,
-    lora_int_id: int,
-) -> Optional[LoRARequest]:
-    if not config.is_peft:
-        return None
-
-    return LoRARequest(
-        lora_name=config.peft_test.adapter_name,
-        lora_int_id=lora_int_id,
-        lora_path=config.peft_test.adapter_path,
     )
 
 

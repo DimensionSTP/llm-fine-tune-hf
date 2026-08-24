@@ -599,6 +599,12 @@ def test_vllm(
     df = load_test_dataframe(
         config=config,
     )
+    lora_preparation = prepare_vllm_lora_request(
+        config=config,
+        lora_int_id=1,
+    )
+    lora_request = lora_preparation["lora_request"]
+    vllm_lora_runtime = lora_preparation["runtime"]
 
     num_gpus = torch.cuda.device_count()
     tp_size = resolve_vllm_tp_size(
@@ -620,11 +626,6 @@ def test_vllm(
         config=config,
         stop_token_ids=[eos_token_id],
     )
-    lora_request = build_lora_request(
-        config=config,
-        lora_int_id=1,
-    )
-
     prompts = []
     labels = []
 
@@ -710,7 +711,7 @@ def test_vllm(
         outputs = llm.generate(
             prompts=prompts,
             sampling_params=sampling_params,
-            lora_request=lora_request if config.is_peft else None,
+            lora_request=lora_request,
             use_tqdm=True,
         )
 
@@ -794,6 +795,12 @@ def test_vllm_multi_turn(
     df = load_test_dataframe(
         config=config,
     )
+    lora_preparation = prepare_vllm_lora_request(
+        config=config,
+        lora_int_id=1,
+    )
+    lora_request = lora_preparation["lora_request"]
+    vllm_lora_runtime = lora_preparation["runtime"]
 
     num_gpus = torch.cuda.device_count()
     tp_size = resolve_vllm_tp_size(
@@ -811,11 +818,6 @@ def test_vllm_multi_turn(
         config=config,
         stop_token_ids=[text_encoder.eos_token_id],
     )
-    lora_request = build_lora_request(
-        config=config,
-        lora_int_id=0,
-    )
-
     try:
         results = []
         for _, row in tqdm(
@@ -873,7 +875,7 @@ def test_vllm_multi_turn(
                     output = llm.generate(
                         prompts=prompt_payload,
                         sampling_params=sampling_params,
-                        lora_request=lora_request if config.is_peft else None,
+                        lora_request=lora_request,
                         use_tqdm=False,
                     )
                     generation = output[0].outputs[0].text.strip()
@@ -923,7 +925,7 @@ def test_vllm_multi_turn(
                 output = llm.generate(
                     prompts=prompt_payload,
                     sampling_params=sampling_params,
-                    lora_request=lora_request if config.is_peft else None,
+                    lora_request=lora_request,
                     use_tqdm=False,
                 )
                 generation = output[0].outputs[0].text.strip()
