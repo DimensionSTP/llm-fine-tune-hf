@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Callable, Iterator, Any
+from typing import Dict, List, Tuple, Optional, Callable, Iterator, Any
 import os
 from contextlib import nullcontext
 from fnmatch import fnmatchcase
@@ -44,27 +44,15 @@ def prepare_vllm_server_accelerator_device(
     return True
 
 
-def resolve_lora_streaming_name_remap_config(
+def resolve_vllm_lora_name_remap_config(
     config: DictConfig,
 ) -> Dict[str, Any]:
-    should_resolve = config.fine_tune_method in {
-        "gold",
-        "grpo",
-        "async_grpo",
-        "sdpo",
-        "distillation",
-    }
-    if not should_resolve:
-        return {}
-    if config.fine_tune_method != "async_grpo" and not config.use_vllm:
-        return {}
-
     remap_config = config.vllm_lora_name_remap
     runtime_package_versions = {
         str(package_name): version(str(package_name))
         for package_name in remap_config.version_packages
     }
-    resolved = _resolve_lora_streaming_name_remap_profile(
+    resolved = _resolve_vllm_lora_name_remap_profile(
         config=config,
         runtime_package_versions=runtime_package_versions,
     )
@@ -79,6 +67,25 @@ def resolve_lora_streaming_name_remap_config(
         "runtime_package_versions": runtime_package_versions,
         "prefix_rules": remap_config.profiles[resolved["profile"]].prefix_rules,
     }
+
+
+def resolve_training_vllm_lora_name_remap_config(
+    config: DictConfig,
+) -> Dict[str, Any]:
+    if config.fine_tune_method not in {
+        "gold",
+        "grpo",
+        "async_grpo",
+        "sdpo",
+        "distillation",
+    }:
+        return {}
+    if config.fine_tune_method != "async_grpo" and not config.use_vllm:
+        return {}
+
+    return resolve_vllm_lora_name_remap_config(
+        config=config,
+    )
 
 
 def patch_vllm_param_name_remap(
@@ -113,7 +120,7 @@ def patch_vllm_param_name_remap(
     if not should_patch:
         return False
 
-    resolve_lora_streaming_name_remap_config(config=config)
+    resolve_training_vllm_lora_name_remap_config(config=config)
     trainer.vllm_generation._param_name_remapper = _get_lora_streaming_name_remapper(
         config=config,
     )
@@ -204,7 +211,7 @@ def patch_lora_streaming_vllm_sync(
     if not should_patch:
         return False
 
-    resolve_lora_streaming_name_remap_config(config=config)
+    resolve_training_vllm_lora_name_remap_config(config=config)
     trainer.vllm_generation._lora_streaming_name_remapper = (
         _get_lora_streaming_name_remapper(config=config)
     )
@@ -224,7 +231,7 @@ def _patch_async_grpo_vllm_param_name_remap(
     if hasattr(trainer, "_streaming_iter_original"):
         return False
 
-    resolve_lora_streaming_name_remap_config(config=config)
+    resolve_training_vllm_lora_name_remap_config(config=config)
     remap_name = _get_lora_streaming_name_remapper(config=config)
     weight_update_info = trainer.weight_transfer._weight_update_info
     weight_update_info["names"] = [
@@ -440,7 +447,7 @@ def _get_vllm_lora_weight_name(
     )
 
 
-def _remap_lora_streaming_name(
+def _remap_vllm_lora_name(
     name: str,
     prefix_rules: ListConfig,
 ) -> str:
@@ -465,12 +472,12 @@ def _get_lora_streaming_name_remapper(
         config.vllm_lora_name_remap.resolved_profile
     ]
     return partial(
-        _remap_lora_streaming_name,
+        _remap_vllm_lora_name,
         prefix_rules=profile.prefix_rules,
     )
 
 
-def _selector_matches_lora_streaming_runtime(
+def _selector_matches_vllm_lora_runtime(
     selector: DictConfig,
     config: DictConfig,
     runtime_package_versions: Dict[str, str],
@@ -495,7 +502,7 @@ def _selector_matches_lora_streaming_runtime(
     )
 
 
-def _resolve_lora_streaming_name_remap_profile(
+def _resolve_vllm_lora_name_remap_profile(
     config: DictConfig,
     runtime_package_versions: Dict[str, str],
 ) -> Dict[str, str]:
@@ -509,7 +516,7 @@ def _resolve_lora_streaming_name_remap_profile(
     matched_selectors = [
         selector
         for selector in remap_config.selectors
-        if _selector_matches_lora_streaming_runtime(
+        if _selector_matches_vllm_lora_runtime(
             selector=selector,
             config=config,
             runtime_package_versions=runtime_package_versions,

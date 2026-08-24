@@ -168,7 +168,7 @@ def train(
         )
         train_dataset = train_datasets["train"]
         val_dataset = train_datasets["val"]
-        resolve_lora_streaming_name_remap_config(config=config)
+        resolve_training_vllm_lora_name_remap_config(config=config)
         write_training_metadata(
             config=config,
             training_arguments=training_arguments,
