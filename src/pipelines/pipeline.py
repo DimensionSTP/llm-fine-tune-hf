@@ -474,6 +474,7 @@ def test(
                 sampling_params=None,
                 tp_size=None,
                 vision_patch_embedding_result=vision_patch_embedding_result,
+                vllm_lora_runtime=None,
             )
             log_tracking_table(
                 config=config,
@@ -558,6 +559,7 @@ def test_large(
             sampling_params=None,
             tp_size=None,
             vision_patch_embedding_result=vision_patch_embedding_result,
+            vllm_lora_runtime=None,
         )
         log_tracking_table(
             config=config,
@@ -752,6 +754,7 @@ def test_vllm(
             sampling_params=sampling_params,
             tp_size=tp_size,
             vision_patch_embedding_result=None,
+            vllm_lora_runtime=vllm_lora_runtime,
         )
 
         log_tracking_table(
@@ -956,6 +959,7 @@ def test_vllm_multi_turn(
             sampling_params=sampling_params,
             tp_size=tp_size,
             vision_patch_embedding_result=None,
+            vllm_lora_runtime=vllm_lora_runtime,
         )
 
         for column in result_df.columns:

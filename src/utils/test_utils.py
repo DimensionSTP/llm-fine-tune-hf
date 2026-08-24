@@ -148,6 +148,7 @@ def write_inference_manifest(
     sampling_params: Optional[SamplingParams],
     tp_size: Optional[int],
     vision_patch_embedding_result: Optional[Dict[str, Any]],
+    vllm_lora_runtime: Optional[Dict[str, Any]],
 ) -> str:
     if not os.path.isfile(result_path):
         raise FileNotFoundError(f"Inference result not found: {result_path}")
@@ -178,15 +179,29 @@ def write_inference_manifest(
     )
     if vision_patch_embedding_result is not None:
         runtime["vision_patch_embedding"] = vision_patch_embedding_result
+    resolved_input = {
+        "active_data_encoder_path": active_data_encoder_path,
+        "dataset_files": test_dataset_files,
+    }
+    if vllm_lora_runtime is not None:
+        resolved_input["peft_adapter"] = {
+            "weights_sha256": vllm_lora_runtime["source_weights_sha256"],
+            "config_sha256": vllm_lora_runtime["source_config_sha256"],
+        }
+        runtime["vllm_lora_adapter"] = {
+            "effective_adapter_path": vllm_lora_runtime["effective_adapter_path"],
+            "effective_weights_sha256": vllm_lora_runtime["effective_weights_sha256"],
+            "total_tensor_count": vllm_lora_runtime["total_tensor_count"],
+            "remapped_tensor_count": vllm_lora_runtime["remapped_tensor_count"],
+            "passthrough_tensor_count": vllm_lora_runtime["passthrough_tensor_count"],
+            "action": vllm_lora_runtime["action"],
+        }
     manifest = {
         "resolved_config": OmegaConf.to_container(
             config,
             resolve=True,
         ),
-        "resolved_input": {
-            "active_data_encoder_path": active_data_encoder_path,
-            "dataset_files": test_dataset_files,
-        },
+        "resolved_input": resolved_input,
         "runtime": runtime,
     }
     temp_path = f"{manifest_path}.tmp.{os.getpid()}"
