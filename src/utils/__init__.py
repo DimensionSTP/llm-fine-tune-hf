@@ -71,7 +71,8 @@ from .test_utils import (
 from .trl_runtime import patch_trl_trainer_runtime
 from .vllm_sync import (
     prepare_vllm_server_accelerator_device,
-    resolve_lora_streaming_name_remap_config,
+    resolve_vllm_lora_name_remap_config,
+    resolve_training_vllm_lora_name_remap_config,
     patch_vllm_param_name_remap,
     patch_qwen_packed_moe_vllm_sync,
     patch_sparse_decoder_moe_vllm_sync,
@@ -142,7 +143,8 @@ __all__ = [
     "load_test_dataframe",
     "patch_trl_trainer_runtime",
     "prepare_vllm_server_accelerator_device",
-    "resolve_lora_streaming_name_remap_config",
+    "resolve_vllm_lora_name_remap_config",
+    "resolve_training_vllm_lora_name_remap_config",
     "patch_vllm_param_name_remap",
     "patch_qwen_packed_moe_vllm_sync",
     "patch_sparse_decoder_moe_vllm_sync",
