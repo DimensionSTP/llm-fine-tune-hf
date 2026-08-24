@@ -491,7 +491,11 @@ class KVReward(BaseReward):
             sort_keys=True,
         )
         if (
-            len(pred_serialized) / max(len(gt_serialized), 1)
+            len(pred_serialized)
+            / max(
+                len(gt_serialized),
+                1,
+            )
             > self.max_serialized_length_ratio
         ):
             cap = min(
