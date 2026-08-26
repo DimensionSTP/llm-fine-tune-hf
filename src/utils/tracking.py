@@ -4,9 +4,11 @@ import base64
 from collections.abc import Collection
 from contextlib import contextmanager
 from functools import partial, partialmethod, update_wrapper
+from importlib.metadata import PackageNotFoundError, version
 import io
 import json
 import logging
+import re
 import uuid
 
 from omegaconf import DictConfig
@@ -428,6 +430,7 @@ def _init_mlflow_train_tracking(
         ):
             active_run = mlflow.start_run(
                 run_id=tracking_run_id,
+                tags=_build_mlflow_train_tags(config=config),
                 log_system_metrics=config.tracking.system_metrics.enabled,
             )
     else:
@@ -597,16 +600,74 @@ def _build_common_tracking_tags(
 ) -> Dict[str, str]:
     tags = {
         "mode": str(config.mode),
+        "package_name": str(config.package_name),
+        "package_version": _resolve_package_version(
+            package_name=str(config.package_name),
+            project_dir=str(config.project_dir),
+        ),
         "project_name": str(config.project_name),
         "fine_tune_method": str(config.fine_tune_method),
+        "modality": str(config.modality),
         "dataset_name": str(config.dataset_name),
         "model_type": str(config.model_type),
+        "model_revision": str(config.revision),
+        "strategy": str(config.strategy),
     }
     if config.run_id is not None:
         tags["artifact_run_id"] = str(config.run_id)
     if config.output_dir is not None:
         tags["output_dir"] = str(config.output_dir)
     return tags
+
+
+def _resolve_package_version(
+    package_name: str,
+    project_dir: str,
+) -> str:
+    source_version = _resolve_source_package_version(
+        package_name=package_name,
+        project_dir=project_dir,
+    )
+    if source_version != "unknown":
+        return source_version
+    try:
+        return version(package_name)
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _resolve_source_package_version(
+    package_name: str,
+    project_dir: str,
+) -> str:
+    pyproject_path = os.path.join(
+        project_dir,
+        "pyproject.toml",
+    )
+    if not os.path.isfile(pyproject_path):
+        return "unknown"
+
+    with open(
+        pyproject_path,
+        encoding="utf-8",
+    ) as file:
+        pyproject = file.read()
+    project_section = pyproject.partition("[project]")[2].partition("\n[")[0]
+    name_match = re.search(
+        r'^name\s*=\s*"([^"]+)"\s*$',
+        project_section,
+        flags=re.MULTILINE,
+    )
+    version_match = re.search(
+        r'^version\s*=\s*"([^"]+)"\s*$',
+        project_section,
+        flags=re.MULTILINE,
+    )
+    if name_match is None or version_match is None:
+        return "unknown"
+    if name_match.group(1) != package_name:
+        return "unknown"
+    return version_match.group(1)
 
 
 def _write_tracking_metadata(
