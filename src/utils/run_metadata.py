@@ -14,6 +14,7 @@ from transformers import TrainingArguments
 from ..helpers.dataset_paths import build_train_dataset_input_metadata
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import resolve_dataloader_runtime
+from .metadata_security import redact_metadata_payload, redact_metadata_text
 from .peft_initialization import build_peft_initialization_metadata
 
 
@@ -61,7 +62,6 @@ def write_run_metadata(
         exist_ok=True,
     )
 
-    manifest_path = _get_run_manifest_path(config=config)
     manifest = {
         "run_id": str(config.run_id),
         "status": "prepared",
@@ -69,14 +69,14 @@ def write_run_metadata(
         "artifacts": {},
         "source": _build_source_section(),
     }
-    _write_json(
-        path=manifest_path,
+    _write_run_manifest(
+        config=config,
         payload=manifest,
     )
     _write_resolved_config(config=config)
     manifest["artifacts"] = _build_train_artifact_section(config=config)
-    _write_json(
-        path=manifest_path,
+    _write_run_manifest(
+        config=config,
         payload=manifest,
     )
 
@@ -98,7 +98,10 @@ def write_training_metadata(
             str(config.output_dir),
             "training_args.json",
         ),
-        payload=training_arguments_payload,
+        payload=redact_metadata_payload(
+            config=config,
+            payload=training_arguments_payload,
+        ),
     )
 
     manifest = _read_run_manifest(config=config)
@@ -115,8 +118,8 @@ def write_training_metadata(
             "peft_initialization",
             None,
         )
-    _write_json(
-        path=_get_run_manifest_path(config=config),
+    _write_run_manifest(
+        config=config,
         payload=manifest,
     )
 
@@ -131,8 +134,8 @@ def write_vision_patch_embedding_metadata(
 
     manifest = _read_run_manifest(config=config)
     manifest["runtime"]["vision_patch_embedding"] = compatibility_result
-    _write_json(
-        path=_get_run_manifest_path(config=config),
+    _write_run_manifest(
+        config=config,
         payload=manifest,
     )
 
@@ -169,8 +172,8 @@ def update_run_metadata(
             "type": type(error).__name__,
             "message": str(error),
         }
-    _write_json(
-        path=_get_run_manifest_path(config=config),
+    _write_run_manifest(
+        config=config,
         payload=manifest,
     )
 
@@ -191,8 +194,13 @@ def update_run_metadata_preserving_error(
             rank=rank,
         )
     except Exception as metadata_error:
-        logging.getLogger(__name__).exception(
-            f"Failed to update run metadata while preserving the pipeline error: {metadata_error}"
+        redacted_error = redact_metadata_text(
+            config=config,
+            text=str(metadata_error),
+        )
+        logging.getLogger(__name__).error(
+            "Failed to update run metadata while preserving the pipeline error: "
+            f"{redacted_error}"
         )
 
 
@@ -565,13 +573,28 @@ def _write_resolved_config(
     ) as file:
         file.write(
             OmegaConf.to_yaml(
-                config,
-                resolve=True,
+                redact_metadata_payload(
+                    config=config,
+                    payload=config,
+                )
             )
         )
     os.replace(
         temp_path,
         path,
+    )
+
+
+def _write_run_manifest(
+    config: DictConfig,
+    payload: Dict[str, Any],
+) -> None:
+    _write_json(
+        path=_get_run_manifest_path(config=config),
+        payload=redact_metadata_payload(
+            config=config,
+            payload=payload,
+        ),
     )
 
 
