@@ -29,6 +29,9 @@ Environment variables:
 - `DEVICES`
 - `HF_HOME`
 - `USER_NAME`
+- `SLACK_WEBHOOK_URL` when the default `notifications=slack` backend is used
+
+Credentials must be supplied through `.env` or environment variables, not Hydra CLI overrides.
 
 Dependency notes:
 
@@ -48,6 +51,8 @@ Dependency notes:
 - Forced process death such as `SIGKILL` cannot be finalized by Python and may leave a stale tracking run.
 - Failures during dataset, model, encoder, or Trainer setup after tracking initialization must not leave an active run.
 - Resume reuses the existing `tracking_run_id` from `${output_dir}/tracking_metadata.json`.
+- MLflow validates every train metadata artifact before upload and fails closed without uploading any metadata when an unredacted secret remains.
+- Notification and tracking preserving-error logs must redact repository-known secrets without changing the runtime credential value or replacing the original pipeline exception.
 
 ## Output Contract
 
@@ -56,7 +61,8 @@ Dependency notes:
 - `train`: `run_id` must be allocated automatically by Python as an ordered `run-000N` leaf.
 - `train`: runtime batch-size fields must be logged as metadata, not embedded in `save_detail`.
 - `train`: `run_manifest.json` and `resolved_config.yaml` must exist before preflight, tracking, or setup. The manifest must record `prepared`, `running`, `completed`, `failed`, or `interrupted` and the last `preflight`, `setup`, `training`, `saving`, or `completed` stage.
-- `train`: `resolved_config.yaml` is the complete config source of truth, `training_args.json` records instantiated trainer arguments, and `run_manifest.json` records observed inputs, PEFT lineage, runtime facts, failures, and relative internal artifact references without duplicating either file.
+- `train`: `resolved_config.yaml` is the complete config source of truth with sensitive credential values stored as `<redacted>` and non-sensitive values fully resolved; `training_args.json` records instantiated trainer arguments, and `run_manifest.json` records observed inputs, PEFT lineage, runtime facts, failures, and relative internal artifact references without duplicating either file.
+- `train`: Hydra must not persist a duplicate `.hydra` metadata directory because the repository-owned metadata files are canonical.
 - MLflow `train`: upload available lifecycle metadata under the run's `metadata/` artifact path before finalizing `FINISHED`, `FAILED`, or `KILLED`; completed runs must preserve `run_manifest.json`, `resolved_config.yaml`, `training_args.json`, and `tracking_metadata.json`, while failed or interrupted runs preserve every file created before termination.
 - `test`, `test_large`, and `test_vllm`: the canonical result and companion manifest must be written under `${connected_dir}/tests/${model_detail}` as `${dataset_name}.json` and `${dataset_name}_manifest.json`.
 - `test_vllm_multi_turn`: the result and companion manifest must be written under the same model-detail namespace as `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json`.
