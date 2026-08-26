@@ -10,6 +10,8 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 import torch
 from torch.utils.data import Dataset, Subset
 
+from .metadata_security import redact_metadata_payload
+
 
 def validate_memory_preflight_config(
     config: DictConfig,
@@ -204,7 +206,10 @@ def _run_memory_preflight_probe(
         ),
         payload={
             "probe_id": probe_id,
-            "command": command,
+            "command": redact_metadata_payload(
+                config=config,
+                payload=command,
+            ),
         },
     )
     result = subprocess.run(
