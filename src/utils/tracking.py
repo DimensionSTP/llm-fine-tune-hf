@@ -17,6 +17,8 @@ import pandas as pd
 
 from transformers import TrainerCallback
 
+from .metadata_security import redact_metadata_text, validate_metadata_file
+
 
 def tracking_lifecycle(
     function: Callable[[DictConfig], None],
@@ -324,8 +326,14 @@ def _finish_tracking_preserving_error(
             status=status,
         )
     except Exception as error:
-        logging.getLogger(__name__).exception(
-            f"Failed to finalize tracking status {status} while preserving the pipeline error: {error}"
+        redacted_error = redact_metadata_text(
+            config=config,
+            text=str(error),
+        )
+        logging.getLogger(__name__).error(
+            "Failed to finalize tracking status "
+            f"{status} while preserving the pipeline error: "
+            f"{redacted_error}"
         )
 
 
@@ -335,8 +343,13 @@ def _log_mlflow_train_metadata_preserving_error(
     try:
         _log_mlflow_train_metadata(config=config)
     except Exception as error:
-        logging.getLogger(__name__).exception(
-            f"Failed to log MLflow train metadata while preserving the pipeline error: {error}"
+        redacted_error = redact_metadata_text(
+            config=config,
+            text=str(error),
+        )
+        logging.getLogger(__name__).error(
+            "Failed to log MLflow train metadata while preserving the pipeline error: "
+            f"{redacted_error}"
         )
 
 
@@ -351,6 +364,30 @@ def _log_mlflow_train_metadata(
         return
 
     output_dir = str(config.output_dir)
+    metadata_paths = [
+        os.path.join(
+            output_dir,
+            filename,
+        )
+        for filename in (
+            "run_manifest.json",
+            "resolved_config.yaml",
+            "training_args.json",
+            "tracking_metadata.json",
+        )
+        if os.path.isfile(
+            os.path.join(
+                output_dir,
+                filename,
+            )
+        )
+    ]
+    for path in metadata_paths:
+        validate_metadata_file(
+            config=config,
+            path=path,
+        )
+
     manifest_path = os.path.join(
         output_dir,
         "run_manifest.json",
@@ -371,21 +408,11 @@ def _log_mlflow_train_metadata(
                 value=git_revision,
             )
 
-    for filename in (
-        "run_manifest.json",
-        "resolved_config.yaml",
-        "training_args.json",
-        "tracking_metadata.json",
-    ):
-        path = os.path.join(
-            output_dir,
-            filename,
+    for path in metadata_paths:
+        mlflow.log_artifact(
+            local_path=path,
+            artifact_path="metadata",
         )
-        if os.path.isfile(path):
-            mlflow.log_artifact(
-                local_path=path,
-                artifact_path="metadata",
-            )
 
 
 def _is_tracking_owner() -> bool:
