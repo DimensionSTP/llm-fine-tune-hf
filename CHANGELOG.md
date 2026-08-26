@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.5] - 2026-08-26
+
+- Record package, model, modality, strategy, artifact run, and Git revision metadata as searchable MLflow tags for fresh and resumed runs.
+- Upload available training lifecycle metadata before finalizing MLflow runs as `FINISHED`, `FAILED`, or `KILLED`, preserving completed, failed, and interrupted run evidence under the `metadata/` artifact path.
+
 ## [v2.10.4] - 2026-08-24
 
 - Extend config-driven vLLM parameter-name remapping to offline PEFT `test_vllm` and `test_vllm_multi_turn` execution while preserving the existing training weight-sync behavior across all supported methods.
