@@ -6,6 +6,7 @@ from urllib.request import Request, urlopen
 from omegaconf import DictConfig
 
 from .tracking import get_tracking_context
+from .metadata_security import redact_metadata_text
 
 
 def validate_notifications_config(
@@ -77,8 +78,13 @@ def send_notification_preserving_error(
             status=status,
         )
     except Exception as error:
-        logging.getLogger(__name__).exception(
-            f"Failed to send notification while preserving the pipeline result: {error}"
+        redacted_error = redact_metadata_text(
+            config=config,
+            text=str(error),
+        )
+        logging.getLogger(__name__).error(
+            "Failed to send notification while preserving the pipeline result: "
+            f"{redacted_error}"
         )
 
 
