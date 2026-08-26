@@ -3,6 +3,11 @@ from .dataloader_runtime import (
     resolve_dataloader_runtime,
     validate_dataloader_runtime_config,
 )
+from .metadata_security import (
+    redact_metadata_payload,
+    redact_metadata_text,
+    validate_metadata_file,
+)
 from .memory_preflight import (
     apply_memory_preflight_dataset,
     run_memory_preflight_if_needed,
@@ -90,6 +95,9 @@ __all__ = [
     "SetUp",
     "resolve_dataloader_runtime",
     "validate_dataloader_runtime_config",
+    "redact_metadata_payload",
+    "redact_metadata_text",
+    "validate_metadata_file",
     "apply_memory_preflight_dataset",
     "run_memory_preflight_if_needed",
     "validate_memory_preflight_config",
