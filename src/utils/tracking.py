@@ -166,11 +166,22 @@ def _run_tracking_lifecycle(
     try:
         result = function(config=config)
     except (KeyboardInterrupt, SystemExit):
+        _log_mlflow_train_metadata_preserving_error(config=config)
         _finish_tracking_preserving_error(
             config=config,
             status="KILLED",
         )
         raise
+    except Exception:
+        _log_mlflow_train_metadata_preserving_error(config=config)
+        _finish_tracking_preserving_error(
+            config=config,
+            status="FAILED",
+        )
+        raise
+
+    try:
+        _log_mlflow_train_metadata(config=config)
     except Exception:
         _finish_tracking_preserving_error(
             config=config,
@@ -316,6 +327,65 @@ def _finish_tracking_preserving_error(
         logging.getLogger(__name__).exception(
             f"Failed to finalize tracking status {status} while preserving the pipeline error: {error}"
         )
+
+
+def _log_mlflow_train_metadata_preserving_error(
+    config: DictConfig,
+) -> None:
+    try:
+        _log_mlflow_train_metadata(config=config)
+    except Exception as error:
+        logging.getLogger(__name__).exception(
+            f"Failed to log MLflow train metadata while preserving the pipeline error: {error}"
+        )
+
+
+def _log_mlflow_train_metadata(
+    config: DictConfig,
+) -> None:
+    if config.mode != "train" or config.tracking.backend != "mlflow":
+        return
+
+    mlflow = _import_mlflow()
+    if mlflow.active_run() is None:
+        return
+
+    output_dir = str(config.output_dir)
+    manifest_path = os.path.join(
+        output_dir,
+        "run_manifest.json",
+    )
+    if os.path.isfile(manifest_path):
+        with open(
+            manifest_path,
+            encoding="utf-8",
+        ) as file:
+            manifest = json.load(file)
+        git_revision = manifest.get(
+            "source",
+            {},
+        ).get("git_revision")
+        if isinstance(git_revision, str) and git_revision != "":
+            mlflow.set_tag(
+                key="git_revision",
+                value=git_revision,
+            )
+
+    for filename in (
+        "run_manifest.json",
+        "resolved_config.yaml",
+        "training_args.json",
+        "tracking_metadata.json",
+    ):
+        path = os.path.join(
+            output_dir,
+            filename,
+        )
+        if os.path.isfile(path):
+            mlflow.log_artifact(
+                local_path=path,
+                artifact_path="metadata",
+            )
 
 
 def _is_tracking_owner() -> bool:
