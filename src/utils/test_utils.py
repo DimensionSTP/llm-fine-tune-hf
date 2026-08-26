@@ -17,8 +17,9 @@ from huggingface_hub import snapshot_download
 
 from tqdm import tqdm
 
-from ..helpers.dataset_paths import resolve_dataset_file_specs
 from .collate_fns import collate_fn_vlm
+from ..helpers.dataset_paths import resolve_dataset_file_specs
+from .metadata_security import redact_metadata_payload
 
 
 def build_test_dataloader(
@@ -196,14 +197,17 @@ def write_inference_manifest(
             "passthrough_tensor_count": vllm_lora_runtime["passthrough_tensor_count"],
             "action": vllm_lora_runtime["action"],
         }
-    manifest = {
-        "resolved_config": OmegaConf.to_container(
-            config,
-            resolve=True,
-        ),
-        "resolved_input": resolved_input,
-        "runtime": runtime,
-    }
+    manifest = redact_metadata_payload(
+        config=config,
+        payload={
+            "resolved_config": OmegaConf.to_container(
+                config,
+                resolve=True,
+            ),
+            "resolved_input": resolved_input,
+            "runtime": runtime,
+        },
+    )
     temp_path = f"{manifest_path}.tmp.{os.getpid()}"
     with open(
         temp_path,
