@@ -2,6 +2,12 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.6] - 2026-08-26
+
+- Redact credential-bearing config values, propagated secrets, URI credentials, CLI overrides, failure messages, and persisted memory-preflight commands without changing runtime config or subprocess arguments.
+- Validate all available training metadata before MLflow upload, fail closed without partial metadata upload, and preserve the original failure or interrupt while logging only redacted secondary errors.
+- Disable duplicate Hydra metadata persistence and document environment-only secret delivery and canonical redacted metadata handling.
+
 ## [v2.10.5] - 2026-08-26
 
 - Record package, model, modality, strategy, artifact run, and Git revision metadata as searchable MLflow tags for fresh and resumed runs.
