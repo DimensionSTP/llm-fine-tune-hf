@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.7] - 2026-08-27
+
+- Redact credential-bearing values across the complete inference companion manifest, including resolved configuration, resolved inputs, runtime metadata, and nested extension payloads, before atomic persistence.
+- Preserve canonical inference result and companion paths, non-sensitive reproducibility metadata, runtime configuration, and all existing Transformers, large-model, vLLM, multi-turn, PEFT adapter, and vision patch embedding behavior.
+
 ## [v2.10.6] - 2026-08-26
 
 - Redact credential-bearing config values, propagated secrets, URI credentials, CLI overrides, failure messages, and persisted memory-preflight commands without changing runtime config or subprocess arguments.
