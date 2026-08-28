@@ -99,6 +99,8 @@ Training automatically allocates `run_id` values such as `run-0001` under the me
 
 MLflow is the default experiment tracking backend, and Slack is the default notification backend through `SLACK_WEBHOOK_URL`. Use `tracking=wandb notifications=wandb` for W&B tracking and native alerts, `notifications=disabled` to disable lifecycle notifications, or `tracking=mlflow_server` for a remote MLflow server selected through `MLFLOW_TRACKING_URI`. Train runs persist only the selected backend and `tracking_run_id` in `${output_dir}/tracking_metadata.json`; checkpoint `run_id` remains local to `output_base_dir`, and interrupted-run resume reuses the persisted tracking identity instead of falling back to `run_id` or starting a new backend run. MLflow also records artifact `run_id`, package, model, modality, strategy, and Git revision as searchable tags, validates `run_manifest.json`, `resolved_config.yaml`, `training_args.json`, and `tracking_metadata.json` for unredacted secrets, and uploads the safe files under the run's `metadata/` artifact path before terminal lifecycle finalization. Unsafe metadata fails closed and is not uploaded. Normal completion, ordinary exceptions, and `KeyboardInterrupt` or `SystemExit` end MLflow runs as `FINISHED`, `FAILED`, and `KILLED`, respectively.
 
+See [MLFLOW_GUIDE.md](MLFLOW_GUIDE.md) for local and remote MLflow setup, run inspection and comparison, resume behavior, and troubleshooting.
+
 ### Test
 
 * end-to-end
