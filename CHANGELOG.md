@@ -2,6 +2,12 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.10.8] - 2026-08-28
+
+- Add a dedicated MLflow operations guide covering local and remote tracking profiles, environment and authentication setup, training and evaluation launches, preflight checks, and run identity.
+- Document active-run monitoring, search and comparison workflows, MLflow 3.13 line smoothing, artifact and tag inspection, distributed training, and Slack lifecycle notifications.
+- Document safe resume and rerun procedures, Hydra override escaping, terminal run states, troubleshooting, and an end-to-end operational checklist without changing runtime behavior.
+
 ## [v2.10.7] - 2026-08-27
 
 - Redact credential-bearing values across the complete inference companion manifest, including resolved configuration, resolved inputs, runtime metadata, and nested extension payloads, before atomic persistence.
