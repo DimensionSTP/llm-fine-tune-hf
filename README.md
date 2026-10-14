@@ -251,12 +251,19 @@ is_sft={True or False}
 * SFT loss type
 
 ```shell
-sft_loss_type={nll or chunked_nll}
+sft_loss_type={nll or dft}
 ```
 
-`nll` is the default SFT loss type. TRL 1.15.0 computes it through a fused, tiled LM head without materializing the full vocabulary logits. `chunked_nll` is a deprecated alias of the same `nll` implementation, not a separate memory-saving mode. Both names support assistant-only masking (`is_sft=True`); dynamic padding is independent of the loss choice. See the [TRL SFT configuration](https://github.com/huggingface/trl/blob/v1.15.0/trl/trainer/sft_config.py) and [trainer implementation](https://github.com/huggingface/trl/blob/v1.15.0/trl/trainer/sft_trainer.py).
+`nll` is the default SFT loss type. Both losses use TRL's fused, tiled LM head without materializing the full vocabulary logits. Assistant-only masking (`is_sft=True`) is supported; dynamic padding is independent of the loss choice. See the [TRL SFT configuration](https://github.com/huggingface/trl/blob/v1.15.0/trl/trainer/sft_config.py) and [trainer implementation](https://github.com/huggingface/trl/blob/v1.15.0/trl/trainer/sft_trainer.py).
 
-Do not apply a PEFT adapter to `lm_head`: the fused path reads its weight directly and TRL rejects such adapters. Standard `all-linear` excludes the output head. Liger layer kernels can remain enabled, but explicitly enabling `liger_kernel_config.fused_linear_cross_entropy` is unsupported because it replaces the forward used by TRL's fused LM head.
+| Loss | Behavior |
+| --- | --- |
+| `nll` | Standard negative log-likelihood averaged over supervised tokens, without extra probability weighting. |
+| `dft` | Dynamic Fine-Tuning: multiplies each supervised token's NLL by the model's probability of the correct token, detached from gradient computation. Lower-probability targets receive smaller gradient weights. |
+
+DFT changes the training objective, not the kernel or memory-saving strategy; task-specific performance gains are not guaranteed. DFT is unsupported with DeepSpeed sequence parallelism (Ulysses/ALST). This restriction is not a blanket ban on DeepSpeed ZeRO.
+
+Do not apply a PEFT adapter to `lm_head`: the fused path reads its weight directly and TRL rejects such adapters. Standard `all-linear` excludes the output head. Liger layer kernels can remain enabled for both `nll` and `dft`; TRL disables Liger's fused cross-entropy. Explicitly enabling `liger_kernel_config.fused_linear_cross_entropy` is unsupported because it replaces the forward used by TRL's fused LM head.
 
 * SFT padding strategy
 
@@ -321,7 +328,7 @@ python main.py --config-name={method}.yaml mode=train
 
 | Method | Config | Dataset contract | Notes |
 | --- | --- | --- | --- |
-| SFT | `sft.yaml` | SFT | `nll` uses the fused LM head; `chunked_nll` is a deprecated alias. |
+| SFT | `sft.yaml` | SFT | `nll` (default) or `dft`, both using the fused LM head. |
 | DPO | `dpo.yaml` | DPO | Preference-pair training. |
 | KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
 | GKD | `gkd.yaml` | GKD | Text-only distillation with config-driven on-policy ratio, divergence, sequence KD, and dropout policy. |
