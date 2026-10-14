@@ -40,7 +40,11 @@ structural:
   dataset_image: ${dataset_image}
   response_start_template: ${response_start_template}
   response_end_template: ${response_end_template}
-  sft_label_mask: ${sft_label_mask}
+  sft_label_mask_backend: ${sft_label_mask.backend}
+  sft_label_mask_validation_enabled: ${sft_label_mask.validation_enabled}
+  sft_label_mask_validation_mode: ${sft_label_mask.validation_mode}
+  sft_label_mask_min_assistant_label_tokens: ${sft_label_mask.min_assistant_label_tokens}
+  sft_label_mask_report_truncated_assistant: ${sft_label_mask.report_truncated_assistant}
 
 conversational:
   _target_: src.datasets.SFTConversationalDataset
@@ -82,4 +86,8 @@ conversational:
   dataset_image: ${dataset_image}
   response_start_template: ${response_start_template}
   response_end_template: ${response_end_template}
-  sft_label_mask: ${sft_label_mask}
+  sft_label_mask_backend: ${sft_label_mask.backend}
+  sft_label_mask_validation_enabled: ${sft_label_mask.validation_enabled}
+  sft_label_mask_validation_mode: ${sft_label_mask.validation_mode}
+  sft_label_mask_min_assistant_label_tokens: ${sft_label_mask.min_assistant_label_tokens}
+  sft_label_mask_report_truncated_assistant: ${sft_label_mask.report_truncated_assistant}

@@ -98,6 +98,7 @@ chat_template_path: null
 response_start_template: <|im_start|>${assistant_column_name}
 response_end_template: null
 sft_label_mask:
+  backend: repo
   validation_enabled: true
   validation_mode: strict
   min_assistant_label_tokens: 1
