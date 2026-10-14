@@ -87,7 +87,7 @@ def attach_train_completion_tracking(
     trainer: Any,
 ) -> None:
     if (
-        config.fine_tune_method not in {"grpo", "distillation"}
+        config.fine_tune_method not in {"grpo", "rloo", "distillation"}
         or not config.log_completions
         or config.memory_preflight.is_probe
         or not _is_tracking_owner()
@@ -238,7 +238,7 @@ def _log_train_completion_artifacts(
     table = {
         "step": [global_step] * len(prompts),
     }
-    if config.fine_tune_method == "grpo":
+    if config.fine_tune_method in {"grpo", "rloo"}:
         table.update(
             {
                 **completion_logs["rewards"],
@@ -264,7 +264,7 @@ def _log_train_completion_artifacts(
             ]
     if (
         config.tracking.backend == "mlflow"
-        and config.fine_tune_method == "grpo"
+        and config.fine_tune_method in {"grpo", "rloo"}
         and config.log_multimodal
     ):
         table["image_artifacts"] = _log_mlflow_completion_images(
