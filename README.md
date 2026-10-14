@@ -457,7 +457,7 @@ vllm_importance_sampling_cap={null or float}
 
 GRPO vLLM importance-sampling correction is enabled by default with `sequence_mask` mode, `clip_max=3.0`, and no min/cap.
 
-GRPO also enables KL bias correction when `beta` is nonzero. Completion logging is disabled by default. Set both `log_completions=true` and `log_multimodal=true` only when image artifact upload is intended. W&B displays the upstream completion table and images, while MLflow stores each logging event under `completions/tables/` and stores referenced images under `completions/images/`.
+GRPO also enables KL bias correction when `beta` is nonzero. Completion logging is disabled by default. GRPO and Distillation use the common tracking path when `log_completions=True`: text stays in `prompt`/`completion`, structured conversations also have JSON `prompt_messages`/`completion_messages`, and configured secrets are redacted in these additional tables without mutating trainer logs. GRPO includes its reward, extra, and advantage columns; Distillation uses its upstream text-only buffer. SDPO does not expose this completion-log contract. W&B retains its upstream completion display and receives the additional tables; MLflow stores each logging event under `completions/tables/`. For GRPO image artifact upload, set both `log_completions=True` and `log_multimodal=True`; MLflow stores referenced images under `completions/images/` and W&B retains its upstream image display.
 
 * GRPO streaming and agentic training
 

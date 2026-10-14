@@ -38,6 +38,7 @@ Training option contracts:
 - Hub kernels are training-only opt-in through `model_loading.train.use_kernels`; a configured Hydra `transformers.KernelConfig` requires that flag, and the selected TrainingArguments must disable Liger. Custom mappings retain inference entries and gain separate training entries. The pinned upstream custom loader needs explicit accelerator placement; default mappings keep the existing model-loading placement.
 - SFT keeps `sft_label_mask.backend=repo` and reentrant checkpointing by default. Native masks require a fast selected encoder with generation-tag templates and preserve VLM image inputs; selective checkpointing requires non-reentrant mode and excludes PEFT with ZeRO-3.
 - Distillation tool calling reuses `agentic` with dataset prompts and synchronous tools only. Environment factories and rollout workers remain GRPO/Async GRPO settings.
+- Enabled GRPO/Distillation completion tables use the selected backend and retain the upstream text or structured messages with configured-secret redaction. GRPO requires its reward, extra, and advantage buffers; Distillation has only prompt/completion buffers. SDPO is not attached to this callback. Completion logging stays disabled by default.
 
 Dependency notes:
 
