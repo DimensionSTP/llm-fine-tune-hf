@@ -209,7 +209,7 @@ def train(
 
         reward_manager = None
         reward_funcs = None
-        if config.fine_tune_method in {"grpo", "async_grpo", "sdpo", "a2po"}:
+        if config.fine_tune_method in {"grpo", "rloo", "async_grpo", "sdpo", "a2po"}:
             reward_manager = setup.get_reward_manager()
             reward_funcs = reward_manager.get_reward_funcs()
             trainer_config["reward_funcs"] = reward_funcs
@@ -270,20 +270,20 @@ def train(
             config=config,
         ):
             print(
-                "[patch] Applied Qwen packed-MoE vLLM sync filter for router-with-lora GRPO."
+                "[patch] Applied Qwen packed-MoE vLLM sync filter for router-with-lora training."
             )
         elif patch_sparse_decoder_moe_vllm_sync(
             trainer=trainer,
             config=config,
         ):
             print(
-                "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora GRPO."
+                "[patch] Applied sparse-decoder MoE vLLM sync filter for router-with-lora training."
             )
         elif patch_lora_streaming_vllm_sync(
             trainer=trainer,
             config=config,
         ):
-            print("[patch] Applied streaming LoRA vLLM sync for GRPO.")
+            print("[patch] Applied streaming LoRA vLLM sync for training.")
         if patch_vllm_param_name_remap(
             trainer=trainer,
             config=config,
@@ -295,7 +295,7 @@ def train(
         ):
             print("[patch] Applied GRPO completion termination override.")
         if (
-            config.fine_tune_method in {"grpo", "sdpo"}
+            config.fine_tune_method in {"grpo", "rloo", "sdpo"}
             and reward_manager is not None
             and config.use_vllm
             and config.vllm_mode == "colocate"
