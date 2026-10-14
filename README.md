@@ -266,6 +266,14 @@ sft_padding_strategy={max_length or dynamic}
 
 `dynamic` is the default. It keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. `max_length` selects sample-level fixed padding. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
 
+* SFT assistant mask backend
+
+```shell
+sft_label_mask.backend={repo or native}
+```
+
+`repo` is the default and uses the configured response boundary tokens. `native` uses the selected tokenizer/processor's generation-tag mask, including alignment after VLM image-token expansion, while retaining pretokenized dataset inputs and image tensors. It requires a fast tokenizer and a chat template containing `{% generation %}` blocks; unsupported or misaligned masks raise an error rather than falling back to `repo`. Supply such a template through the selected encoder's saved configuration (`custom_data_encoder_path` when `is_preprocessed=True`); a trainer-only `chat_template_path` does not re-encode the dataset. With `is_sft=False`, all non-padding tokens remain supervised. Processor `assistant_masks` are consumed during dataset validation, not forwarded to the model. Standalone native batch audits must supply the original `assistant_masks` alongside the batch. The native `truncated_assistant` diagnostic flags a capacity-filled input ending in an assistant-mask token other than tokenizer EOS; it does not depend on legacy response markers or change labels. This is a right-boundary warning, not proof that an untruncated source is complete.
+
 * SFT selective activation checkpointing
 
 ```shell
