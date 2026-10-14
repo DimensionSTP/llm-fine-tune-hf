@@ -33,6 +33,10 @@ Environment variables:
 
 Credentials must be supplied through `.env` or environment variables, not Hydra CLI overrides.
 
+Training option contracts:
+
+- Hub kernels are training-only opt-in through `model_loading.train.use_kernels`; a configured Hydra `transformers.KernelConfig` requires that flag, and the selected TrainingArguments must disable Liger. Custom mappings retain inference entries and gain separate training entries. The pinned upstream custom loader needs explicit accelerator placement; default mappings keep the existing model-loading placement.
+
 Dependency notes:
 
 - Python 3.11 or newer is required; the validated interpreter is Python 3.12.

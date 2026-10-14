@@ -319,6 +319,8 @@ Distillation resolves its configured version/model-specific vLLM parameter-name 
 
 Liger layer kernels remain enabled by default for SFT through `training_arguments.use_liger_kernel=True`; TRL deprecates this switch in favor of Hub kernels. Set it to `False` when native model execution is required. TRL disables Liger's fused cross-entropy to preserve its own fused LM head.
 
+Hub layer kernels are independently opt-in through `model_loading.train.use_kernels=True`; disable `training_arguments.use_liger_kernel` when enabling them. The default is `use_kernels=False` and `kernel_config=null`. To configure replacements, set `model_loading.train.kernel_config` to a Hydra object with `_target_: transformers.KernelConfig` and its documented arguments. The object is passed to the actual training model loader, not a trainer-only model-init path. A configured `kernel_config` requires `use_kernels=True`. Setup retains inference entries and adds separate training entries so custom mappings remain active after the trainer switches modes. The pinned upstream custom-mapping loader requires accelerator placement during loading; for a single CUDA device, configure `model_loading.train.device_map=cuda:0` explicitly. A null `kernel_config` uses the upstream default mapping and retains the existing loading placement. Inference kernel selection is unchanged. See [loading kernels](https://huggingface.co/docs/transformers/kernel_doc/loading_kernels).
+
 * Use preprocessed tokenizer option
 
 ```shell
