@@ -82,6 +82,7 @@ def resolve_training_vllm_lora_name_remap_config(
     if config.fine_tune_method not in {
         "gold",
         "grpo",
+        "rloo",
         "async_grpo",
         "sdpo",
         "distillation",
@@ -167,7 +168,7 @@ def patch_vllm_param_name_remap(
         (
             config.fine_tune_method in {"gold", "distillation"}
             or (
-                config.fine_tune_method == "grpo"
+                config.fine_tune_method in {"grpo", "rloo"}
                 and config.vllm_sync_strategy == "default"
             )
             or config.fine_tune_method == "sdpo"
@@ -207,7 +208,7 @@ def patch_qwen_packed_moe_vllm_sync(
         "-experts_" in config.model_type
     )
     should_patch = (
-        config.fine_tune_method == "grpo"
+        config.fine_tune_method in {"grpo", "rloo"}
         and config.use_vllm
         and config.is_peft
         and config.dense_to_moe.router_with_lora
@@ -237,7 +238,7 @@ def patch_sparse_decoder_moe_vllm_sync(
         "-experts_" in config.model_type and not config.model_type.startswith("Qwen3-")
     )
     should_patch = (
-        config.fine_tune_method == "grpo"
+        config.fine_tune_method in {"grpo", "rloo"}
         and config.use_vllm
         and config.is_peft
         and config.dense_to_moe.router_with_lora
@@ -264,7 +265,7 @@ def patch_lora_streaming_vllm_sync(
     config: DictConfig,
 ) -> bool:
     should_patch = (
-        config.fine_tune_method == "grpo"
+        config.fine_tune_method in {"grpo", "rloo"}
         and config.use_vllm
         and config.is_peft
         and config.vllm_sync_strategy == "lora_streaming"
