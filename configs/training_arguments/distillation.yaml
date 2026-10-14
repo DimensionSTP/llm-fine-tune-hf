@@ -59,5 +59,6 @@ vllm_max_model_length: ${vllm_max_model_length}
 vllm_tensor_parallel_size: ${vllm_tensor_parallel_size}
 beta: ${beta}
 log_completions: ${log_completions}
+max_tool_calling_iterations: ${agentic.max_tool_calling_iterations}
 num_completions_to_print: ${num_completions_to_print}
 log_unique_prompts: ${log_unique_prompts}
