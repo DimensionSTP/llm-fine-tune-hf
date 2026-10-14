@@ -17,7 +17,7 @@ def validate_training_arguments_config(
     _validate_dataset_input_config(config=config)
     _validate_grpo_dataset_streaming_config(config=config)
     _validate_agentic_config(config=config)
-    _validate_grpo_logging_config(config=config)
+    _validate_completion_logging_config(config=config)
 
     if config.fine_tune_method == "async_grpo" and config.strategy == "deepspeed":
         raise ValueError(
@@ -200,7 +200,7 @@ def _validate_dataset_input_config(
 def _validate_grpo_dataset_streaming_config(
     config: DictConfig,
 ) -> None:
-    if config.fine_tune_method not in {"grpo", "async_grpo", "sdpo", "a2po"}:
+    if config.fine_tune_method not in {"grpo", "rloo", "async_grpo", "sdpo", "a2po"}:
         return
     if not config.dataset_streaming.enabled:
         return
@@ -338,10 +338,10 @@ def _validate_agentic_targets(
         raise ValueError("agentic.rollout_worker must define a Hydra _target_.")
 
 
-def _validate_grpo_logging_config(
+def _validate_completion_logging_config(
     config: DictConfig,
 ) -> None:
-    if config.fine_tune_method != "grpo":
+    if config.fine_tune_method not in {"grpo", "rloo"}:
         return
     if config.log_multimodal and not config.log_completions:
         raise ValueError("log_multimodal=true requires log_completions=true.")
