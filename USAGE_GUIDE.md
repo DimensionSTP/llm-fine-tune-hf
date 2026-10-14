@@ -88,12 +88,15 @@ MLflow is the default tracking backend. Use `tracking=wandb` for W&B or `trackin
 - `bash scripts/preprocessing/preprocess.sh`
 - `bash scripts/preprocessing/preprocess_dataset.sh`
 - `bash scripts/train/train.sh`
+- `bash scripts/train/rloo_train.sh`
 - `bash scripts/train/async_grpo_train.sh`
 - `bash scripts/postprocessing/merge_lora.sh`
 - `bash scripts/test/test.sh`
 - `bash scripts/test/test_large.sh`
 - `bash scripts/test/test_vllm.sh`
 - `bash scripts/test/test_vllm_multi_turn.sh`
+
+For multi-node RLOO colocate training, configure the internal node address and GPU settings in `scripts/train/multinode/rloo_train_rank0.sh` and `rloo_train_rank1.sh`, then run the matching script on each node. No command-line experiment arguments are required. RLOO reuses the GRPO dataset contract and reward configuration; its default generation cadence follows `gradient_accumulation_steps`.
 
 Async GRPO server flow:
 
@@ -140,6 +143,7 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - PEFT/quantization: `is_quantized`, `is_peft`
 - LoRA merge: `merge_max_shard_size`, `merge_pack_qwen_moe_experts`
 - GRPO/vLLM: `use_vllm`, `vllm_mode`, `vllm_sync_strategy`
+- RLOO: `num_generations`, `num_iterations`, `beta`, `epsilon`, `epsilon_high`, `steps_per_generation`; defaults are two generations, one iteration, left padding, and vLLM colocate with TP1. Keep the generation batch and global evaluation batch divisible by their generation counts. For VLM, use conversational prompts, keep `left_padding=True`, and set `decode_image_paths=True` for image-path datasets.
 - VLM image augmentation: `image_augmentation.enabled`, `image_augmentation.probability`
 - VLM image paths: `dataset_image.image_root_dir`, `dataset_image.convert_unsupported_extensions`; base64 images are decoded to PIL images when needed
 - Reward extraction: `reward.extraction_profile`

@@ -296,7 +296,7 @@ Selective checkpointing is opt-in and requires `gradient_checkpointing=True`. Th
 memory_preflight.enabled={true or false}
 ```
 
-`false` is the default and preserves the existing training path. When enabled, memory preflight runs a strict subprocess probe before the real training run, selects a max-shape batch, and starts the real run only if the probe succeeds. The probe does not allocate a second run or initialize experiment tracking; its `command.json`, `selected_indices.json`, and `result.json` evidence is stored under `${output_dir}/memory_preflight` and referenced relatively by the parent manifest. The current implementation supports direct single-process and single-node multi-GPU SFT, DPO, KTO, GKD, GOLD, GRPO, SDPO, and A2PO preflight. vLLM preflight is limited to colocate mode; multi-node, vLLM server, and async GRPO topologies fail fast instead of running an approximate probe.
+`false` is the default and preserves the existing training path. When enabled, memory preflight runs a strict subprocess probe before the real training run, selects a max-shape batch, and starts the real run only if the probe succeeds. The probe does not allocate a second run or initialize experiment tracking; its `command.json`, `selected_indices.json`, and `result.json` evidence is stored under `${output_dir}/memory_preflight` and referenced relatively by the parent manifest. The current implementation supports direct single-process and single-node multi-GPU SFT, DPO, KTO, GKD, GOLD, GRPO, RLOO, SDPO, and A2PO preflight. vLLM preflight is limited to colocate mode; multi-node, vLLM server, and async GRPO topologies fail fast instead of running an approximate probe.
 
 * DataLoader runtime policy
 
@@ -335,11 +335,14 @@ python main.py --config-name={method}.yaml mode=train
 | GOLD | `gold.yaml` | GKD-style teacher | Uses the upstream TRL experimental trainer. |
 | Distillation | `distillation.yaml` | Prompt-only | Stable on-policy distillation with a local teacher and student vLLM generation. |
 | GRPO | `grpo.yaml` | GRPO | vLLM importance-sampling correction is enabled by default. |
+| RLOO | `rloo.yaml` | GRPO-style reward | Uses the other completions for each prompt as the leave-one-out reward baseline. |
 | async GRPO | `async_grpo.yaml` | GRPO | Requires the trainer/vLLM split runtime. |
 | SDPO | `sdpo.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
 | A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer with ZeRO-2 because its reference-model construction does not support ZeRO-3. |
 
 Distillation resolves its configured version/model-specific vLLM parameter-name profile for both full and PEFT training before the first student weight sync.
+
+RLOO uses the stable `trl.RLOOTrainer` and the existing GRPO structural/conversational dataset contract: `prompt`, `solution`, and `reward_categories`, with optional VLM images. Defaults are `num_generations=2`, `num_iterations=1`, `beta=0.05`, `epsilon=0.2`, `left_padding=True`, and vLLM colocate with TP1; Liger is disabled. VLM inputs require conversational prompts and decoded images; set `decode_image_paths=True` for image-path datasets. Keep left padding so multimodal token types align with the trainer's left-padded prompt tokens in unequal-length batches. It shares the configured reward manager, vLLM name-remap and sync strategies, PEFT initialization, and run metadata, including the GRPO colocate QLoRA limitation described below. The generation batch and global evaluation batch must be divisible by their generation counts, and training requires at least two generations per prompt. GRPO-specific loss, streaming, agentic, and completion-termination options are not connected to RLOO.
 
 Liger layer kernels remain enabled by default for SFT through `training_arguments.use_liger_kernel=True`; TRL deprecates this switch in favor of Hub kernels. Set it to `False` when native model execution is required. TRL disables Liger's fused cross-entropy to preserve its own fused LM head.
 
@@ -464,7 +467,7 @@ vllm_importance_sampling_cap={null or float}
 
 GRPO vLLM importance-sampling correction is enabled by default with `sequence_mask` mode, `clip_max=3.0`, and no min/cap.
 
-GRPO also enables KL bias correction when `beta` is nonzero. Completion logging is disabled by default. GRPO and Distillation use the common tracking path when `log_completions=True`: text stays in `prompt`/`completion`, structured conversations also have JSON `prompt_messages`/`completion_messages`, and configured secrets are redacted in these additional tables without mutating trainer logs. GRPO includes its reward, extra, and advantage columns; Distillation uses its upstream text-only buffer. SDPO does not expose this completion-log contract. W&B retains its upstream completion display and receives the additional tables; MLflow stores each logging event under `completions/tables/`. For GRPO image artifact upload, set both `log_completions=True` and `log_multimodal=True`; MLflow stores referenced images under `completions/images/` and W&B retains its upstream image display.
+GRPO also enables KL bias correction when `beta` is nonzero. Completion logging is disabled by default. GRPO, RLOO, and Distillation use the common tracking path when `log_completions=True`: text stays in `prompt`/`completion`, structured conversations also have JSON `prompt_messages`/`completion_messages`, and configured secrets are redacted in these additional tables without mutating trainer logs. GRPO and RLOO include their reward, extra, and advantage columns; Distillation uses its upstream text-only buffer. SDPO does not expose this completion-log contract. W&B retains its upstream completion display and receives the additional tables; MLflow stores each logging event under `completions/tables/`. For GRPO or RLOO image artifact upload, set both `log_completions=True` and `log_multimodal=True`; MLflow stores referenced images under `completions/images/` and W&B retains its upstream image display.
 
 * GRPO streaming and agentic training
 
@@ -583,7 +586,7 @@ image_augmentation.albumentations.seasoning.probability=1.0
 
 For Qwen3-VL GRPO with colocated vLLM, small smoke runs may need an explicit `vllm_max_model_length` because the model advertises a very long context window and vLLM sizes KV cache from that value.
 
-GRPO and SDPO expose `steps_per_generation` as an optional generation cadence control. The default `null` preserves TRL behavior, which resolves it to `gradient_accumulation_steps`. Lower values reduce the generation batch size and can reduce peak generation/buffer VRAM, but they usually increase generation frequency and may reduce throughput. Async GRPO does not expose this option in the current TRL API, and GOLD keeps its separate `generation_batch_size` contract because TRL's GOLDConfig does not expose `steps_per_generation`.
+GRPO and SDPO expose `steps_per_generation` as an optional generation cadence control. The default `null` preserves TRL behavior, which resolves it to `gradient_accumulation_steps`. Lower values reduce the generation batch size and can reduce peak generation/buffer VRAM, but they usually increase generation frequency and may reduce throughput. RLOO explicitly defaults `steps_per_generation` to `${gradient_accumulation_steps}` and supports the same override. Async GRPO does not expose this option in the current TRL API, and GOLD keeps its separate `generation_batch_size` contract because TRL's GOLDConfig does not expose `steps_per_generation`.
 
 VLM image paths are resolved through `dataset_image.image_root_dir` before they reach the processor. Relative paths are interpreted under that root, no-decode paths are normalized to absolute paths, base64 images are decoded to PIL images when they would otherwise be misread as paths, and unsupported direct-path extensions such as `tif`/`tiff` are converted through PIL when `dataset_image.convert_unsupported_extensions=True`.
 
@@ -597,6 +600,7 @@ The table below records VLM training support for the pinned dependency stack. Co
 | GKD / GOLD | No | Text-only repository dataset contract |
 | Distillation | Yes | Prompt-only LLM/VLM data with `image` or `images`; student and teacher must share a vocabulary and compatible multimodal inputs. |
 | GRPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
+| RLOO | Yes | Same GRPO-style dataset and image controls; generation and policy scoring retain multimodal inputs. |
 | async GRPO / SDPO / A2PO | No | Text-only with the pinned TRL trainer paths |
 
 * Reward embedding vLLM environment isolation
