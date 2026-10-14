@@ -17,7 +17,11 @@ import pandas as pd
 
 from transformers import TrainerCallback
 
-from .metadata_security import redact_metadata_text, validate_metadata_file
+from .metadata_security import (
+    redact_metadata_payload,
+    redact_metadata_text,
+    validate_metadata_file,
+)
 
 
 def tracking_lifecycle(
@@ -83,15 +87,14 @@ def attach_train_completion_tracking(
     trainer: Any,
 ) -> None:
     if (
-        config.fine_tune_method != "grpo"
+        config.fine_tune_method not in {"grpo", "distillation"}
         or not config.log_completions
-        or config.tracking.backend != "mlflow"
         or config.memory_preflight.is_probe
         or not _is_tracking_owner()
     ):
         return
     trainer.add_callback(
-        _MLflowCompletionArtifactCallback(
+        _TrainCompletionArtifactCallback(
             config=config,
             completion_logs=trainer._logs,
         ),
@@ -198,7 +201,7 @@ def _run_tracking_lifecycle(
     return result
 
 
-class _MLflowCompletionArtifactCallback(TrainerCallback):
+class _TrainCompletionArtifactCallback(TrainerCallback):
     def __init__(
         self,
         config: DictConfig,
@@ -214,7 +217,7 @@ class _MLflowCompletionArtifactCallback(TrainerCallback):
         control: Any,
         **kwargs: Any,
     ) -> None:
-        _log_mlflow_completion_artifacts(
+        _log_train_completion_artifacts(
             config=self.config,
             completion_logs=self.completion_logs,
             global_step=state.global_step,
@@ -222,7 +225,7 @@ class _MLflowCompletionArtifactCallback(TrainerCallback):
         )
 
 
-def _log_mlflow_completion_artifacts(
+def _log_train_completion_artifacts(
     config: DictConfig,
     completion_logs: Dict[str, Any],
     global_step: int,
@@ -234,13 +237,36 @@ def _log_mlflow_completion_artifacts(
 
     table = {
         "step": [global_step] * len(prompts),
-        "prompt": prompts,
-        "completion": completion_logs["completion"],
-        **completion_logs["rewards"],
-        **completion_logs["extra"],
-        "advantage": completion_logs["advantages"],
     }
-    if config.log_multimodal:
+    if config.fine_tune_method == "grpo":
+        table.update(
+            {
+                **completion_logs["rewards"],
+                **completion_logs["extra"],
+                "advantage": completion_logs["advantages"],
+            },
+        )
+    for key in ("prompt", "completion"):
+        rows = list(completion_logs[key])
+        table[key] = [_render_completion_log(value=value) for value in rows]
+        if any(isinstance(value, (list, dict)) for value in rows):
+            table[f"{key}_messages"] = [
+                (
+                    json.dumps(
+                        value,
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                    if isinstance(value, (list, dict))
+                    else None
+                )
+                for value in rows
+            ]
+    if (
+        config.tracking.backend == "mlflow"
+        and config.fine_tune_method == "grpo"
+        and config.log_multimodal
+    ):
         table["image_artifacts"] = _log_mlflow_completion_images(
             image_rows=completion_logs["images"],
             num_rows=len(prompts),
@@ -248,11 +274,50 @@ def _log_mlflow_completion_artifacts(
             log_index=log_index,
         )
 
-    mlflow = _import_mlflow()
-    mlflow.log_table(
-        data=pd.DataFrame(table),
-        artifact_file=f"completions/tables/step_{global_step:05d}_log_{log_index:05d}.json",
+    table = redact_metadata_payload(
+        config=config,
+        payload={key: list(values) for key, values in table.items()},
     )
+    log_tracking_table(
+        config=config,
+        key=f"completions/tables/step_{global_step:05d}_log_{log_index:05d}",
+        dataframe=pd.DataFrame(table),
+    )
+
+
+def _render_completion_log(
+    value: Any,
+) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(_render_completion_log(value=message) for message in value)
+    if isinstance(value, dict):
+        content = value.get(
+            "content",
+            "",
+        )
+        text = (
+            content
+            if isinstance(content, str)
+            else json.dumps(
+                content,
+                ensure_ascii=False,
+                default=str,
+            )
+        )
+        if value.get("tool_calls"):
+            text += json.dumps(
+                value["tool_calls"],
+                ensure_ascii=False,
+                default=str,
+            )
+        role = value.get(
+            "role",
+            "",
+        )
+        return f"{role}: {text}"
+    return str(value)
 
 
 def _log_mlflow_completion_images(
