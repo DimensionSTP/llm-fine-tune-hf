@@ -538,7 +538,7 @@ completion_termination.infer_finished_from_short_completion={True or False}
 completion_termination.include_model_generation_eos={True or False}
 ```
 
-`completion_termination` is GRPO-only and disabled by default. It extends TRL's truncated-completion masking beyond tokenizer EOS/PAD by treating configured terminal token ids or token texts as valid completion terminators. `infer_finished_from_short_completion=True` also treats generations shorter than `max_completion_length` as terminated. SDPO and async GRPO do not use this option.
+`completion_termination` is GRPO-only and disabled by default. TRL already handles the model's multiple generation EOS ids; no additional switch is needed for that behavior. This option adds configured terminal token ids or token texts to truncated-completion classification. `include_model_generation_eos=True` retains the model's EOS list, and `infer_finished_from_short_completion=True` also treats generations shorter than `max_completion_length` as terminated. SDPO and async GRPO do not use this option.
 
 * VLM patch embedding compatibility
 
