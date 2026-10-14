@@ -504,16 +504,20 @@ class SetUp:
         train_dataset: Optional[Union[HFDataset, HFIterableDataset]],
         training_arguments: TrainingArguments,
         data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
-        reward_funcs: List[Callable[..., List[float]]],
+        reward_funcs: Optional[List[Callable[..., List[float]]]],
         rank: int,
     ) -> Dict[str, Any]:
         if (
-            self.config.fine_tune_method not in {"grpo", "async_grpo"}
+            self.config.fine_tune_method not in {"grpo", "async_grpo", "distillation"}
             or not self.config.agentic.enabled
         ):
             return {}
 
         tools = self._get_agentic_tools()
+        if self.config.fine_tune_method == "distillation":
+            return {"tools": tools}
+        if reward_funcs is None:
+            raise ValueError("Agentic GRPO requires reward functions.")
         environment_factory = self._get_agentic_environment_factory()
         trainer_kwargs = {
             "tools": tools,
