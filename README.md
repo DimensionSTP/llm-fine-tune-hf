@@ -473,6 +473,8 @@ Streaming is GRPO-only, does not support weighted offline resampling or memory p
 
 Agentic training is disabled by default. Define task-specific tools and environment factories outside this repository and connect them through Hydra targets:
 
+Distillation reuses `agentic.enabled`, `agentic.tools`, and `agentic.max_tool_calling_iterations` for synchronous tool calling with dataset prompts. Keep `agentic.data_source=dataset`, `environment_factory=null`, and `rollout_worker=null`: the pinned Distillation trainer accepts tools, not environment factories or async rollout workers. Tool-result tokens are masked by the upstream distillation loss. The following environment-owned examples are GRPO/Async GRPO workflows, not Distillation configurations.
+
 ```yaml
 agentic:
   enabled: true
