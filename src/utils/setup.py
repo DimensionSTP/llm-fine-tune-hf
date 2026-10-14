@@ -224,6 +224,18 @@ class SetUp:
         training_arguments: TrainingArguments,
         data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
     ) -> TrainingArguments:
+        if self.config.model_loading.train.kernel_config is not None:
+            if not self.config.model_loading.train.use_kernels:
+                raise ValueError(
+                    "model_loading.train.kernel_config requires use_kernels=true."
+                )
+        if (
+            self.config.model_loading.train.use_kernels
+            and training_arguments.use_liger_kernel
+        ):
+            raise ValueError(
+                "Hub kernels require training_arguments.use_liger_kernel=false."
+            )
         if not hasattr(
             training_arguments,
             "chat_template_kwargs",
@@ -297,6 +309,14 @@ class SetUp:
         is_inference = self.config.mode in ["test", "test_large"]
         model_load_plan = self.model_load_planner.build()
         self.hf_deepspeed_config = model_load_plan.hf_deepspeed_config
+        model_kwargs = {}
+        if not is_inference:
+            model_kwargs["use_kernels"] = self.config.model_loading.train.use_kernels
+            if self.config.model_loading.train.kernel_config is not None:
+                model_kwargs["kernel_config"] = instantiate(
+                    self.config.model_loading.train.kernel_config,
+                    _convert_="all",
+                )
 
         if self.config.modality == "text":
             model = AutoModelForCausalLM.from_pretrained(
@@ -307,6 +327,7 @@ class SetUp:
                 quantization_config=model_load_plan.quantization_config,
                 device_map=model_load_plan.device_map,
                 revision=self.revision,
+                **model_kwargs,
             )
         else:
             model = AutoModelForImageTextToText.from_pretrained(
@@ -317,7 +338,20 @@ class SetUp:
                 quantization_config=model_load_plan.quantization_config,
                 device_map=model_load_plan.device_map,
                 revision=self.revision,
+                **model_kwargs,
             )
+
+        if (
+            not is_inference
+            and self.config.model_loading.train.kernel_config is not None
+        ):
+            from kernels import Mode
+
+            for layer_mapping in model.kernel_config.kernel_mapping.values():
+                for device_mapping in layer_mapping.values():
+                    for mode, repository in list(device_mapping.items()):
+                        training_mode = (mode & ~Mode.INFERENCE) | Mode.TRAINING
+                        device_mapping[training_mode] = repository
 
         if is_inference:
             model.eval()
