@@ -227,7 +227,7 @@ def _validate_grpo_dataset_streaming_config(
 def _validate_agentic_config(
     config: DictConfig,
 ) -> None:
-    if config.fine_tune_method not in {"grpo", "async_grpo"}:
+    if config.fine_tune_method not in {"grpo", "async_grpo", "distillation"}:
         return
 
     agentic = config.agentic
@@ -255,6 +255,17 @@ def _validate_agentic_config(
             "agentic.enabled=true requires tools, environment_factory, or rollout_worker."
         )
     _validate_agentic_targets(agentic=agentic)
+
+    if config.fine_tune_method == "distillation":
+        if (
+            agentic.data_source != "dataset"
+            or agentic.environment_factory is not None
+            or agentic.rollout_worker is not None
+        ):
+            raise ValueError(
+                "Distillation agentic training supports dataset prompts and tools only."
+            )
+        return
 
     if agentic.data_source == "environment":
         if config.dataset_namespace is None:
