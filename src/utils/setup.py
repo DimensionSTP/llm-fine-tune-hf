@@ -236,6 +236,25 @@ class SetUp:
             raise ValueError(
                 "Hub kernels require training_arguments.use_liger_kernel=false."
             )
+        if self.config.fine_tune_method == "sft":
+            checkpointing_kwargs = training_arguments.gradient_checkpointing_kwargs
+            if checkpointing_kwargs and checkpointing_kwargs.get("selective"):
+                if not training_arguments.gradient_checkpointing:
+                    raise ValueError(
+                        "Selective checkpointing requires gradient_checkpointing=true."
+                    )
+                if checkpointing_kwargs.get("use_reentrant"):
+                    raise ValueError(
+                        "Selective checkpointing requires use_reentrant=false."
+                    )
+                if (
+                    self.config.is_peft
+                    and training_arguments.deepspeed_plugin is not None
+                    and training_arguments.deepspeed_plugin.zero_stage == 3
+                ):
+                    raise ValueError(
+                        "Selective checkpointing does not support PEFT with ZeRO-3."
+                    )
         if not hasattr(
             training_arguments,
             "chat_template_kwargs",
@@ -365,8 +384,24 @@ class SetUp:
             return model
 
         if self.config.gradient_checkpointing:
+            checkpointing_kwargs = (
+                OmegaConf.to_container(
+                    self.config.gradient_checkpointing_kwargs,
+                    resolve=True,
+                )
+                if self.config.gradient_checkpointing_kwargs is not None
+                else None
+            )
+            if (
+                self.config.fine_tune_method == "sft"
+                and checkpointing_kwargs is not None
+            ):
+                checkpointing_kwargs.pop(
+                    "selective",
+                    None,
+                )
             model.gradient_checkpointing_enable(
-                gradient_checkpointing_kwargs=self.config.gradient_checkpointing_kwargs,
+                gradient_checkpointing_kwargs=checkpointing_kwargs,
             )
 
         if self.config.dense_to_moe.router_only_train:
