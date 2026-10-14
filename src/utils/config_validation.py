@@ -32,17 +32,6 @@ def validate_training_arguments_config(
     validate_memory_preflight_config(config=config)
     _validate_vllm_lora_name_remap_config(config=config)
 
-    if config.fine_tune_method != "sft":
-        return
-    if (
-        config.sft_loss_type == "chunked_nll"
-        and config.training_arguments.use_liger_kernel
-    ):
-        raise ValueError(
-            "SFT loss_type='chunked_nll' is not compatible with "
-            "use_liger_kernel=True."
-        )
-
 
 def validate_train_artifact_config(
     config: DictConfig,
