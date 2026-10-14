@@ -35,9 +35,13 @@ Credentials must be supplied through `.env` or environment variables, not Hydra 
 
 Dependency notes:
 
+- Python 3.11 or newer is required; the validated interpreter is Python 3.12.
+- Use the documented CUDA 12.9 install path, the FlashInfer CUDA index for architecture-specific JIT providers, and `requirements-overrides.txt` for the explicit Transformers metadata exception; this does not imply a clean `pip check`. MLflow supports the pinned Pandas version without an override.
+- On Blackwell with a driver that cannot execute Triton's bundled CUDA 13.1 PTX, the existing `.env` bootstrap may select `TRITON_PTXAS_BLACKWELL_PATH=${CONDA_PREFIX}/bin/ptxas` from the active CUDA 12.9 environment. Child processes inherit that compiler selection.
+- Torch changes require rebuilding Flash Attention and causal-conv1d against the active Torch ABI; Conda CUDA builds may require the toolkit header path described in README.
 - Base install excludes `flash-attn`.
 - Optional GPU install path:
-  - `uv pip install --override requirements-overrides.txt --torch-backend=cu129 --no-build-isolation ".[gpu]"`
+  - `uv pip install --override requirements-overrides.txt --torch-backend=cu129 --extra-index-url https://flashinfer.ai/whl/cu129 --no-build-isolation ".[gpu]"`
   - or pinned Git install command from README.
 
 ## Tracking Contract

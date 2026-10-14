@@ -27,12 +27,14 @@ uv pip install "setuptools>=68" wheel
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     -r requirements.txt
 ```
 
-`requirements-overrides.txt` keeps Pandas 3.0.1 while overriding MLflow 3.13.0's `pandas<3` package metadata.
-The CUDA 12.9 compiler and pinned FlashInfer CUDA 12.9 JIT cache keep Blackwell sampler initialization from falling back to an older system CUDA toolkit. The pinned cuRAND runtime and development package provide the CUDA libraries and headers required to build DeepSpeed CPUAdam.
+Python 3.11 or newer is required; Python 3.12 is the validated installation target. MLflow 3.17.1 supports the pinned Pandas 3.0.1 without a metadata override. `requirements-overrides.txt` selects Transformers 5.19.0 despite vLLM 0.31.0's `transformers<5.18.0` metadata. This explicit exception does not make `pip check` clean or prove every runtime path compatible. The [FlashInfer CUDA index](https://docs.flashinfer.ai/installation.html) supplies the architecture-specific providers required by the pinned JIT cache.
+
+The CUDA 12.9 compiler and pinned FlashInfer CUDA 12.9 JIT cache keep Blackwell sampler initialization from falling back to an older system CUDA toolkit. The pinned cuRAND runtime and development package provide the CUDA libraries and headers required to build DeepSpeed CPUAdam. Triton 3.7.1 also bundles a separate Blackwell compiler; if its CUDA 13.1 PTX exceeds the installed driver's support, select the active environment's CUDA 12.9 compiler through the existing `.env` bootstrap with `TRITON_PTXAS_BLACKWELL_PATH=${CONDA_PREFIX}/bin/ptxas`. This setting is conditional on the driver/compiler combination, not a universal requirement or a disabled kernel.
 
 ### Quick setup (pyproject.toml)
 
@@ -45,6 +47,7 @@ uv pip install "setuptools>=68" wheel
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     .
 
@@ -52,6 +55,7 @@ uv pip install \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     -e .
 ```
@@ -63,6 +67,7 @@ uv pip install \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     ".[gpu]"
 
@@ -71,6 +76,8 @@ python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/
 ```
 
 ### Execution contract
+
+Rebuild Flash Attention and causal-conv1d after changing Torch; an extension built against the previous Torch ABI must not be reused. For Conda CUDA source builds, expose the toolkit headers through `CPATH=${CONDA_PREFIX}/targets/x86_64-linux/include` when the compiler cannot find `cuda_runtime.h`. Keep existing include paths when already configured. Flash Attention remains pinned to the source above; HF Flash Attention and vLLM's bundled attention kernels are separate implementations.
 
 - See `TRAINING_EVAL_CONTRACT.md` for required runtime inputs, supported modes, and output path expectations.
 
