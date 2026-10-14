@@ -179,7 +179,7 @@ def patch_vllm_param_name_remap(
         )
         and not hasattr(
             trainer.vllm_generation,
-            "_push_param_to_vllm_original",
+            "_fix_param_name_to_vllm_original",
         )
     )
     if not should_patch:
@@ -189,11 +189,11 @@ def patch_vllm_param_name_remap(
     trainer.vllm_generation._param_name_remapper = _get_lora_streaming_name_remapper(
         config=config,
     )
-    trainer.vllm_generation._push_param_to_vllm_original = (
-        trainer.vllm_generation._push_param_to_vllm
+    trainer.vllm_generation._fix_param_name_to_vllm_original = (
+        trainer.vllm_generation._fix_param_name_to_vllm
     )
-    trainer.vllm_generation._push_param_to_vllm = MethodType(
-        _push_param_to_vllm_with_name_remap,
+    trainer.vllm_generation._fix_param_name_to_vllm = MethodType(
+        _fix_param_name_to_vllm_with_name_remap,
         trainer.vllm_generation,
     )
     return True
@@ -829,16 +829,18 @@ def _build_router_with_lora_sync(
     )
 
 
-def _push_param_to_vllm_with_name_remap(
+def _fix_param_name_to_vllm_with_name_remap(
     self: Any,
     name: str,
-    param: torch.Tensor,
-) -> None:
-    remapped_name = self._param_name_remapper(name)
-    self._push_param_to_vllm_original(
-        remapped_name,
-        param,
+    *args: Any,
+    **kwargs: Any,
+) -> str:
+    normalized_name = self._fix_param_name_to_vllm_original(
+        name,
+        *args,
+        **kwargs,
     )
+    return self._param_name_remapper(name=normalized_name)
 
 
 def _sync_weights_router_with_lora(
