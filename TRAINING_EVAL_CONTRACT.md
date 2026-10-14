@@ -36,6 +36,7 @@ Credentials must be supplied through `.env` or environment variables, not Hydra 
 Training option contracts:
 
 - Hub kernels are training-only opt-in through `model_loading.train.use_kernels`; a configured Hydra `transformers.KernelConfig` requires that flag, and the selected TrainingArguments must disable Liger. Custom mappings retain inference entries and gain separate training entries. The pinned upstream custom loader needs explicit accelerator placement; default mappings keep the existing model-loading placement.
+- SFT keeps reentrant checkpointing by default; selective checkpointing requires non-reentrant mode and excludes PEFT with ZeRO-3.
 
 Dependency notes:
 

@@ -266,6 +266,15 @@ sft_padding_strategy={max_length or dynamic}
 
 `dynamic` is the default. It keeps `max_length` as the truncation cap, pads each batch to the longest sample, uses `pad_to_multiple_of` when set, and is supported for both LLM and VLM SFT. `max_length` selects sample-level fixed padding. SFT dynamic padding is right-padding only; `left_padding=True` fails fast.
 
+* SFT selective activation checkpointing
+
+```shell
+gradient_checkpointing_kwargs.selective=true
+gradient_checkpointing_kwargs.use_reentrant=false
+```
+
+Selective checkpointing is opt-in and requires `gradient_checkpointing=True`. The default remains `selective=False` and `use_reentrant=True`. PEFT with DeepSpeed ZeRO-3 cannot use this option under the pinned TRL contract. TRL owns the selective wrapper; the setup stage removes only the TRL-specific `selective` key before its initial Transformers checkpointing call. See [selective activation checkpointing](https://huggingface.co/docs/trl/reducing_memory_usage#selective-activation-checkpointing).
+
 * Memory preflight
 
 ```shell
