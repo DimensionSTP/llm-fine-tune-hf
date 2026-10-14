@@ -254,9 +254,9 @@ is_sft={True or False}
 sft_loss_type={nll or chunked_nll}
 ```
 
-`nll` is the default SFT loss type and is the supported default for assistant-only SFT (`is_sft=True`).
+`nll` is the default SFT loss type. TRL 1.15.0 computes it through a fused, tiled LM head without materializing the full vocabulary logits. `chunked_nll` is a deprecated alias of the same `nll` implementation, not a separate memory-saving mode. Both names support assistant-only masking (`is_sft=True`); dynamic padding is independent of the loss choice. See the [TRL SFT configuration](https://github.com/huggingface/trl/blob/v1.15.0/trl/trainer/sft_config.py) and [trainer implementation](https://github.com/huggingface/trl/blob/v1.15.0/trl/trainer/sft_trainer.py).
 
-`chunked_nll` is an optional SFT-only loss path that reduces peak VRAM for long-context SFT while keeping the NLL objective. Use it for non-assistant-only long-context SFT when VRAM pressure is the bottleneck. Disable the default Liger kernel with `training_arguments.use_liger_kernel=False` before selecting `chunked_nll`, and do not use it with assistant-only SFT (`is_sft=True`). Smoke tests on both LLM and VLM paths showed that `chunked_nll + is_sft=True` can stall at the first training step. The likely reason is that `chunked_nll` drops `labels == -100` tokens before the LM head, while assistant-only masking makes valid label positions sparse and non-contiguous, causing the hidden-state gather/compaction path to become the bottleneck. `dynamic` padding is independent of the loss choice and is compatible with both `nll` and `chunked_nll`. The unsupported combinations are `chunked_nll + is_sft=True` and `chunked_nll + Liger`.
+Do not apply a PEFT adapter to `lm_head`: the fused path reads its weight directly and TRL rejects such adapters. Standard `all-linear` excludes the output head. Liger layer kernels can remain enabled, but explicitly enabling `liger_kernel_config.fused_linear_cross_entropy` is unsupported because it replaces the forward used by TRL's fused LM head.
 
 * SFT padding strategy
 
@@ -304,7 +304,7 @@ python main.py --config-name={method}.yaml mode=train
 
 | Method | Config | Dataset contract | Notes |
 | --- | --- | --- | --- |
-| SFT | `sft.yaml` | SFT | `nll` is the default loss type; `chunked_nll` is opt-in for non-assistant-only long-context SFT. |
+| SFT | `sft.yaml` | SFT | `nll` uses the fused LM head; `chunked_nll` is a deprecated alias. |
 | DPO | `dpo.yaml` | DPO | Preference-pair training. |
 | KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
 | GKD | `gkd.yaml` | GKD | Text-only distillation with config-driven on-policy ratio, divergence, sequence KD, and dropout policy. |
@@ -317,7 +317,7 @@ python main.py --config-name={method}.yaml mode=train
 
 Distillation resolves its configured version/model-specific vLLM parameter-name profile for both full and PEFT training before the first student weight sync.
 
-Liger is enabled by default for SFT through `training_arguments.use_liger_kernel=True`. Set it to `False` when selecting `chunked_nll` or when native model execution is required.
+Liger layer kernels remain enabled by default for SFT through `training_arguments.use_liger_kernel=True`; TRL deprecates this switch in favor of Hub kernels. Set it to `False` when native model execution is required. TRL disables Liger's fused cross-entropy to preserve its own fused LM head.
 
 * Use preprocessed tokenizer option
 
