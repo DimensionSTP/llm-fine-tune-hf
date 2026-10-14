@@ -208,18 +208,20 @@ def train(
         TrainerClass = get_class(config.trainer._target_)
 
         reward_manager = None
+        reward_funcs = None
         if config.fine_tune_method in {"grpo", "async_grpo", "sdpo", "a2po"}:
             reward_manager = setup.get_reward_manager()
-            trainer_config["reward_funcs"] = reward_manager.get_reward_funcs()
+            reward_funcs = reward_manager.get_reward_funcs()
+            trainer_config["reward_funcs"] = reward_funcs
 
-        if config.fine_tune_method in {"grpo", "async_grpo"}:
+        if config.fine_tune_method in {"grpo", "async_grpo", "distillation"}:
             trainer_config.update(
                 setup.get_agentic_trainer_kwargs(
                     model=model,
                     train_dataset=train_dataset,
                     training_arguments=training_arguments,
                     data_encoder=data_encoder,
-                    reward_funcs=trainer_config["reward_funcs"],
+                    reward_funcs=reward_funcs,
                     rank=rank,
                 )
             )
