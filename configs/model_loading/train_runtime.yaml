@@ -3,6 +3,8 @@ model_loading:
   train:
     device_map: null
     quantized_local_rank_device_map: true
+    use_kernels: false
+    kernel_config: null
   inference:
     device_map: null
     test_large_device_map: auto
