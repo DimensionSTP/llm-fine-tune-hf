@@ -7,6 +7,7 @@ HFDataset = datasets.Dataset
 
 import io
 import math
+import re
 
 import numpy as np
 
@@ -74,7 +75,11 @@ class StructuralDataset(Dataset):
         allow_val_dataset_file_name_mismatch: bool,
         dataset_resampling: Dict[str, Any],
         dataset_image: Optional[Dict[str, Any]],
-        sft_label_mask: Optional[Dict[str, Any]],
+        sft_label_mask_backend: str,
+        sft_label_mask_validation_enabled: bool,
+        sft_label_mask_validation_mode: str,
+        sft_label_mask_min_assistant_label_tokens: int,
+        sft_label_mask_report_truncated_assistant: bool,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -103,7 +108,13 @@ class StructuralDataset(Dataset):
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
         self._init_image_io(dataset_image=dataset_image)
-        self._init_sft_label_mask_validation(sft_label_mask=sft_label_mask)
+        self._init_sft_label_mask_validation(
+            backend=sft_label_mask_backend,
+            validation_enabled=sft_label_mask_validation_enabled,
+            validation_mode=sft_label_mask_validation_mode,
+            min_assistant_label_tokens=sft_label_mask_min_assistant_label_tokens,
+            report_truncated_assistant=sft_label_mask_report_truncated_assistant,
+        )
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -208,6 +219,13 @@ class StructuralDataset(Dataset):
         self,
         idx: int,
     ) -> Dict[str, Any]:
+        if self.sft_label_mask_backend == "native":
+            return self._encode_native_conversation(
+                conversation=self._build_conversation(
+                    data=self.datas[idx],
+                    label=self.labels[idx],
+                ),
+            )
         prompt = self.apply_chat_template(
             data=self.datas[idx],
             label=self.labels[idx],
@@ -317,34 +335,10 @@ class StructuralDataset(Dataset):
         data: str,
         label: str,
     ) -> str:
-        if self.modality == "text":
-            conversation = [
-                {
-                    self.role_column_name: "user",
-                    self.content_column_name: data,
-                },
-                {
-                    self.role_column_name: self.assistant_column_name,
-                    self.content_column_name: label,
-                },
-            ]
-        else:
-            conversation = [
-                {
-                    self.role_column_name: "user",
-                    self.content_column_name: data,
-                },
-                {
-                    self.role_column_name: self.assistant_column_name,
-                    self.content_column_name: [
-                        {
-                            "type": "text",
-                            "text": label,
-                        },
-                    ],
-                },
-            ]
-
+        conversation = self._build_conversation(
+            data=data,
+            label=label,
+        )
         chat_template_kwargs = build_enable_thinking_kwargs(
             data_encoder=self.data_encoder,
             is_enable_thinking=self.is_enable_thinking,
@@ -431,6 +425,7 @@ class StructuralDataset(Dataset):
             attention_mask=attention_mask,
             start_indices=start_indices,
             end_indices=end_indices,
+            assistant_mask=None,
         )
         return encoded
 
@@ -444,6 +439,17 @@ class StructuralDataset(Dataset):
         input_ids = batch["input_ids"]
         labels = batch["labels"]
         attention_mask = batch.get("attention_mask")
+        assistant_masks = None
+        if self.sft_label_mask_backend == "native":
+            assistant_masks = batch.get("assistant_masks")
+            if (
+                assistant_masks is None
+                or assistant_masks.shape != input_ids.shape
+                or not torch.all((assistant_masks == 0) | (assistant_masks == 1))
+            ):
+                raise ValueError(
+                    "Native batch validation requires aligned assistant_masks."
+                )
         reports = []
         for sample_idx in range(input_ids.size(0)):
             sample_attention_mask = None
@@ -462,6 +468,11 @@ class StructuralDataset(Dataset):
                         input_ids=input_ids[sample_idx],
                         pattern=self.response_end_tokens,
                     ),
+                    assistant_mask=(
+                        assistant_masks[sample_idx]
+                        if assistant_masks is not None
+                        else None
+                    ),
                 )
             )
 
@@ -476,6 +487,134 @@ class StructuralDataset(Dataset):
             "errors": errors,
         }
 
+    def _build_conversation(
+        self,
+        data: Any,
+        label: str,
+    ) -> List[Dict[str, Any]]:
+        content = label
+        if self.modality != "text":
+            content = [
+                {
+                    "type": "text",
+                    "text": label,
+                },
+            ]
+        return [
+            {
+                self.role_column_name: "user",
+                self.content_column_name: data,
+            },
+            {
+                self.role_column_name: self.assistant_column_name,
+                self.content_column_name: content,
+            },
+        ]
+
+    def _encode_native_conversation(
+        self,
+        conversation: List[Dict[str, Any]],
+    ) -> Dict[str, torch.Tensor]:
+        tokenizer = (
+            self.data_encoder
+            if self.modality == "text"
+            else self.data_encoder.tokenizer
+        )
+        if not tokenizer.is_fast:
+            raise ValueError("Native assistant masking requires a fast tokenizer.")
+        template = (
+            tokenizer.get_chat_template()
+            if self.modality == "text"
+            else self.data_encoder.chat_template
+        )
+        if isinstance(template, dict):
+            template = template.get("default")
+        if not isinstance(template, str) or not re.search(
+            r"\{%[-+]?\s*generation\s*[-+]?%\}", template
+        ):
+            raise ValueError(
+                "Native assistant masking requires a template with generation tags."
+            )
+
+        messages = []
+        for turn in conversation:
+            content = turn[self.content_column_name]
+            if isinstance(content, list):
+                content = [dict(part) for part in content]
+                for part in content:
+                    if part.get("type") == "image":
+                        part["image"] = self._process_single_image(image=part["image"])
+            messages.append(
+                {
+                    self.role_column_name: turn[self.role_column_name],
+                    self.content_column_name: content,
+                },
+            )
+        encode_kwargs = {
+            "padding": self._get_encode_padding(),
+            "max_length": self.max_length,
+            "truncation": True,
+        }
+        template_kwargs = build_enable_thinking_kwargs(
+            data_encoder=self.data_encoder,
+            is_enable_thinking=self.is_enable_thinking,
+        )
+        if self.modality == "text":
+            template_kwargs.update(encode_kwargs)
+        else:
+            template_kwargs["processor_kwargs"] = encode_kwargs
+        encoded = self.data_encoder.apply_chat_template(
+            conversation=messages,
+            tokenize=True,
+            return_dict=True,
+            return_assistant_tokens_mask=True,
+            add_generation_prompt=False,
+            return_tensors="pt",
+            **template_kwargs,
+        )
+        assistant_mask = encoded.pop(
+            "assistant_masks",
+            None,
+        )
+        if assistant_mask is None:
+            raise ValueError("Native assistant masking did not return assistant_masks.")
+        encoded = {key: value.squeeze(0) for key, value in encoded.items()}
+        assistant_mask = torch.as_tensor(assistant_mask).squeeze(0)
+        input_ids = encoded["input_ids"]
+        if assistant_mask.shape != input_ids.shape or not torch.all(
+            (assistant_mask == 0) | (assistant_mask == 1)
+        ):
+            raise ValueError(
+                "Native assistant_masks must be binary and aligned with input_ids."
+            )
+        attention_mask = encoded["attention_mask"]
+        label_mask = (
+            assistant_mask.bool()
+            if self.is_sft
+            else torch.ones_like(
+                input_ids,
+                dtype=torch.bool,
+            )
+        )
+        encoded["labels"] = input_ids.masked_fill(
+            ~(label_mask & attention_mask.bool()),
+            self.ignore_index,
+        )
+        if self.is_sft:
+            self._validate_sft_label_mask(
+                input_ids=input_ids,
+                labels=encoded["labels"],
+                attention_mask=attention_mask,
+                start_indices=[],
+                end_indices=[],
+                assistant_mask=assistant_mask,
+            )
+        encoded.pop(
+            "token_type_ids",
+            None,
+        )
+        return encoded
+
     def _validate_sft_label_mask(
         self,
         input_ids: torch.Tensor,
@@ -483,6 +622,7 @@ class StructuralDataset(Dataset):
         attention_mask: Optional[torch.Tensor],
         start_indices: List[int],
         end_indices: List[int],
+        assistant_mask: Optional[torch.Tensor],
     ) -> None:
         if not self.sft_label_mask_validation_enabled:
             return
@@ -493,6 +633,7 @@ class StructuralDataset(Dataset):
             attention_mask=attention_mask,
             start_indices=start_indices,
             end_indices=end_indices,
+            assistant_mask=assistant_mask,
         )
         if report["errors"] and self.sft_label_mask_validation_mode == "strict":
             raise ValueError(
@@ -506,11 +647,16 @@ class StructuralDataset(Dataset):
         attention_mask: Optional[torch.Tensor],
         start_indices: List[int],
         end_indices: List[int],
+        assistant_mask: Optional[torch.Tensor],
     ) -> Dict[str, Any]:
-        expected_mask = self._build_sft_expected_label_mask(
-            input_ids=input_ids,
-            start_indices=start_indices,
-            end_indices=end_indices,
+        expected_mask = (
+            assistant_mask.bool()
+            if assistant_mask is not None
+            else self._build_sft_expected_label_mask(
+                input_ids=input_ids,
+                start_indices=start_indices,
+                end_indices=end_indices,
+            )
         )
         if attention_mask is not None:
             expected_mask = expected_mask & (attention_mask != 0)
@@ -528,7 +674,7 @@ class StructuralDataset(Dataset):
             )
 
         errors = []
-        if len(start_indices) == 0:
+        if assistant_mask is None and len(start_indices) == 0:
             errors.append("response_start_template was not found.")
         if assistant_label_tokens < self.sft_label_mask_min_assistant_label_tokens:
             errors.append(
@@ -554,6 +700,7 @@ class StructuralDataset(Dataset):
                 attention_mask=attention_mask,
                 start_indices=start_indices,
                 end_indices=end_indices,
+                assistant_mask=assistant_mask,
             ),
             "errors": errors,
         }
@@ -591,9 +738,27 @@ class StructuralDataset(Dataset):
         attention_mask: Optional[torch.Tensor],
         start_indices: List[int],
         end_indices: List[int],
+        assistant_mask: Optional[torch.Tensor],
     ) -> bool:
         if not self.sft_label_mask_report_truncated_assistant:
             return False
+        if assistant_mask is not None:
+            active_indices = (
+                torch.nonzero(attention_mask).flatten()
+                if attention_mask is not None
+                else torch.arange(input_ids.size(0))
+            )
+            if active_indices.numel() < self.max_length:
+                return False
+            last_index = int(active_indices[-1].item())
+            tokenizer = (
+                self.data_encoder
+                if self.modality == "text"
+                else self.data_encoder.tokenizer
+            )
+            return bool(assistant_mask[last_index].item()) and (
+                int(input_ids[last_index].item()) != tokenizer.eos_token_id
+            )
         if len(start_indices) == 0:
             return False
         if any(end_idx > start_indices[-1] for end_idx in end_indices):
@@ -653,49 +818,21 @@ class StructuralDataset(Dataset):
 
     def _init_sft_label_mask_validation(
         self,
-        sft_label_mask: Optional[Dict[str, Any]],
+        backend: str,
+        validation_enabled: bool,
+        validation_mode: str,
+        min_assistant_label_tokens: int,
+        report_truncated_assistant: bool,
     ) -> None:
-        config = sft_label_mask or {}
-        self.sft_label_mask_validation_enabled = bool(
-            self._get_sft_label_mask_config_value(
-                config=config,
-                key="validation_enabled",
-                default=True,
-            )
-        )
-        self.sft_label_mask_validation_mode = str(
-            self._get_sft_label_mask_config_value(
-                config=config,
-                key="validation_mode",
-                default="strict",
-            )
-        )
+        self.sft_label_mask_backend = backend
+        if self.sft_label_mask_backend not in {"repo", "native"}:
+            raise ValueError("sft_label_mask.backend must be repo or native.")
+        self.sft_label_mask_validation_enabled = validation_enabled
+        self.sft_label_mask_validation_mode = validation_mode
         if self.sft_label_mask_validation_mode not in ["strict", "report"]:
             raise ValueError("sft_label_mask.validation_mode must be strict or report.")
-        self.sft_label_mask_min_assistant_label_tokens = int(
-            self._get_sft_label_mask_config_value(
-                config=config,
-                key="min_assistant_label_tokens",
-                default=1,
-            )
-        )
-        self.sft_label_mask_report_truncated_assistant = bool(
-            self._get_sft_label_mask_config_value(
-                config=config,
-                key="report_truncated_assistant",
-                default=True,
-            )
-        )
-
-    @staticmethod
-    def _get_sft_label_mask_config_value(
-        config: Dict[str, Any],
-        key: str,
-        default: Any,
-    ) -> Any:
-        if key in config:
-            return config[key]
-        return default
+        self.sft_label_mask_min_assistant_label_tokens = int(min_assistant_label_tokens)
+        self.sft_label_mask_report_truncated_assistant = report_truncated_assistant
 
     def _init_sft_padding(
         self,
@@ -856,7 +993,11 @@ class ConversationalDataset(StructuralDataset):
         allow_val_dataset_file_name_mismatch: bool,
         dataset_resampling: Dict[str, Any],
         dataset_image: Optional[Dict[str, Any]],
-        sft_label_mask: Optional[Dict[str, Any]],
+        sft_label_mask_backend: str,
+        sft_label_mask_validation_enabled: bool,
+        sft_label_mask_validation_mode: str,
+        sft_label_mask_min_assistant_label_tokens: int,
+        sft_label_mask_report_truncated_assistant: bool,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -883,7 +1024,13 @@ class ConversationalDataset(StructuralDataset):
         self.pretrained_model_name = pretrained_model_name
         self.modality = modality
         self._init_image_io(dataset_image=dataset_image)
-        self._init_sft_label_mask_validation(sft_label_mask=sft_label_mask)
+        self._init_sft_label_mask_validation(
+            backend=sft_label_mask_backend,
+            validation_enabled=sft_label_mask_validation_enabled,
+            validation_mode=sft_label_mask_validation_mode,
+            min_assistant_label_tokens=sft_label_mask_min_assistant_label_tokens,
+            report_truncated_assistant=sft_label_mask_report_truncated_assistant,
+        )
         self._init_resize(
             modality=modality,
             max_pixels=max_pixels,
@@ -987,6 +1134,10 @@ class ConversationalDataset(StructuralDataset):
         self,
         idx: int,
     ) -> Dict[str, Any]:
+        if self.sft_label_mask_backend == "native":
+            return self._encode_native_conversation(
+                conversation=self.conversations[idx],
+            )
         prompt = self.apply_chat_template(
             conversation=self.conversations[idx],
         )
