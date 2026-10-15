@@ -84,7 +84,7 @@ class SetUp:
                 "train": None,
                 "val": None,
             }
-        if self.config.fine_tune_method == "sft":
+        if self.config.fine_tune_method in {"sft", "decision"}:
             return {
                 "train": self._get_train_dataset(),
                 "val": self._get_val_dataset() if self.config.use_validation else None,
@@ -100,6 +100,8 @@ class SetUp:
         test_dataset: Dataset = instantiate(
             self.config.test_dataset[self.data_type],
         )
+        if self.config.mode == "test_decision":
+            return test_dataset.to_hf_dataset()
         return test_dataset
 
     def get_ds_config(self) -> Optional[Dict[str, Any]]:
@@ -198,6 +200,20 @@ class SetUp:
         self,
         data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
     ) -> Optional[Callable[..., Dict[str, torch.Tensor]]]:
+        if self.config.fine_tune_method == "decision":
+            tokenizer = (
+                data_encoder
+                if self.config.modality == "text"
+                else data_encoder.tokenizer
+            )
+            return DecisionCollator(
+                model_collator=SFTDynamicPaddingCollator(
+                    pad_token_id=tokenizer.pad_token_id,
+                    pad_to_multiple_of=self.config.pad_to_multiple_of,
+                    ignore_index=-100,
+                    padding_side=tokenizer.padding_side,
+                ),
+            )
         if self.config.fine_tune_method != "sft":
             return None
         if self.config.sft_padding_strategy != "dynamic":
@@ -217,6 +233,7 @@ class SetUp:
             pad_token_id=pad_token_id,
             pad_to_multiple_of=self.config.pad_to_multiple_of,
             ignore_index=-100,
+            padding_side="right",
         )
 
     def finalize_training_arguments(
@@ -325,7 +342,11 @@ class SetUp:
         }
 
     def get_model(self) -> PreTrainedModel:
-        is_inference = self.config.mode in ["test", "test_large"]
+        is_inference = self.config.mode in [
+            "test",
+            "test_large",
+            "test_decision",
+        ]
         model_load_plan = self.model_load_planner.build()
         self.hf_deepspeed_config = model_load_plan.hf_deepspeed_config
         model_kwargs = {}

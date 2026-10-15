@@ -287,7 +287,11 @@ class ModelLoadPlanner:
         return int(os.environ.get("LOCAL_RANK") or 0)
 
     def is_inference(self) -> bool:
-        return self.config.mode in ["test", "test_large"]
+        return self.config.mode in [
+            "test",
+            "test_large",
+            "test_decision",
+        ]
 
     def resolve_dtype(
         self,
