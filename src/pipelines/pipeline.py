@@ -243,9 +243,13 @@ def train(
         if config.fine_tune_method != "async_grpo":
             trainer_kwargs["eval_dataset"] = val_dataset
 
-        trainer = TrainerClass(
-            **trainer_kwargs,
-        )
+        with prepare_trl_trainer_initialization(
+            config=config,
+            training_arguments=training_arguments,
+        ):
+            trainer = TrainerClass(
+                **trainer_kwargs,
+            )
         for trainer_runtime_patch in patch_trl_trainer_runtime(
             trainer=trainer,
             config=config,
