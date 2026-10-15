@@ -1,4 +1,6 @@
-from typing import List, Optional, Callable, Any
+from typing import List, Union, Optional, Callable, Any
+
+from omegaconf import ListConfig
 
 from .base import BaseReward
 
@@ -6,7 +8,7 @@ from .base import BaseReward
 class RewardManager:
     def __init__(
         self,
-        rewards: List[BaseReward],
+        rewards: Union[List[BaseReward], ListConfig],
     ) -> None:
         self.rewards = [reward for reward in rewards if reward.weight > 0]
 
