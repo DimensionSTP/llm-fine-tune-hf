@@ -243,6 +243,7 @@ def _validate_supported_memory_preflight_method(
 ) -> None:
     supported_methods = [
         "sft",
+        "decision",
         "dpo",
         "kto",
         "gkd",
@@ -256,7 +257,7 @@ def _validate_supported_memory_preflight_method(
     if config.fine_tune_method not in supported_methods:
         raise ValueError(
             "memory_preflight strict_subprocess currently supports "
-            "sft, dpo, kto, gkd, gold, distillation, grpo, rloo, sdpo, and a2po."
+            "sft, decision, dpo, kto, gkd, gold, distillation, grpo, rloo, sdpo, and a2po."
         )
     if (
         config.fine_tune_method in {"gold", "distillation", "grpo", "rloo", "sdpo"}
