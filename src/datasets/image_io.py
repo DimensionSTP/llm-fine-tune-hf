@@ -4,6 +4,8 @@ import base64
 import io
 import urllib.request
 
+from omegaconf import DictConfig
+
 from PIL import Image
 
 
@@ -122,7 +124,7 @@ def normalize_image_payloads(
 
 
 def build_image_io_settings(
-    dataset_image: Optional[Dict[str, Any]],
+    dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
     default_image_root_dir: str,
 ) -> Dict[str, Any]:
     config = dataset_image or {}
@@ -420,7 +422,7 @@ def _normalize_image_dict(
 
 
 def _select_config_value(
-    config: Dict[str, Any],
+    config: Union[Dict[str, Any], DictConfig],
     key: str,
     default: Any,
 ) -> Any:
