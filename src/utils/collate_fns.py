@@ -48,12 +48,16 @@ class SFTDynamicPaddingCollator:
         pad_token_id: int,
         pad_to_multiple_of: Optional[int],
         ignore_index: int,
+        padding_side: str,
     ) -> None:
         if pad_to_multiple_of is not None and pad_to_multiple_of <= 0:
             raise ValueError("pad_to_multiple_of must be a positive integer or None.")
         self.pad_token_id = pad_token_id
         self.pad_to_multiple_of = pad_to_multiple_of
         self.ignore_index = ignore_index
+        if padding_side not in {"left", "right"}:
+            raise ValueError("padding_side must be left or right.")
+        self.padding_side = padding_side
 
     def __call__(
         self,
@@ -156,7 +160,8 @@ class SFTDynamicPaddingCollator:
             device=tensors[0].device,
         )
         for idx, tensor in enumerate(tensors):
-            output[idx, : tensor.size(0)] = tensor
+            start = target_length - tensor.size(0) if self.padding_side == "left" else 0
+            output[idx, start : start + tensor.size(0)] = tensor
         return output
 
     def _collate_vlm_tensors(
