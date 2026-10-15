@@ -1,54 +1,28 @@
-structural:
-  _target_: src.datasets.TestStructuralDataset
-  data_path: ${data_path}
-  dataset_name: ${dataset_name}
-  dataset_format: ${dataset_format}
-  dataset_subdir: ${test_dataset_subdir}
-  dataset_file_path: ${test_dataset_file_path}
-  dataset_file_paths: ${test_dataset_file_paths}
-  dataset_files: ${test_dataset_files}
-  allow_dataset_file_name_mismatch: ${allow_test_dataset_file_name_mismatch}
-  is_preprocessed: ${is_preprocessed}
-  data_column_name: ${data_column_name}
-  target_column_name: ${target_column_name}
-  role_column_name: ${role_column_name}
-  content_column_name: ${content_column_name}
-  assistant_column_name: ${assistant_column_name}
-  pretrained_model_name: ${pretrained_model_name}
-  modality: ${modality}
-  custom_data_encoder_path: ${custom_data_encoder_path}
-  revision: ${revision}
-  reference_data_encoder_name: ${reference_data_encoder_name}
-  left_padding: ${left_padding}
-  is_enable_thinking: ${is_enable_thinking}
-  max_length: ${max_length}
-  max_pixels: ${max_pixels}
-  do_resize: ${do_resize}
-  dataset_image: ${dataset_image}
-
-conversational:
-  _target_: src.datasets.TestConversationalDataset
-  data_path: ${data_path}
-  dataset_name: ${dataset_name}
-  dataset_format: ${dataset_format}
-  dataset_subdir: ${test_dataset_subdir}
-  dataset_file_path: ${test_dataset_file_path}
-  dataset_file_paths: ${test_dataset_file_paths}
-  dataset_files: ${test_dataset_files}
-  allow_dataset_file_name_mismatch: ${allow_test_dataset_file_name_mismatch}
-  is_preprocessed: ${is_preprocessed}
-  conversation_column_name: ${conversation_column_name}
-  role_column_name: ${role_column_name}
-  content_column_name: ${content_column_name}
-  assistant_column_name: ${assistant_column_name}
-  pretrained_model_name: ${pretrained_model_name}
-  modality: ${modality}
-  custom_data_encoder_path: ${custom_data_encoder_path}
-  revision: ${revision}
-  reference_data_encoder_name: ${reference_data_encoder_name}
-  left_padding: ${left_padding}
-  is_enable_thinking: ${is_enable_thinking}
-  max_length: ${max_length}
-  max_pixels: ${max_pixels}
-  do_resize: ${do_resize}
-  dataset_image: ${dataset_image}
+_target_: src.datasets.TestDataset
+data_type: ${data_type}
+data_path: ${data_path}
+dataset_name: ${dataset_name}
+dataset_format: ${dataset_format}
+dataset_subdir: ${test_dataset_subdir}
+dataset_file_path: ${test_dataset_file_path}
+dataset_file_paths: ${test_dataset_file_paths}
+dataset_files: ${test_dataset_files}
+allow_dataset_file_name_mismatch: ${allow_test_dataset_file_name_mismatch}
+is_preprocessed: ${is_preprocessed}
+data_column_name: ${data_column_name}
+conversation_column_name: ${conversation_column_name}
+target_column_name: ${target_column_name}
+role_column_name: ${role_column_name}
+content_column_name: ${content_column_name}
+assistant_column_name: ${assistant_column_name}
+pretrained_model_name: ${pretrained_model_name}
+modality: ${modality}
+custom_data_encoder_path: ${custom_data_encoder_path}
+revision: ${revision}
+reference_data_encoder_name: ${reference_data_encoder_name}
+left_padding: ${left_padding}
+is_enable_thinking: ${is_enable_thinking}
+max_length: ${max_length}
+max_pixels: ${max_pixels}
+do_resize: ${do_resize}
+dataset_image: ${dataset_image}

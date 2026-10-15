@@ -1,93 +1,48 @@
-structural:
-  _target_: src.datasets.SFTStructuralDataset
-  data_path: ${data_path}
-  split: ${split.train}
-  split_ratio: ${split_ratio}
-  is_strict_split: ${is_strict_split}
-  seed: ${seed}
-  dataset_name: ${dataset_name}
-  dataset_format: ${dataset_format}
-  dataset_subdir: ${dataset_subdir}
-  dataset_file_path: ${dataset_file_path}
-  dataset_file_paths: ${dataset_file_paths}
-  dataset_files: ${dataset_files}
-  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
-  val_dataset_file_path: ${val_dataset_file_path}
-  val_dataset_file_paths: ${val_dataset_file_paths}
-  val_dataset_files: ${val_dataset_files}
-  allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
-  dataset_resampling: ${dataset_resampling}
-  is_sft: ${is_sft}
-  is_preprocessed: ${is_preprocessed}
-  data_column_name: ${data_column_name}
-  target_column_name: ${target_column_name}
-  role_column_name: ${role_column_name}
-  content_column_name: ${content_column_name}
-  assistant_column_name: ${assistant_column_name}
-  pretrained_model_name: ${pretrained_model_name}
-  modality: ${modality}
-  custom_data_encoder_path: ${custom_data_encoder_path}
-  revision: ${revision}
-  reference_data_encoder_name: ${reference_data_encoder_name}
-  left_padding: ${left_padding}
-  is_enable_thinking: ${is_enable_thinking}
-  max_length: ${max_length}
-  sft_padding_strategy: ${sft_padding_strategy}
-  truncation_mode: ${truncation_mode}
-  max_pixels: ${max_pixels}
-  do_resize: ${do_resize}
-  image_augmentation: ${image_augmentation}
-  dataset_image: ${dataset_image}
-  response_start_template: ${response_start_template}
-  response_end_template: ${response_end_template}
-  sft_label_mask_backend: ${sft_label_mask.backend}
-  sft_label_mask_validation_enabled: ${sft_label_mask.validation_enabled}
-  sft_label_mask_validation_mode: ${sft_label_mask.validation_mode}
-  sft_label_mask_min_assistant_label_tokens: ${sft_label_mask.min_assistant_label_tokens}
-  sft_label_mask_report_truncated_assistant: ${sft_label_mask.report_truncated_assistant}
-
-conversational:
-  _target_: src.datasets.SFTConversationalDataset
-  data_path: ${data_path}
-  split: ${split.train}
-  split_ratio: ${split_ratio}
-  is_strict_split: ${is_strict_split}
-  seed: ${seed}
-  dataset_name: ${dataset_name}
-  dataset_format: ${dataset_format}
-  dataset_subdir: ${dataset_subdir}
-  dataset_file_path: ${dataset_file_path}
-  dataset_file_paths: ${dataset_file_paths}
-  dataset_files: ${dataset_files}
-  allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
-  val_dataset_file_path: ${val_dataset_file_path}
-  val_dataset_file_paths: ${val_dataset_file_paths}
-  val_dataset_files: ${val_dataset_files}
-  allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
-  dataset_resampling: ${dataset_resampling}
-  is_sft: ${is_sft}
-  is_preprocessed: ${is_preprocessed}
-  conversation_column_name: ${conversation_column_name}
-  role_column_name: ${role_column_name}
-  content_column_name: ${content_column_name}
-  pretrained_model_name: ${pretrained_model_name}
-  modality: ${modality}
-  custom_data_encoder_path: ${custom_data_encoder_path}
-  revision: ${revision}
-  reference_data_encoder_name: ${reference_data_encoder_name}
-  left_padding: ${left_padding}
-  is_enable_thinking: ${is_enable_thinking}
-  max_length: ${max_length}
-  sft_padding_strategy: ${sft_padding_strategy}
-  truncation_mode: ${truncation_mode}
-  max_pixels: ${max_pixels}
-  do_resize: ${do_resize}
-  image_augmentation: ${image_augmentation}
-  dataset_image: ${dataset_image}
-  response_start_template: ${response_start_template}
-  response_end_template: ${response_end_template}
-  sft_label_mask_backend: ${sft_label_mask.backend}
-  sft_label_mask_validation_enabled: ${sft_label_mask.validation_enabled}
-  sft_label_mask_validation_mode: ${sft_label_mask.validation_mode}
-  sft_label_mask_min_assistant_label_tokens: ${sft_label_mask.min_assistant_label_tokens}
-  sft_label_mask_report_truncated_assistant: ${sft_label_mask.report_truncated_assistant}
+_target_: src.datasets.SFTDataset
+data_type: ${data_type}
+data_path: ${data_path}
+split: ${split.train}
+split_ratio: ${split_ratio}
+is_strict_split: ${is_strict_split}
+seed: ${seed}
+dataset_name: ${dataset_name}
+dataset_format: ${dataset_format}
+dataset_subdir: ${dataset_subdir}
+dataset_file_path: ${dataset_file_path}
+dataset_file_paths: ${dataset_file_paths}
+dataset_files: ${dataset_files}
+allow_dataset_file_name_mismatch: ${allow_dataset_file_name_mismatch}
+val_dataset_file_path: ${val_dataset_file_path}
+val_dataset_file_paths: ${val_dataset_file_paths}
+val_dataset_files: ${val_dataset_files}
+allow_val_dataset_file_name_mismatch: ${allow_val_dataset_file_name_mismatch}
+dataset_resampling: ${dataset_resampling}
+is_sft: ${is_sft}
+is_preprocessed: ${is_preprocessed}
+data_column_name: ${data_column_name}
+conversation_column_name: ${conversation_column_name}
+target_column_name: ${target_column_name}
+role_column_name: ${role_column_name}
+content_column_name: ${content_column_name}
+assistant_column_name: ${assistant_column_name}
+pretrained_model_name: ${pretrained_model_name}
+modality: ${modality}
+custom_data_encoder_path: ${custom_data_encoder_path}
+revision: ${revision}
+reference_data_encoder_name: ${reference_data_encoder_name}
+left_padding: ${left_padding}
+is_enable_thinking: ${is_enable_thinking}
+max_length: ${max_length}
+sft_padding_strategy: ${sft_padding_strategy}
+truncation_mode: ${truncation_mode}
+max_pixels: ${max_pixels}
+do_resize: ${do_resize}
+image_augmentation: ${image_augmentation}
+dataset_image: ${dataset_image}
+response_start_template: ${response_start_template}
+response_end_template: ${response_end_template}
+sft_label_mask_backend: ${sft_label_mask.backend}
+sft_label_mask_validation_enabled: ${sft_label_mask.validation_enabled}
+sft_label_mask_validation_mode: ${sft_label_mask.validation_mode}
+sft_label_mask_min_assistant_label_tokens: ${sft_label_mask.min_assistant_label_tokens}
+sft_label_mask_report_truncated_assistant: ${sft_label_mask.report_truncated_assistant}
