@@ -42,6 +42,7 @@ Training option contracts:
 - Distillation tool calling reuses `agentic` with dataset prompts and synchronous tools only. Environment factories and rollout workers remain GRPO/Async GRPO settings.
 - RLOO uses the stable upstream trainer with the existing GRPO dataset and reward manager. Text and VLM inputs share the configured image controls. VLM requires conversational prompts and decoded images; image-path datasets use `decode_image_paths=True`. RLOO defaults to left padding so multimodal token types and left-padded prompt tokens remain aligned in unequal-length batches. Its generation cadence follows gradient accumulation by default, generation groups require at least two completions, and generation/global evaluation batches must be divisible by their generation counts. GRPO-only streaming, agentic, loss, and completion-termination options are not forwarded.
 - Enabled GRPO/RLOO/Distillation completion tables use the selected backend and retain the upstream text or structured messages with configured-secret redaction. GRPO and RLOO require their reward, extra, and advantage buffers; Distillation has only prompt/completion buffers. SDPO is not attached to this callback. Completion logging stays disabled by default.
+- With pinned TRL 1.15.0, distributed SDPO is unsupported when ranks have different empty/nonempty self-distillation masks: the metric collective paths can diverge and deadlock. The EMA synchronization adapter does not fix this upstream loss-path defect; single-process usage is unaffected by this mismatch.
 
 Dependency notes:
 

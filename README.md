@@ -352,7 +352,7 @@ python main.py --config-name={method}.yaml mode=train
 | GRPO | `grpo.yaml` | GRPO | vLLM importance-sampling correction is enabled by default. |
 | RLOO | `rloo.yaml` | GRPO-style reward | Uses the other completions for each prompt as the leave-one-out reward baseline. |
 | async GRPO | `async_grpo.yaml` | GRPO | Requires the trainer/vLLM split runtime. |
-| SDPO | `sdpo.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
+| SDPO | `sdpo.yaml` | GRPO-style reward | Upstream experimental trainer; pinned distributed support limitation is documented below. |
 | A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer with ZeRO-2 because its reference-model construction does not support ZeRO-3. |
 
 All methods default to `data_type=conversational`. Set `data_type=structural` explicitly for separate input/target columns. Each dataset group has one `_target_` and receives `data_type` as an argument; override its fields through `dataset.<field>` or `test_dataset.<field>`. The root column-name settings remain the shared owners. Generative test uses `configs/dataset/test_generation.yaml`, while non-generative Decision test uses `configs/dataset/test_decision.yaml`; these remain separate because their target and output contracts differ.
@@ -557,6 +557,8 @@ vllm_server_base_url={null or http://host:port}
 ```
 
 SDPO keeps `teacher_model_kind=ema`, `use_teacher_server=False`, and colocate vLLM by default. Teacher-server mode is opt-in and should be used with the upstream live-teacher server requirements: `teacher_model_kind=live`, `use_teacher_server=True`, and `vllm_mode=server`.
+
+With pinned TRL 1.15.0, distributed SDPO is unsupported when one rank has no valid self-distillation tokens and another does: the empty rank skips a metric collective and can deadlock. The existing EMA synchronization support does not repair this upstream loss-path defect. Single-process SDPO is unaffected by this collective mismatch; avoid the asymmetric-mask distributed case until the upstream fix is available.
 
 For dense-model external vLLM server mode, keep `data_parallel_size=1`.
 Current vLLM offline server initialization rejects dense-model `data_parallel_size>1`,
