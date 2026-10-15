@@ -1,5 +1,7 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Union, Optional
 import os
+
+from omegaconf import ListConfig
 
 import numpy as np
 
@@ -24,8 +26,8 @@ class VllmEmbedding:
         master_port: Optional[int],
         nccl_socket_ifname: Optional[str],
         nccl_ib_disable: Optional[int],
-        preserved_env_keys: List[str],
-        isolated_env_keys: List[str],
+        preserved_env_keys: Union[List[str], ListConfig],
+        isolated_env_keys: Union[List[str], ListConfig],
     ) -> None:
         if model_ft_data == "base":
             model_id = f"{model_default_upload_user}/{model_base}"

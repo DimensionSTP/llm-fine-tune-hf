@@ -155,7 +155,7 @@ class RetrievalHitReward(RetrievalBaseReward):
         retrieval_top_k: int,
         shaping_weight: float,
         rank_margin: int,
-        stages: List[Dict[str, Any]],
+        stages: Union[List[Dict[str, Any]], ListConfig],
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -390,7 +390,7 @@ class RetrievalnDCGReward(RetrievalBaseReward):
         embedding: VllmEmbedding,
         retrieval_top_k: Optional[int],
         reward_mode: str,
-        ndcg_top_ks: List[int],
+        ndcg_top_ks: Union[List[int], ListConfig],
         alpha: float,
         weighting_mode: str,
         epsilon: float,
