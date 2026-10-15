@@ -96,7 +96,7 @@ class SetUp:
             "val": dataset["val"],
         }
 
-    def get_test_dataset(self) -> Dataset:
+    def get_test_dataset(self) -> Union[Dataset, HFDataset]:
         test_dataset: Dataset = instantiate(
             self.config.test_dataset[self.data_type],
         )
