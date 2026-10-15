@@ -18,7 +18,7 @@ from .dataset_loading import (
 )
 
 
-class StructuralDataset:
+class GKDDataset:
     def __init__(
         self,
         data_path: str,
@@ -27,7 +27,9 @@ class StructuralDataset:
         seed: int,
         dataset_name: str,
         dataset_format: str,
+        data_type: str,
         data_column_name: str,
+        conversation_column_name: str,
         target_column_name: str,
         role_column_name: str,
         content_column_name: str,
@@ -43,6 +45,9 @@ class StructuralDataset:
         allow_val_dataset_file_name_mismatch: bool,
         dataset_resampling: DictConfig,
     ) -> None:
+        if data_type not in {"structural", "conversational"}:
+            raise ValueError("data_type must be structural or conversational.")
+        self.data_type = data_type
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
@@ -60,6 +65,7 @@ class StructuralDataset:
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
         self.data_column_name = data_column_name
+        self.conversation_column_name = conversation_column_name
         self.target_column_name = target_column_name
         self.role_column_name = role_column_name
         self.content_column_name = content_column_name
@@ -110,28 +116,54 @@ class StructuralDataset:
             dataset = loaded_datasets["train"]
             val_dataset = loaded_datasets["val"]
 
-        output_column_names = [
-            "messages",
-        ]
-        input_column_names = [
-            self.data_column_name,
-            self.target_column_name,
-        ]
-        remove_columns = [
-            name for name in input_column_names if name not in output_column_names
-        ]
+        if self.data_type == "conversational":
+            if self.conversation_column_name != "messages":
+                dataset = dataset.rename_column(
+                    self.conversation_column_name,
+                    "messages",
+                )
+                if val_dataset is not None:
+                    val_dataset = val_dataset.rename_column(
+                        self.conversation_column_name,
+                        "messages",
+                    )
 
-        dataset = dataset.map(
-            self.create_conversations,
-            batched=True,
-            remove_columns=remove_columns,
-        )
-        if val_dataset is not None:
-            val_dataset = val_dataset.map(
+            output_column_names = [
+                "messages",
+            ]
+            remove_columns = [
+                column
+                for column in dataset.column_names
+                if column not in output_column_names
+            ]
+
+            if remove_columns:
+                dataset = dataset.remove_columns(remove_columns)
+                if val_dataset is not None:
+                    val_dataset = val_dataset.remove_columns(remove_columns)
+        else:
+            output_column_names = [
+                "messages",
+            ]
+            input_column_names = [
+                self.data_column_name,
+                self.target_column_name,
+            ]
+            remove_columns = [
+                name for name in input_column_names if name not in output_column_names
+            ]
+
+            dataset = dataset.map(
                 self.create_conversations,
                 batched=True,
                 remove_columns=remove_columns,
             )
+            if val_dataset is not None:
+                val_dataset = val_dataset.map(
+                    self.create_conversations,
+                    batched=True,
+                    remove_columns=remove_columns,
+                )
 
         if val_dataset is None:
             split_dataset = dataset.train_test_split(
@@ -185,131 +217,3 @@ class StructuralDataset:
             },
         ]
         return conversation
-
-
-class ConversationalDataset:
-    def __init__(
-        self,
-        data_path: str,
-        split_ratio: float,
-        is_strict_split: bool,
-        seed: int,
-        dataset_name: str,
-        dataset_format: str,
-        conversation_column_name: str,
-        dataset_subdir: Optional[str],
-        dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[Union[List[str], ListConfig]],
-        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-        allow_dataset_file_name_mismatch: bool,
-        val_dataset_file_path: Optional[str],
-        val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
-        val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-        allow_val_dataset_file_name_mismatch: bool,
-        dataset_resampling: DictConfig,
-    ) -> None:
-        self.data_path = data_path
-        self.dataset_subdir = dataset_subdir
-        self.dataset_file_path = dataset_file_path
-        self.dataset_file_paths = dataset_file_paths
-        self.dataset_files = dataset_files
-        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
-        self.val_dataset_file_path = val_dataset_file_path
-        self.val_dataset_file_paths = val_dataset_file_paths
-        self.val_dataset_files = val_dataset_files
-        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
-        self.dataset_resampling = dataset_resampling
-        self.split_ratio = split_ratio
-        self.is_strict_split = is_strict_split
-        self.seed = seed
-        self.dataset_name = dataset_name
-        self.dataset_format = dataset_format
-        self.conversation_column_name = conversation_column_name
-
-    def __call__(self) -> Dict[str, HFDataset]:
-        train_data_specs = resolve_dataset_file_specs(
-            dataset_name=self.dataset_name,
-            dataset_format=self.dataset_format,
-            data_path=self.data_path,
-            dataset_subdir=self.dataset_subdir,
-            dataset_file_path=self.dataset_file_path,
-            dataset_file_paths=self.dataset_file_paths,
-            dataset_files=self.dataset_files,
-            allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
-            path_label="dataset",
-            allow_weight=True,
-        )
-        val_data_specs = resolve_optional_dataset_file_specs(
-            dataset_name=self.dataset_name,
-            dataset_format=self.dataset_format,
-            data_path=self.data_path,
-            dataset_file_path=self.val_dataset_file_path,
-            dataset_file_paths=self.val_dataset_file_paths,
-            dataset_files=self.val_dataset_files,
-            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
-            path_label="val_dataset",
-            allow_weight=False,
-        )
-        if self.dataset_resampling.enabled:
-            dataset = load_weighted_hf_dataset_specs(
-                dataset_file_specs=train_data_specs,
-                dataset_resampling=self.dataset_resampling,
-                seed=self.seed,
-            )
-            val_dataset = (
-                None
-                if val_data_specs is None
-                else load_hf_dataset_specs(
-                    dataset_file_specs=val_data_specs,
-                )
-            )
-        else:
-            loaded_datasets = load_hf_train_val_dataset_specs(
-                train_dataset_file_specs=train_data_specs,
-                val_dataset_file_specs=val_data_specs,
-            )
-            dataset = loaded_datasets["train"]
-            val_dataset = loaded_datasets["val"]
-
-        if self.conversation_column_name != "messages":
-            dataset = dataset.rename_column(
-                self.conversation_column_name,
-                "messages",
-            )
-            if val_dataset is not None:
-                val_dataset = val_dataset.rename_column(
-                    self.conversation_column_name,
-                    "messages",
-                )
-
-        output_column_names = [
-            "messages",
-        ]
-        remove_columns = [
-            column
-            for column in dataset.column_names
-            if column not in output_column_names
-        ]
-
-        if remove_columns:
-            dataset = dataset.remove_columns(remove_columns)
-            if val_dataset is not None:
-                val_dataset = val_dataset.remove_columns(remove_columns)
-
-        if val_dataset is None:
-            split_dataset = dataset.train_test_split(
-                test_size=self.split_ratio,
-                seed=self.seed,
-            )
-            if self.is_strict_split:
-                train_dataset = split_dataset["train"]
-            else:
-                train_dataset = dataset
-            val_dataset = split_dataset["test"]
-        else:
-            train_dataset = dataset
-
-        return {
-            "train": train_dataset,
-            "val": val_dataset,
-        }
