@@ -1,21 +1,11 @@
-from .sft_dataset import StructuralDataset as SFTStructuralDataset
-from .sft_dataset import ConversationalDataset as SFTConversationalDataset
-from .decision_dataset import StructuralDataset as DecisionStructuralDataset
-from .decision_dataset import ConversationalDataset as DecisionConversationalDataset
-from .dpo_dataset import StructuralDataset as DPOStructuralDataset
-from .dpo_dataset import ConversationalDataset as DPOConversationalDataset
-from .kto_dataset import StructuralDataset as KTOStructuralDataset
-from .kto_dataset import ConversationalDataset as KTOConversationalDataset
-from .gkd_dataset import StructuralDataset as GKDStructuralDataset
-from .gkd_dataset import ConversationalDataset as GKDConversationalDataset
-from .distillation_dataset import StructuralDataset as DistillationStructuralDataset
-from .distillation_dataset import (
-    ConversationalDataset as DistillationConversationalDataset,
-)
-from .grpo_dataset import StructuralDataset as GRPOStructuralDataset
-from .grpo_dataset import ConversationalDataset as GRPOConversationalDataset
-from .test_dataset import StructuralDataset as TestStructuralDataset
-from .test_dataset import ConversationalDataset as TestConversationalDataset
+from .sft_dataset import SFTDataset
+from .decision_dataset import DecisionDataset
+from .dpo_dataset import DPODataset
+from .kto_dataset import KTODataset
+from .gkd_dataset import GKDDataset
+from .distillation_dataset import DistillationDataset
+from .grpo_dataset import GRPODataset
+from .test_dataset import TestDataset
 from .decision_dataset import DecisionCollator, build_decision_candidate_token_ids
 from .image_augmentation import build_image_augmenter
 from .image_io import (
@@ -47,22 +37,14 @@ from .dataset_loading import (
 )
 
 __all__ = [
-    "SFTStructuralDataset",
-    "SFTConversationalDataset",
-    "DecisionStructuralDataset",
-    "DecisionConversationalDataset",
-    "DPOStructuralDataset",
-    "DPOConversationalDataset",
-    "KTOStructuralDataset",
-    "KTOConversationalDataset",
-    "GKDStructuralDataset",
-    "GKDConversationalDataset",
-    "DistillationStructuralDataset",
-    "DistillationConversationalDataset",
-    "GRPOStructuralDataset",
-    "GRPOConversationalDataset",
-    "TestStructuralDataset",
-    "TestConversationalDataset",
+    "SFTDataset",
+    "DecisionDataset",
+    "DPODataset",
+    "KTODataset",
+    "GKDDataset",
+    "DistillationDataset",
+    "GRPODataset",
+    "TestDataset",
     "DecisionCollator",
     "build_decision_candidate_token_ids",
     "build_image_augmenter",
