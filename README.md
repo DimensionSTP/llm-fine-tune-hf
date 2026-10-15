@@ -75,6 +75,14 @@ uv pip install \
 python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
 ```
 
+### Async GRPO attention kernel
+
+Async GRPO selects its HF policy model's Flash Attention implementation through `attn_implementation`, defaulting to `flash_attention_2`. The vLLM server's attention backend is configured independently.
+
+On Blackwell GPUs, use `attn_implementation=flash_attention_2`. On hardware supported by the official FA3 Hub kernel, select `attn_implementation=kernels-community/flash-attn3`; Transformers loads it through the existing `kernels` dependency and `HF_HOME` cache. The pinned FA3 build does not support Blackwell SM 12.0. There is no automatic backend fallback.
+
+For Hub-backed attention implementations, first startup requires Hub access and cache write permission. Cached binaries alone do not guarantee offline startup: `kernels==0.17.2` can still fail version lookup offline. If needed, allow Hub access for the Async process through `HF_HUB_OFFLINE=0` and `TRANSFORMERS_OFFLINE=0` in the existing environment bootstrap, without changing model revisions or other methods' offline policy.
+
 ### Execution contract
 
 Rebuild Flash Attention and causal-conv1d after changing Torch; an extension built against the previous Torch ABI must not be reused. For Conda CUDA source builds, expose the toolkit headers through `CPATH=${CONDA_PREFIX}/targets/x86_64-linux/include` when the compiler cannot find `cuda_runtime.h`. Keep existing include paths when already configured. Flash Attention remains pinned to the source above; HF Flash Attention and vLLM's bundled attention kernels are separate implementations.

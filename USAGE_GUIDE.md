@@ -110,6 +110,8 @@ Decision multi-node launchers are `scripts/train/multinode/decision_train_rank0.
 
 Async GRPO server flow:
 
+Check the [Async GRPO attention kernel requirements](README.md#async-grpo-attention-kernel) before launch. For Blackwell GPUs, use `attn_implementation=flash_attention_2`, which is the default. Select `attn_implementation=kernels-community/flash-attn3` only on supported hardware. The vLLM server backend is configured independently; Hub access and offline startup conditions apply when selecting a Hub-backed kernel.
+
 ```bash
 # script-managed server start/stop
 # requirement: even number of GPUs and >=2 GPUs
