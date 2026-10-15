@@ -34,7 +34,7 @@ from .image_io import build_image_io_settings, load_image, normalize_image_sourc
 from .image_augmentation import build_image_augmenter
 
 
-class StructuralDataset(Dataset):
+class SFTDataset(Dataset):
     def __init__(
         self,
         data_path: str,
@@ -44,9 +44,11 @@ class StructuralDataset(Dataset):
         seed: int,
         dataset_name: str,
         dataset_format: str,
+        data_type: str,
         is_sft: bool,
         is_preprocessed: bool,
         data_column_name: str,
+        conversation_column_name: str,
         target_column_name: str,
         role_column_name: str,
         content_column_name: str,
@@ -83,6 +85,9 @@ class StructuralDataset(Dataset):
         sft_label_mask_min_assistant_label_tokens: int,
         sft_label_mask_report_truncated_assistant: bool,
     ) -> None:
+        if data_type not in {"structural", "conversational"}:
+            raise ValueError("data_type must be structural or conversational.")
+        self.data_type = data_type
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
@@ -103,6 +108,7 @@ class StructuralDataset(Dataset):
         self.is_sft = is_sft
         self.is_preprocessed = is_preprocessed
         self.data_column_name = data_column_name
+        self.conversation_column_name = conversation_column_name
         self.target_column_name = target_column_name
         self.role_column_name = role_column_name
         self.content_column_name = content_column_name
@@ -215,30 +221,28 @@ class StructuralDataset(Dataset):
         self.ignore_index = -100
 
     def __len__(self) -> int:
-        return len(self.labels)
+        return len(self.datas)
 
     def __getitem__(
         self,
         idx: int,
     ) -> Dict[str, Any]:
-        if self.sft_label_mask_backend == "native":
-            return self._encode_native_conversation(
-                conversation=self._build_conversation(
-                    data=self.datas[idx],
-                    label=self.labels[idx],
-                ),
-            )
-        prompt = self.apply_chat_template(
+        conversation = self._build_conversation(
             data=self.datas[idx],
-            label=self.labels[idx],
+            label=self.labels[idx] if self.labels is not None else None,
         )
-
+        if self.sft_label_mask_backend == "native":
+            return self._encode_native_conversation(conversation=conversation)
+        prompt = self.apply_chat_template(conversation=conversation)
         image = None
         if self.modality != "text":
             image = []
-            for part in self.datas[idx]:
-                if isinstance(part, dict) and part.get("type") == "image":
-                    image.append(part.get("image"))
+            for turn in conversation:
+                content = turn[self.content_column_name]
+                if isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "image":
+                            image.append(part.get("image"))
 
             if not image:
                 image = None
@@ -257,7 +261,6 @@ class StructuralDataset(Dataset):
             del encoded["token_type_ids"]
         if not "labels" in encoded.keys():
             encoded["labels"] = encoded["input_ids"]
-
         return encoded
 
     def to_hf_dataset(self) -> HFDataset:
@@ -265,7 +268,7 @@ class StructuralDataset(Dataset):
             _SFTDatasetTransform(dataset=self)
         )
 
-    def get_dataset(self) -> Dict[str, List[Any]]:
+    def get_dataset(self) -> Dict[str, Optional[List[Any]]]:
         val_data_specs = resolve_optional_dataset_file_specs(
             dataset_name=self.dataset_name,
             dataset_format=self.dataset_format,
@@ -322,11 +325,18 @@ class StructuralDataset(Dataset):
             if self.split == "val":
                 data = val_data
 
-        datas = [
-            _normalize_sft_nested_value(value=value)
-            for value in data[self.data_column_name].tolist()
-        ]
-        labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
+        if self.data_type == "conversational":
+            datas = [
+                _normalize_sft_nested_value(value=value)
+                for value in data[self.conversation_column_name].tolist()
+            ]
+            labels = None
+        else:
+            datas = [
+                _normalize_sft_nested_value(value=value)
+                for value in data[self.data_column_name].tolist()
+            ]
+            labels = data[self.target_column_name].apply(lambda x: x.strip()).tolist()
         return {
             "datas": datas,
             "labels": labels,
@@ -334,19 +344,22 @@ class StructuralDataset(Dataset):
 
     def apply_chat_template(
         self,
-        data: str,
-        label: str,
+        conversation: List[Dict[str, Any]],
     ) -> str:
-        conversation = self._build_conversation(
-            data=data,
-            label=label,
-        )
+        preprocessed_conversation = []
+        for turn in conversation:
+            preprocessed_turn = {
+                self.role_column_name: turn[self.role_column_name],
+                self.content_column_name: turn[self.content_column_name],
+            }
+            preprocessed_conversation.append(preprocessed_turn)
+
         chat_template_kwargs = build_enable_thinking_kwargs(
             data_encoder=self.data_encoder,
             is_enable_thinking=self.is_enable_thinking,
         )
         prompt = self.data_encoder.apply_chat_template(
-            conversation=conversation,
+            conversation=preprocessed_conversation,
             tokenize=False,
             add_generation_prompt=False,
             **chat_template_kwargs,
@@ -492,8 +505,10 @@ class StructuralDataset(Dataset):
     def _build_conversation(
         self,
         data: Any,
-        label: str,
+        label: Optional[str],
     ) -> List[Dict[str, Any]]:
+        if self.data_type == "conversational":
+            return data
         content = label
         if self.modality != "text":
             content = [
@@ -952,315 +967,6 @@ class StructuralDataset(Dataset):
             )
         except Exception:
             return image
-
-
-class ConversationalDataset(StructuralDataset):
-    def __init__(
-        self,
-        data_path: str,
-        split: str,
-        split_ratio: float,
-        is_strict_split: bool,
-        seed: int,
-        dataset_name: str,
-        dataset_format: str,
-        is_sft: bool,
-        is_preprocessed: bool,
-        conversation_column_name: str,
-        role_column_name: str,
-        content_column_name: str,
-        pretrained_model_name: str,
-        modality: str,
-        max_pixels: Optional[int],
-        do_resize: bool,
-        image_augmentation: Union[Dict[str, Any], DictConfig],
-        custom_data_encoder_path: str,
-        revision: str,
-        reference_data_encoder_name: str,
-        left_padding: bool,
-        is_enable_thinking: bool,
-        max_length: int,
-        sft_padding_strategy: str,
-        truncation_mode: str,
-        response_start_template: str,
-        response_end_template: Optional[str],
-        dataset_subdir: Optional[str],
-        dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[Union[List[str], ListConfig]],
-        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-        allow_dataset_file_name_mismatch: bool,
-        val_dataset_file_path: Optional[str],
-        val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
-        val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-        allow_val_dataset_file_name_mismatch: bool,
-        dataset_resampling: DictConfig,
-        dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
-        sft_label_mask_backend: str,
-        sft_label_mask_validation_enabled: bool,
-        sft_label_mask_validation_mode: str,
-        sft_label_mask_min_assistant_label_tokens: int,
-        sft_label_mask_report_truncated_assistant: bool,
-    ) -> None:
-        self.data_path = data_path
-        self.dataset_subdir = dataset_subdir
-        self.dataset_file_path = dataset_file_path
-        self.dataset_file_paths = dataset_file_paths
-        self.dataset_files = dataset_files
-        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
-        self.val_dataset_file_path = val_dataset_file_path
-        self.val_dataset_file_paths = val_dataset_file_paths
-        self.val_dataset_files = val_dataset_files
-        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
-        self.dataset_resampling = dataset_resampling
-        self.split = split
-        self.split_ratio = split_ratio
-        self.is_strict_split = is_strict_split
-        self.seed = seed
-        self.dataset_name = dataset_name
-        self.dataset_format = dataset_format
-        self.is_sft = is_sft
-        self.is_preprocessed = is_preprocessed
-        self.conversation_column_name = conversation_column_name
-        self.role_column_name = role_column_name
-        self.content_column_name = content_column_name
-        self.pretrained_model_name = pretrained_model_name
-        self.modality = modality
-        self._init_image_io(dataset_image=dataset_image)
-        self._init_sft_label_mask_validation(
-            backend=sft_label_mask_backend,
-            validation_enabled=sft_label_mask_validation_enabled,
-            validation_mode=sft_label_mask_validation_mode,
-            min_assistant_label_tokens=sft_label_mask_min_assistant_label_tokens,
-            report_truncated_assistant=sft_label_mask_report_truncated_assistant,
-        )
-        self._init_resize(
-            modality=modality,
-            max_pixels=max_pixels,
-            do_resize=do_resize,
-        )
-        self.image_augmenter = None
-        if split == "train":
-            self.image_augmenter = build_image_augmenter(
-                config=image_augmentation,
-                seed=seed,
-            )
-
-        if is_preprocessed:
-            data_encoder_path = custom_data_encoder_path
-        else:
-            data_encoder_path = self.pretrained_model_name
-
-        if self.modality == "text":
-            self.data_encoder = AutoTokenizer.from_pretrained(
-                data_encoder_path,
-                use_fast=True,
-                revision=revision,
-            )
-
-            if self.data_encoder.chat_template is None:
-                reference_data_encoder = AutoTokenizer.from_pretrained(
-                    reference_data_encoder_name
-                )
-                self.data_encoder.chat_template = reference_data_encoder.chat_template
-
-            if self.data_encoder.pad_token_id is None:
-                self.data_encoder.pad_token_id = self.data_encoder.eos_token_id
-
-            if left_padding:
-                self.data_encoder.padding_side = "left"
-            else:
-                self.data_encoder.padding_side = "right"
-            self._init_sft_padding(
-                sft_padding_strategy=sft_padding_strategy,
-                truncation_mode=truncation_mode,
-            )
-        else:
-            self.data_encoder = AutoProcessor.from_pretrained(
-                data_encoder_path,
-                revision=revision,
-            )
-
-            if self.data_encoder.tokenizer.chat_template is None:
-                reference_data_encoder = AutoTokenizer.from_pretrained(
-                    reference_data_encoder_name
-                )
-                self.data_encoder.tokenizer.chat_template = (
-                    reference_data_encoder.chat_template
-                )
-
-            if self.data_encoder.tokenizer.pad_token_id is None:
-                self.data_encoder.tokenizer.pad_token_id = (
-                    self.data_encoder.tokenizer.eos_token_id
-                )
-
-            if left_padding:
-                self.data_encoder.tokenizer.padding_side = "left"
-            else:
-                self.data_encoder.tokenizer.padding_side = "right"
-            self._init_sft_padding(
-                sft_padding_strategy=sft_padding_strategy,
-                truncation_mode=truncation_mode,
-            )
-
-        self.is_enable_thinking = is_enable_thinking
-
-        dataset = self.get_dataset()
-        self.conversations = dataset["conversations"]
-        self.max_length = max_length
-        self.column_names = ["input_ids", "attention_mask", "labels"]
-
-        self.response_start_tokens = self.data_encoder(
-            text=response_start_template,
-            return_tensors="pt",
-            add_special_tokens=False,
-        )["input_ids"].squeeze(0)
-        self.eos_token = (
-            self.data_encoder.eos_token
-            if modality == "text"
-            else self.data_encoder.tokenizer.eos_token
-        )
-        response_end_text = (
-            self.eos_token if response_end_template is None else response_end_template
-        )
-        self.response_end_tokens = self.data_encoder(
-            text=response_end_text,
-            return_tensors="pt",
-            add_special_tokens=False,
-        )["input_ids"].squeeze(0)
-        self.ignore_index = -100
-
-    def __len__(self) -> int:
-        return len(self.conversations)
-
-    def __getitem__(
-        self,
-        idx: int,
-    ) -> Dict[str, Any]:
-        if self.sft_label_mask_backend == "native":
-            return self._encode_native_conversation(
-                conversation=self.conversations[idx],
-            )
-        prompt = self.apply_chat_template(
-            conversation=self.conversations[idx],
-        )
-
-        image = None
-        if self.modality != "text":
-            image = []
-            for turn in self.conversations[idx]:
-                content = turn[self.content_column_name]
-                if isinstance(content, list):
-                    for part in content:
-                        if isinstance(part, dict) and part.get("type") == "image":
-                            image.append(part.get("image"))
-
-            if not image:
-                image = None
-            elif self.image_augmenter is not None or self._should_resize_images:
-                image = [self._process_single_image(image=img) for img in image]
-            else:
-                image = [self._normalize_single_image(image=img) for img in image]
-
-        encoded = self.encode_data(
-            data=prompt,
-            image=image,
-        )
-        if self.is_sft:
-            encoded = self.add_sft_label(encoded=encoded)
-        if "token_type_ids" in encoded.keys():
-            del encoded["token_type_ids"]
-        if not "labels" in encoded.keys():
-            encoded["labels"] = encoded["input_ids"]
-        return encoded
-
-    def get_dataset(self) -> Dict[str, List[Any]]:
-        val_data_specs = resolve_optional_dataset_file_specs(
-            dataset_name=self.dataset_name,
-            dataset_format=self.dataset_format,
-            data_path=self.data_path,
-            dataset_file_path=self.val_dataset_file_path,
-            dataset_file_paths=self.val_dataset_file_paths,
-            dataset_files=self.val_dataset_files,
-            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
-            path_label="val_dataset",
-            allow_weight=False,
-        )
-
-        if self.split == "val" and val_data_specs is not None:
-            data = load_pandas_dataset_specs(
-                dataset_file_specs=val_data_specs,
-            )
-        elif self.split in ["train", "val"]:
-            train_data_specs = resolve_dataset_file_specs(
-                dataset_name=self.dataset_name,
-                dataset_format=self.dataset_format,
-                data_path=self.data_path,
-                dataset_subdir=self.dataset_subdir,
-                dataset_file_path=self.dataset_file_path,
-                dataset_file_paths=self.dataset_file_paths,
-                dataset_files=self.dataset_files,
-                allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
-                path_label="dataset",
-                allow_weight=True,
-            )
-            if self.dataset_resampling.enabled:
-                data = load_weighted_pandas_dataset_specs(
-                    dataset_file_specs=train_data_specs,
-                    dataset_resampling=self.dataset_resampling,
-                    seed=self.seed,
-                )
-            else:
-                data = load_pandas_dataset_specs(
-                    dataset_file_specs=train_data_specs,
-                )
-        else:
-            raise ValueError(f"Inavalid split: {self.split}")
-
-        data = data.fillna("_")
-
-        if val_data_specs is None:
-            train_data, val_data = train_test_split(
-                data,
-                test_size=self.split_ratio,
-                random_state=self.seed,
-                shuffle=True,
-            )
-            if self.split == "train" and self.is_strict_split:
-                data = train_data
-            if self.split == "val":
-                data = val_data
-
-        conversations = [
-            _normalize_sft_nested_value(value=value)
-            for value in data[self.conversation_column_name].tolist()
-        ]
-        return {
-            "conversations": conversations,
-        }
-
-    def apply_chat_template(
-        self,
-        conversation: List[Dict[str, str]],
-    ) -> str:
-        preprocessed_conversation = []
-        for turn in conversation:
-            preprocessed_turn = {
-                self.role_column_name: turn[self.role_column_name],
-                self.content_column_name: turn[self.content_column_name],
-            }
-            preprocessed_conversation.append(preprocessed_turn)
-
-        chat_template_kwargs = build_enable_thinking_kwargs(
-            data_encoder=self.data_encoder,
-            is_enable_thinking=self.is_enable_thinking,
-        )
-        prompt = self.data_encoder.apply_chat_template(
-            conversation=preprocessed_conversation,
-            tokenize=False,
-            add_generation_prompt=False,
-            **chat_template_kwargs,
-        )
-        return prompt
 
 
 def _normalize_sft_nested_value(
