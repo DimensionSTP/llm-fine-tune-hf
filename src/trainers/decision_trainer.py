@@ -66,6 +66,21 @@ class DecisionTrainer(Trainer):
                 )
         return super().train(**kwargs)
 
+    def get_eval_dataloader(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> DataLoader:
+        even_batches = self.accelerator.even_batches
+        self.accelerator.even_batches = True
+        try:
+            return super().get_eval_dataloader(
+                *args,
+                **kwargs,
+            )
+        finally:
+            self.accelerator.even_batches = even_batches
+
     def _prepare_inputs(
         self,
         inputs: Dict[str, Any],
