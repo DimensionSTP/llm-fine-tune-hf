@@ -30,7 +30,7 @@ from .image_io import (
 from .image_augmentation import build_image_augmenter
 
 
-class StructuralDataset:
+class KTODataset:
     def __init__(
         self,
         data_path: str,
@@ -39,8 +39,11 @@ class StructuralDataset:
         seed: int,
         dataset_name: str,
         dataset_format: str,
+        data_type: str,
         data_column_name: str,
+        prompt_column_name: str,
         target_column_name: str,
+        completion_column_name: str,
         label_column_name: str,
         role_column_name: str,
         content_column_name: str,
@@ -62,6 +65,9 @@ class StructuralDataset:
         dataset_resampling: DictConfig,
         dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
     ) -> None:
+        if data_type not in {"structural", "conversational"}:
+            raise ValueError("data_type must be structural or conversational.")
+        self.data_type = data_type
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
         self.dataset_file_path = dataset_file_path
@@ -79,7 +85,9 @@ class StructuralDataset:
         self.dataset_name = dataset_name
         self.dataset_format = dataset_format
         self.data_column_name = data_column_name
+        self.prompt_column_name = prompt_column_name
         self.target_column_name = target_column_name
+        self.completion_column_name = completion_column_name
         self.label_column_name = label_column_name
         self.role_column_name = role_column_name
         self.content_column_name = content_column_name
@@ -141,31 +149,83 @@ class StructuralDataset:
             dataset = loaded_datasets["train"]
             val_dataset = loaded_datasets["val"]
 
-        output_column_names = [
-            "prompt",
-            "completion",
-            "label",
-        ]
-        input_column_names = [
-            self.data_column_name,
-            self.target_column_name,
-            self.label_column_name,
-        ]
-        remove_columns = [
-            name for name in input_column_names if name not in output_column_names
-        ]
+        if self.data_type == "conversational":
+            if self.prompt_column_name != "prompt":
+                dataset = dataset.rename_column(
+                    self.prompt_column_name,
+                    "prompt",
+                )
+                if val_dataset is not None:
+                    val_dataset = val_dataset.rename_column(
+                        self.prompt_column_name,
+                        "prompt",
+                    )
 
-        dataset = dataset.map(
-            self.create_conversations,
-            batched=True,
-            remove_columns=remove_columns,
-        )
-        if val_dataset is not None:
-            val_dataset = val_dataset.map(
+            if self.completion_column_name != "completion":
+                dataset = dataset.rename_column(
+                    self.completion_column_name,
+                    "completion",
+                )
+                if val_dataset is not None:
+                    val_dataset = val_dataset.rename_column(
+                        self.completion_column_name,
+                        "completion",
+                    )
+
+            if self.label_column_name != "label":
+                dataset = dataset.rename_column(
+                    self.label_column_name,
+                    "label",
+                )
+                if val_dataset is not None:
+                    val_dataset = val_dataset.rename_column(
+                        self.label_column_name,
+                        "label",
+                    )
+
+            output_column_names = [
+                "prompt",
+                "completion",
+                "label",
+                "image",
+                "images",
+            ]
+            remove_columns = [
+                column
+                for column in dataset.column_names
+                if column not in output_column_names
+            ]
+
+            if remove_columns:
+                dataset = dataset.remove_columns(remove_columns)
+                if val_dataset is not None:
+                    val_dataset = val_dataset.remove_columns(remove_columns)
+        else:
+            output_column_names = [
+                "prompt",
+                "completion",
+                "label",
+            ]
+            input_column_names = [
+                self.data_column_name,
+                self.target_column_name,
+                self.label_column_name,
+            ]
+            remove_columns = [
+                name for name in input_column_names if name not in output_column_names
+            ]
+
+            dataset = dataset.map(
                 self.create_conversations,
                 batched=True,
                 remove_columns=remove_columns,
             )
+            if val_dataset is not None:
+                val_dataset = val_dataset.map(
+                    self.create_conversations,
+                    batched=True,
+                    remove_columns=remove_columns,
+                )
 
         if self.modality != "text":
             dataset = dataset.map(self._normalize_image_columns)
@@ -504,202 +564,3 @@ class StructuralDataset:
         if apply_image_augmentation:
             return dataset.with_transform(self._decode_train_image_columns)
         return dataset.with_transform(self._decode_eval_image_columns)
-
-
-class ConversationalDataset(StructuralDataset):
-    def __init__(
-        self,
-        data_path: str,
-        split_ratio: float,
-        is_strict_split: bool,
-        seed: int,
-        dataset_name: str,
-        dataset_format: str,
-        prompt_column_name: str,
-        completion_column_name: str,
-        label_column_name: str,
-        modality: str,
-        max_pixels: Optional[int],
-        do_resize: bool,
-        image_augmentation: Union[Dict[str, Any], DictConfig],
-        decode_image_paths: bool,
-        dataset_subdir: Optional[str],
-        dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[Union[List[str], ListConfig]],
-        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-        allow_dataset_file_name_mismatch: bool,
-        val_dataset_file_path: Optional[str],
-        val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
-        val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
-        allow_val_dataset_file_name_mismatch: bool,
-        dataset_resampling: DictConfig,
-        dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
-    ) -> None:
-        self.data_path = data_path
-        self.dataset_subdir = dataset_subdir
-        self.dataset_file_path = dataset_file_path
-        self.dataset_file_paths = dataset_file_paths
-        self.dataset_files = dataset_files
-        self.allow_dataset_file_name_mismatch = allow_dataset_file_name_mismatch
-        self.val_dataset_file_path = val_dataset_file_path
-        self.val_dataset_file_paths = val_dataset_file_paths
-        self.val_dataset_files = val_dataset_files
-        self.allow_val_dataset_file_name_mismatch = allow_val_dataset_file_name_mismatch
-        self.dataset_resampling = dataset_resampling
-        self.split_ratio = split_ratio
-        self.is_strict_split = is_strict_split
-        self.seed = seed
-        self.dataset_name = dataset_name
-        self.dataset_format = dataset_format
-        self.prompt_column_name = prompt_column_name
-        self.completion_column_name = completion_column_name
-        self.label_column_name = label_column_name
-        self.decode_image_paths = decode_image_paths
-        self._init_image_io(dataset_image=dataset_image)
-        self._init_resize(
-            modality=modality,
-            max_pixels=max_pixels,
-            do_resize=do_resize,
-        )
-        self.image_augmenter = build_image_augmenter(
-            config=image_augmentation,
-            seed=seed,
-        )
-
-    def __call__(self) -> Dict[str, HFDataset]:
-        train_data_specs = resolve_dataset_file_specs(
-            dataset_name=self.dataset_name,
-            dataset_format=self.dataset_format,
-            data_path=self.data_path,
-            dataset_subdir=self.dataset_subdir,
-            dataset_file_path=self.dataset_file_path,
-            dataset_file_paths=self.dataset_file_paths,
-            dataset_files=self.dataset_files,
-            allow_dataset_file_name_mismatch=self.allow_dataset_file_name_mismatch,
-            path_label="dataset",
-            allow_weight=True,
-        )
-        val_data_specs = resolve_optional_dataset_file_specs(
-            dataset_name=self.dataset_name,
-            dataset_format=self.dataset_format,
-            data_path=self.data_path,
-            dataset_file_path=self.val_dataset_file_path,
-            dataset_file_paths=self.val_dataset_file_paths,
-            dataset_files=self.val_dataset_files,
-            allow_dataset_file_name_mismatch=self.allow_val_dataset_file_name_mismatch,
-            path_label="val_dataset",
-            allow_weight=False,
-        )
-        if self.dataset_resampling.enabled:
-            dataset = load_weighted_hf_dataset_specs(
-                dataset_file_specs=train_data_specs,
-                dataset_resampling=self.dataset_resampling,
-                seed=self.seed,
-            )
-            val_dataset = (
-                None
-                if val_data_specs is None
-                else load_hf_dataset_specs(
-                    dataset_file_specs=val_data_specs,
-                )
-            )
-        else:
-            loaded_datasets = load_hf_train_val_dataset_specs(
-                train_dataset_file_specs=train_data_specs,
-                val_dataset_file_specs=val_data_specs,
-            )
-            dataset = loaded_datasets["train"]
-            val_dataset = loaded_datasets["val"]
-
-        if self.prompt_column_name != "prompt":
-            dataset = dataset.rename_column(
-                self.prompt_column_name,
-                "prompt",
-            )
-            if val_dataset is not None:
-                val_dataset = val_dataset.rename_column(
-                    self.prompt_column_name,
-                    "prompt",
-                )
-
-        if self.completion_column_name != "completion":
-            dataset = dataset.rename_column(
-                self.completion_column_name,
-                "completion",
-            )
-            if val_dataset is not None:
-                val_dataset = val_dataset.rename_column(
-                    self.completion_column_name,
-                    "completion",
-                )
-
-        if self.label_column_name != "label":
-            dataset = dataset.rename_column(
-                self.label_column_name,
-                "label",
-            )
-            if val_dataset is not None:
-                val_dataset = val_dataset.rename_column(
-                    self.label_column_name,
-                    "label",
-                )
-
-        output_column_names = [
-            "prompt",
-            "completion",
-            "label",
-            "image",
-            "images",
-        ]
-        remove_columns = [
-            column
-            for column in dataset.column_names
-            if column not in output_column_names
-        ]
-
-        if remove_columns:
-            dataset = dataset.remove_columns(remove_columns)
-            if val_dataset is not None:
-                val_dataset = val_dataset.remove_columns(remove_columns)
-
-        if self.modality != "text":
-            dataset = dataset.map(self._normalize_image_columns)
-            if val_dataset is not None:
-                val_dataset = val_dataset.map(self._normalize_image_columns)
-
-        if (
-            self._should_resize_images
-            and self.image_augmenter is None
-            and not self.decode_image_paths
-        ):
-            dataset = dataset.map(self._resize_image_columns)
-            if val_dataset is not None:
-                val_dataset = val_dataset.map(self._resize_image_columns)
-
-        if val_dataset is None:
-            split_dataset = dataset.train_test_split(
-                test_size=self.split_ratio,
-                seed=self.seed,
-            )
-            if self.is_strict_split:
-                train_dataset = split_dataset["train"]
-            else:
-                train_dataset = dataset
-            val_dataset = split_dataset["test"]
-        else:
-            train_dataset = dataset
-
-        if self.decode_image_paths or self.image_augmenter is not None:
-            train_dataset = self._decode_image_paths(
-                dataset=train_dataset,
-                apply_image_augmentation=self.image_augmenter is not None,
-            )
-            val_dataset = self._decode_image_paths(
-                dataset=val_dataset,
-                apply_image_augmentation=False,
-            )
-
-        return {
-            "train": train_dataset,
-            "val": val_dataset,
-        }
