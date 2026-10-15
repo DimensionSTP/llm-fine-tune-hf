@@ -9,7 +9,7 @@ main_process_port=29500
 gpu_ids="0,1,2,3,4,5,6,7"
 
 modality="text"
-data_type="structural"
+data_type="conversational"
 split_ratio=1e-2
 is_strict_split=False
 dataset_name="tulu"
