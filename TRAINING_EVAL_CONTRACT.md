@@ -51,6 +51,7 @@ Dependency notes:
 - On Blackwell with a driver that cannot execute Triton's bundled CUDA 13.1 PTX, the existing `.env` bootstrap may select `TRITON_PTXAS_BLACKWELL_PATH=${CONDA_PREFIX}/bin/ptxas` from the active CUDA 12.9 environment. Child processes inherit that compiler selection.
 - Torch changes require rebuilding Flash Attention and causal-conv1d against the active Torch ABI; Conda CUDA builds may require the toolkit header path described in README.
 - Async GRPO selects the HF policy model's Flash Attention through `attn_implementation`, independently of the vLLM server backend. Use `flash_attention_2` on Blackwell GPUs; this is also the default. The official FA3 Hub kernel is selectable on supported hardware and uses the existing `HF_HOME`. There is no automatic fallback. See [Async GRPO attention kernel](README.md#async-grpo-attention-kernel) for Hub access and offline startup requirements.
+- Host-specific vLLM runner/sampler compatibility selectors belong in the existing environment bootstrap, not product defaults. A standalone cuDNN Conv3d crash is a host runtime issue; disabling cuDNN in a diagnostic process does not qualify the default native path.
 - Base install excludes `flash-attn`.
 - Optional GPU install path:
   - `uv pip install --override requirements-overrides.txt --torch-backend=cu129 --extra-index-url https://flashinfer.ai/whl/cu129 --no-build-isolation ".[gpu]"`

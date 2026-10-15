@@ -87,6 +87,10 @@ For Hub-backed attention implementations, first startup requires Hub access and 
 
 Rebuild Flash Attention and causal-conv1d after changing Torch; an extension built against the previous Torch ABI must not be reused. For Conda CUDA source builds, expose the toolkit headers through `CPATH=${CONDA_PREFIX}/targets/x86_64-linux/include` when the compiler cannot find `cuda_runtime.h`. Keep existing include paths when already configured. Flash Attention remains pinned to the source above; HF Flash Attention and vLLM's bundled attention kernels are separate implementations.
 
+For a host where the default vLLM V2 runner or FlashInfer sampler fails independently of the training pipeline, the supported compatibility selectors are `VLLM_USE_V2_MODEL_RUNNER=0` and `VLLM_USE_FLASHINFER_SAMPLER=0`. Set only the required selectors through the existing `.env` bootstrap so managed children inherit them. These are host-specific compatibility conditions, not global defaults or proof that the original kernel failure is fixed.
+
+If standalone native Conv3d crashes inside cuDNN, resolve the host driver/runtime compatibility separately; a diagnostic run with `torch.backends.cudnn.enabled=False` does not validate the default cuDNN path and is not a repository configuration option.
+
 - See `TRAINING_EVAL_CONTRACT.md` for required runtime inputs, supported modes, and output path expectations.
 
 ### .env file setting
