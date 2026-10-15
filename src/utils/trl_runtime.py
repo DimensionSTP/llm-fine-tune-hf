@@ -1,4 +1,4 @@
-from typing import Dict, List, Iterator, Any
+from typing import Dict, List, Optional, Iterator, Any
 from contextlib import contextmanager
 from types import MethodType
 
@@ -6,7 +6,37 @@ from omegaconf import DictConfig
 
 import torch
 
-from transformers import PreTrainedModel, Trainer, TrainerCallback
+from transformers import PreTrainedModel, TrainingArguments, Trainer, TrainerCallback
+
+
+@contextmanager
+def prepare_trl_trainer_initialization(
+    config: DictConfig,
+    training_arguments: TrainingArguments,
+) -> Iterator[None]:
+    if config.fine_tune_method != "async_grpo":
+        yield
+        return
+
+    original_model_init_kwargs = training_arguments.model_init_kwargs
+    model_init_kwargs = dict(original_model_init_kwargs or {})
+    model_init_kwargs.pop(
+        "attn_implementation",
+        None,
+    )
+    model_init_kwargs["architecture"] = _AsyncGRPOModelLoader(
+        training_arguments=training_arguments,
+        attn_implementation=config.attn_implementation,
+        architecture=model_init_kwargs.pop(
+            "architecture",
+            None,
+        ),
+    )
+    training_arguments.model_init_kwargs = model_init_kwargs
+    try:
+        yield
+    finally:
+        training_arguments.model_init_kwargs = original_model_init_kwargs
 
 
 def patch_trl_trainer_runtime(
@@ -25,6 +55,34 @@ def patch_trl_trainer_runtime(
     ):
         applied_patches.append("SDPO ZeRO-3 PEFT EMA synchronization")
     return applied_patches
+
+
+class _AsyncGRPOModelLoader:
+    def __init__(
+        self,
+        training_arguments: TrainingArguments,
+        attn_implementation: str,
+        architecture: Optional[type],
+    ) -> None:
+        self.training_arguments = training_arguments
+        self.original_model_init_kwargs = training_arguments.model_init_kwargs
+        self.attn_implementation = attn_implementation
+        self.architecture = architecture
+
+    def from_pretrained(
+        self,
+        model_id: str,
+        **kwargs: Any,
+    ) -> PreTrainedModel:
+        from trl.trainer.utils import create_model_from_path
+
+        self.training_arguments.model_init_kwargs = self.original_model_init_kwargs
+        kwargs["attn_implementation"] = self.attn_implementation
+        return create_model_from_path(
+            model_id=model_id,
+            architecture=self.architecture,
+            **kwargs,
+        )
 
 
 def _patch_gkd_gradient_checkpointing(
