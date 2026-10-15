@@ -1,0 +1,3 @@
+_target_: src.trainers.DecisionTrainer
+candidate_markers: ${decision.candidate_markers}
+ece_num_bins: ${decision.ece_num_bins}
