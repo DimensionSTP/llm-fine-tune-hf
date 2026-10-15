@@ -44,7 +44,6 @@ class SetUp:
         config: DictConfig,
     ) -> None:
         self.config = config
-        self.data_type = self.config.data_type
         self.revision = self.config.revision
         validate_vision_patch_embedding_config(config=self.config)
         self.distributed_runtime_snapshot = build_distributed_runtime_snapshot(
@@ -98,7 +97,7 @@ class SetUp:
 
     def get_test_dataset(self) -> Union[Dataset, HFDataset]:
         test_dataset: Dataset = instantiate(
-            self.config.test_dataset[self.data_type],
+            self.config.test_dataset,
         )
         if self.config.mode == "test_decision":
             return test_dataset.to_hf_dataset()
@@ -576,14 +575,14 @@ class SetUp:
 
     def _get_train_dataset(self) -> HFDataset:
         train_dataset: _SFTDataset = instantiate(
-            self.config.dataset[self.data_type],
+            self.config.dataset,
             split=self.config.split.train,
         )
         return train_dataset.to_hf_dataset()
 
     def _get_val_dataset(self) -> HFDataset:
         val_dataset: _SFTDataset = instantiate(
-            self.config.dataset[self.data_type],
+            self.config.dataset,
             split=self.config.split.val,
         )
         return val_dataset.to_hf_dataset()
@@ -592,7 +591,7 @@ class SetUp:
         self,
     ) -> Dict[str, Optional[Union[HFDataset, HFIterableDataset]]]:
         dataset: _DatasetBuilder = instantiate(
-            self.config.dataset[self.data_type],
+            self.config.dataset,
         )
         return dataset()
 
