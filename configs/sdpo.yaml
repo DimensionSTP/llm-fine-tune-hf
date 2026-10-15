@@ -19,7 +19,7 @@ defaults:
   - vision_patch_embedding: base
   - peft_initialization: lora
   - run_metadata: allocation
-  - dataset@test_dataset: test
+  - dataset@test_dataset: test_generation
   - dense_to_moe: dense_to_moe
   - hydra: hydra
 
