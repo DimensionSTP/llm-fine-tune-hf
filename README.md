@@ -122,6 +122,12 @@ python main.py mode=test
 python main.py mode=test_large
 ```
 
+* end-to-end(candidate selection)
+
+```shell
+python main.py --config-name=decision.yaml mode=test_decision is_peft=False
+```
+
 * end-to-end(vLLM)
 
 ```shell
@@ -296,7 +302,7 @@ Selective checkpointing is opt-in and requires `gradient_checkpointing=True`. Th
 memory_preflight.enabled={true or false}
 ```
 
-`false` is the default and preserves the existing training path. When enabled, memory preflight runs a strict subprocess probe before the real training run, selects a max-shape batch, and starts the real run only if the probe succeeds. The probe does not allocate a second run or initialize experiment tracking; its `command.json`, `selected_indices.json`, and `result.json` evidence is stored under `${output_dir}/memory_preflight` and referenced relatively by the parent manifest. The current implementation supports direct single-process and single-node multi-GPU SFT, DPO, KTO, GKD, GOLD, GRPO, RLOO, SDPO, and A2PO preflight. vLLM preflight is limited to colocate mode; multi-node, vLLM server, and async GRPO topologies fail fast instead of running an approximate probe.
+`false` is the default and preserves the existing training path. When enabled, memory preflight runs a strict subprocess probe before the real training run, selects a max-shape batch, and starts the real run only if the probe succeeds. The probe does not allocate a second run or initialize experiment tracking; its `command.json`, `selected_indices.json`, and `result.json` evidence is stored under `${output_dir}/memory_preflight` and referenced relatively by the parent manifest. The current implementation supports direct single-process and single-node multi-GPU SFT, Decision, DPO, KTO, GKD, GOLD, GRPO, RLOO, SDPO, and A2PO preflight. vLLM preflight is limited to colocate mode; multi-node, vLLM server, and async GRPO topologies fail fast instead of running an approximate probe.
 
 * DataLoader runtime policy
 
@@ -329,6 +335,7 @@ python main.py --config-name={method}.yaml mode=train
 | Method | Config | Dataset contract | Notes |
 | --- | --- | --- | --- |
 | SFT | `sft.yaml` | SFT | `nll` (default) or `dft`, both using the fused LM head. |
+| Decision | `decision.yaml` | Prompt, options, and a hard label or soft distribution | Non-generative candidate selection: binary score-difference BCE or multi-candidate CE. |
 | DPO | `dpo.yaml` | DPO | Preference-pair training. |
 | KTO | `kto.yaml` | KTO | Unlikelihood-style preference training. |
 | GKD | `gkd.yaml` | GKD | Text-only distillation with config-driven on-policy ratio, divergence, sequence KD, and dropout policy. |
@@ -339,6 +346,18 @@ python main.py --config-name={method}.yaml mode=train
 | async GRPO | `async_grpo.yaml` | GRPO | Requires the trainer/vLLM split runtime. |
 | SDPO | `sdpo.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer. |
 | A2PO | `a2po.yaml` | GRPO-style reward | Uses the upstream TRL experimental trainer with ZeRO-2 because its reference-model construction does not support ZeRO-3. |
+
+Decision uses the existing causal LM/VLM output head and ordinary adapters; it adds no classifier head or vocabulary tokens. Train with `bash scripts/train/decision_train.sh` or `python main.py --config-name=decision.yaml mode=train`. The separate structural/conversational profiles in `configs/dataset/decision.yaml` and `configs/dataset/test_decision.yaml` share encoding and validation. Configure `decision.columns` for column names. Train/validation require a target; test targets are optional. A structural JSONL row is:
+
+```json
+{"id":"example-1","input":"The meeting is Thursday. Choose the correct answer.","task_type":"choice","options":[{"id":"first","text":"Wednesday"},{"id":"second","text":"Thursday"}],"target":{"label_id":"second"}}
+```
+
+For conversational input, replace `input` with the configured message-list column and end the prompt with a user message. Soft targets use `{"probabilities":{"first":0.2,"second":0.8}}` instead of `label_id`. `choice` returns the selected ID and candidate probabilities; `noul` requires `true`/`false` IDs and also returns `true_probability`; `score` requires finite, strictly increasing `score_levels` aligned with the options and also returns the selected level and expected score. Accuracy/ECE use hard labels only; NLL/Brier use both target types. These are relative candidate probabilities, not a guarantee of calibration or absolute correctness. This is supervised selection inspired by public Jev-style objectives, not a reproduction of private RLCD.
+
+Decision defaults to dynamic padding, LoRA, and the existing reentrant checkpointing/ZeRO-3 settings. `decision.padding_strategy=max_length` enables fixed padding; both left and right padding select the final real input position. Inputs exceeding `max_length` are rejected, not truncated. Configured `decision.candidate_markers` must tokenize to distinct, non-special single tokens and preserve the prompt boundary. VLM inputs use the existing image loading, resizing, train-only augmentation, and multimodal tensor collation; inline images and external `image`/`images` columns must not duplicate one another. Multi-file/multi-format loading and weighted training-source sampling retain the existing dataset flow: internal validation is sampled from that pool, while explicit validation files and test files are never resampled. Use explicit validation files to keep validation independent of resampling. Decision materializes vocabulary logits, so its memory requirements differ from fused SFT; use memory preflight for the actual configured shape. Same-run resume requires unchanged decision settings, token mapping, and chat template; method changes use adapter continuation in a new run.
+
+For non-generative inference use `python main.py --config-name=decision.yaml mode=test_decision is_peft=False` for a base model, or set `is_peft=True` and `peft_test.adapter_path` for a trained adapter. Escape `=` inside direct CLI path values as `\=`. Results use `${test_output_dir}/${dataset_name}.json` with the existing manifest companion; the default directory is `${connected_dir}/tests/${model_detail}/decision`. Generation parameters are not used or recorded as active for this mode.
 
 Distillation resolves its configured version/model-specific vLLM parameter-name profile for both full and PEFT training before the first student weight sync.
 
@@ -595,6 +614,7 @@ The table below records VLM training support for the pinned dependency stack. Co
 | Training method | VLM training | Image controls or limitation |
 | --- | --- | --- |
 | SFT | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `dataset_image` |
+| Decision | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `dataset_image`; image tensors are retained for candidate scoring. |
 | DPO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
 | KTO | Yes | `modality`, `max_pixels`, `do_resize`, `image_augmentation`, `decode_image_paths`, `dataset_image` |
 | GKD / GOLD | No | Text-only repository dataset contract |

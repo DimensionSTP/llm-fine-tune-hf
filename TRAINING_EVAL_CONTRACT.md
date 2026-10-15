@@ -15,6 +15,7 @@ Contract for `llm-fine-tune-hf` runtime interface, supported execution modes, an
 - `train`
 - `test`
 - `test_large`
+- `test_decision`
 - `test_vllm`
 - `test_vllm_multi_turn`
 
@@ -35,6 +36,7 @@ Credentials must be supplied through `.env` or environment variables, not Hydra 
 
 Training option contracts:
 
+- Decision reuses the causal LM/VLM and ordinary adapters with no new head or vocabulary. Structural and conversational datasets have separate classes/config targets; training and test profiles are separate. Two candidates use score-difference BCE, larger sets use masked CE, and gradient accumulation counts questions rather than tokens/candidates. Hard and soft targets remain distinct; accuracy/ECE exclude soft-only labels. Dynamic/fixed and left/right padding score the final real token, preserve image tensors, and reject overlong inputs without truncation. Same-run resume requires unchanged decision configuration, marker mapping, and template; cross-method training uses continuation in a new run.
 - Hub kernels are training-only opt-in through `model_loading.train.use_kernels`; a configured Hydra `transformers.KernelConfig` requires that flag, and the selected TrainingArguments must disable Liger. Custom mappings retain inference entries and gain separate training entries. The pinned upstream custom loader needs explicit accelerator placement; default mappings keep the existing model-loading placement.
 - SFT keeps `sft_label_mask.backend=repo` and reentrant checkpointing by default. Native masks require a fast selected encoder with generation-tag templates and preserve VLM image inputs; selective checkpointing requires non-reentrant mode and excludes PEFT with ZeRO-3.
 - Distillation tool calling reuses `agentic` with dataset prompts and synchronous tools only. Environment factories and rollout workers remain GRPO/Async GRPO settings.
@@ -78,6 +80,7 @@ Dependency notes:
 - MLflow `train`: upload available lifecycle metadata under the run's `metadata/` artifact path before finalizing `FINISHED`, `FAILED`, or `KILLED`; completed runs must preserve `run_manifest.json`, `resolved_config.yaml`, `training_args.json`, and `tracking_metadata.json`, while failed or interrupted runs preserve every file created before termination.
 - `test`, `test_large`, and `test_vllm`: the canonical result and companion manifest must be written under `${connected_dir}/tests/${model_detail}` as `${dataset_name}.json` and `${dataset_name}_manifest.json`.
 - `test_vllm_multi_turn`: the result and companion manifest must be written under the same model-detail namespace as `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json`.
+- `test_decision`: use `${connected_dir}/tests/${model_detail}/decision/${dataset_name}.json` and `${dataset_name}_manifest.json` by default. Return candidate probabilities and typed choice/Noul/Score values without generation; the manifest records `generation=null`. Test targets are optional, but supplied invalid targets must fail validation. Rank-padding duplicates are removed by dataset row index, not by user ID; intentional resampling repetitions remain distinct.
 - `test*`: companion manifests must store the full resolved config once and add the active data encoder, resolved test files, runtime backend, effective device map or tensor-parallel size, and actual generation parameters; sensitive credential values anywhere in the companion must be represented as `<redacted>`.
 - PEFT `test_vllm` and `test_vllm_multi_turn`: `peft_test.adapter_path` is the immutable source adapter, and adapter validation and configured vLLM parameter-name remapping must complete before vLLM model loading.
 - PEFT `test_vllm` and `test_vllm_multi_turn`: passthrough must use the source adapter without creating an artifact; non-passthrough must use a validated content-addressed adapter under `${test_output_dir}/vllm_lora_adapters/<profile>-<identity>/` without modifying the source.

@@ -64,6 +64,7 @@ python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/
 - `train`
 - `test`
 - `test_large`
+- `test_decision`
 - `test_vllm`
 - `test_vllm_multi_turn`
 
@@ -73,6 +74,7 @@ Run examples:
 python main.py mode=train
 python main.py mode=test
 python main.py mode=test_large
+python main.py --config-name=decision.yaml mode=test_decision is_peft=False
 python main.py mode=test_vllm
 python main.py mode=test_vllm_multi_turn
 ```
@@ -81,6 +83,8 @@ Training automatically allocates `run_id` values such as `run-0001` under the me
 
 Single-turn test modes write the canonical `${connected_dir}/tests/${model_detail}/${dataset_name}.json` result and `${dataset_name}_manifest.json` companion. Multi-turn vLLM testing writes `${dataset_name}_multi_turn.jsonl` and `${dataset_name}_multi_turn_manifest.json` in the same model-detail directory. Companion manifests store the full resolved config once and add only the resolved test files, active data encoder, runtime backend, effective device map or tensor-parallel size, and actual generation parameters.
 
+Decision uses HF forward scoring rather than generation. Its default namespace adds `/decision` below the model-detail directory, retains the canonical result/manifest names, and records `generation=null`. For a trained adapter, set `is_peft=True` and `peft_test.adapter_path`; the base-model example explicitly disables adapter loading.
+
 MLflow is the default tracking backend. Use `tracking=wandb` for W&B or `tracking=mlflow_server` for the remote endpoint in `MLFLOW_TRACKING_URI`. The server profile leaves artifact location selection to the server and uses `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD` when the endpoint requires MLflow basic authentication. Train runs write the selected backend and generated tracking UUID to `${output_dir}/tracking_metadata.json`; its location under the artifact run provides the mapping without copying config fields. Normal completion, ordinary exceptions, and `KeyboardInterrupt` or `SystemExit` end MLflow runs as `FINISHED`, `FAILED`, and `KILLED`, respectively.
 
 ## Script-based Execution
@@ -88,15 +92,19 @@ MLflow is the default tracking backend. Use `tracking=wandb` for W&B or `trackin
 - `bash scripts/preprocessing/preprocess.sh`
 - `bash scripts/preprocessing/preprocess_dataset.sh`
 - `bash scripts/train/train.sh`
+- `bash scripts/train/decision_train.sh`
 - `bash scripts/train/rloo_train.sh`
 - `bash scripts/train/async_grpo_train.sh`
 - `bash scripts/postprocessing/merge_lora.sh`
 - `bash scripts/test/test.sh`
 - `bash scripts/test/test_large.sh`
+- `bash scripts/test/decision_test.sh`
 - `bash scripts/test/test_vllm.sh`
 - `bash scripts/test/test_vllm_multi_turn.sh`
 
 For multi-node RLOO colocate training, configure the internal node address and GPU settings in `scripts/train/multinode/rloo_train_rank0.sh` and `rloo_train_rank1.sh`, then run the matching script on each node. No command-line experiment arguments are required. RLOO reuses the GRPO dataset contract and reward configuration; its default generation cadence follows `gradient_accumulation_steps`.
+
+Decision multi-node launchers are `scripts/train/multinode/decision_train_rank0.sh` and `decision_train_rank1.sh`; configure their internal topology variables before use. Decision train/test profiles independently select structural or conversational input. See the Decision schema in README; do not feed ordinary SFT response rows without options and a target. Training/validation require hard or soft targets, while inference accepts target-free rows.
 
 Async GRPO server flow:
 
@@ -136,6 +144,7 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - SFT label mask validation: `sft_label_mask.validation_enabled`, `sft_label_mask.validation_mode`
 - SFT loss: `sft_loss_type={nll or dft}`; default `nll` is standard NLL, while `dft` weights it by the detached correct-token probability. Both use TRL's fused, tiled LM head. DFT does not support DeepSpeed sequence parallelism (Ulysses/ALST).
 - SFT padding: `sft_padding_strategy=dynamic`; use `max_length` for fixed padding
+- Decision: `decision.padding_strategy`, `decision.candidate_markers`, `decision.answer_prefix`, `decision.option_template`, `decision.columns`, `decision.ece_num_bins`, and inference-only `decision.inference_temperature`. Two candidates use BCE on their score difference; larger sets use CE. LoRA and dynamic padding are defaults; there is no text generation, new head, or automatic probability calibration. Overlong inputs are rejected without truncation.
 - SFT Liger kernel: `training_arguments.use_liger_kernel=true` applies layer kernels with either loss; explicitly enabling `liger_kernel_config.fused_linear_cross_entropy` is unsupported.
 - Training strategy: `strategy=deepspeed`
 - Distributed launch: `distributed.enabled`, `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, `distributed.main_process_port`
