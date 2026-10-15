@@ -9,6 +9,7 @@ import pandas as pd
 
 import torch
 from torch import distributed as dist
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from transformers import set_seed
@@ -22,6 +23,7 @@ from ..datasets import (
     is_vlm_content_parts,
 )
 from ..rewards import prepare_colocated_vllm_models
+from ..trainers import predict_decisions, collect_decision_results
 from ..utils import *
 
 
@@ -585,6 +587,136 @@ def test_large(
             status="FAILED",
         )
         raise e
+
+
+@tracking_lifecycle
+def test_decision(
+    config: DictConfig,
+) -> None:
+    world_size = int(
+        os.environ.get(
+            "WORLD_SIZE",
+            1,
+        )
+    )
+    rank = int(
+        os.environ.get(
+            "RANK",
+            0,
+        )
+    )
+    local_rank = int(
+        os.environ.get(
+            "LOCAL_RANK",
+            0,
+        )
+    )
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu",
+        local_rank if torch.cuda.is_available() else None,
+    )
+    if world_size > 1:
+        torch.cuda.set_device(local_rank)
+        dist.init_process_group(backend="nccl")
+    try:
+        if rank == 0:
+            validate_notifications_config(config=config)
+            init_eval_tracking(config=config)
+        set_seed(config.seed)
+        setup = SetUp(config=config)
+        test_dataset = setup.get_test_dataset()
+        data_encoder = setup.get_data_encoder()
+        sampler = (
+            DistributedSampler(
+                test_dataset,
+                shuffle=False,
+            )
+            if world_size > 1
+            else None
+        )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=config.eval_batch_size,
+            sampler=sampler,
+            collate_fn=setup.get_data_collator(data_encoder=data_encoder),
+            **setup.get_dataloader_kwargs(),
+        )
+        model = setup.get_model()
+        vision_patch_embedding_result = None
+        if config.modality != "text":
+            vision_patch_embedding_plan = prepare_vision_patch_embedding_compatibility(
+                model=model,
+                config=config,
+                model_role="hf_primary_model",
+            )
+            vision_patch_embedding_result = apply_vision_patch_embedding_compatibility(
+                compatibility_plan=vision_patch_embedding_plan,
+            )
+        if not getattr(model, "hf_device_map", None):
+            model.to(device)
+        predictions = predict_decisions(
+            model=model,
+            test_loader=test_loader,
+            inference_temperature=config.decision.inference_temperature,
+        )
+        if world_size > 1:
+            gathered = [None] * world_size if rank == 0 else None
+            dist.gather_object(
+                predictions,
+                gathered,
+                dst=0,
+            )
+            if rank == 0:
+                predictions = [row for partition in gathered for row in partition]
+        if rank == 0:
+            collected = collect_decision_results(
+                predictions=predictions,
+                ece_num_bins=config.decision.ece_num_bins,
+            )
+            artifact = save_test_results_json(
+                results=collected["results"],
+                output_dir=config.test_output_dir,
+                output_name=config.dataset_name,
+            )
+            write_inference_manifest(
+                config=config,
+                result_path=artifact["result_path"],
+                sampling_params=None,
+                tp_size=None,
+                vision_patch_embedding_result=vision_patch_embedding_result,
+                vllm_lora_runtime=None,
+            )
+            log_tracking_table(
+                config=config,
+                key="test_results",
+                dataframe=artifact["dataframe"],
+            )
+            if collected["metrics"]:
+                log_tracking_table(
+                    config=config,
+                    key="test_metrics",
+                    dataframe=pd.DataFrame([collected["metrics"]]),
+                )
+            send_notification_preserving_error(
+                config=config,
+                title="Testing Complete",
+                text=f"Decision evaluation on {config.dataset_name} has finished.",
+                level="INFO",
+                status="FINISHED",
+            )
+    except Exception as error:
+        if rank == 0:
+            send_notification_preserving_error(
+                config=config,
+                title="Testing Error",
+                text=f"Decision evaluation failed: {error}",
+                level="ERROR",
+                status="FAILED",
+            )
+        raise
+    finally:
+        if world_size > 1:
+            dist.destroy_process_group()
 
 
 @tracking_lifecycle

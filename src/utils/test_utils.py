@@ -417,7 +417,9 @@ def _build_inference_runtime_section(
 def _build_inference_generation_section(
     config: DictConfig,
     sampling_params: Optional[SamplingParams],
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
+    if config.mode == "test_decision":
+        return None
     if sampling_params is None:
         configured_generation = OmegaConf.to_container(
             config.generation_config,

@@ -60,6 +60,8 @@ def main(
         return test(config)
     elif config.mode == "test_large":
         return test_large(config)
+    elif config.mode == "test_decision":
+        return test_decision(config)
     elif config.mode == "test_vllm":
         return test_vllm(config)
     elif config.mode == "test_vllm_multi_turn":
