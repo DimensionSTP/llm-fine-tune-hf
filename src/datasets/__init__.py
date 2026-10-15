@@ -1,5 +1,7 @@
 from .sft_dataset import StructuralDataset as SFTStructuralDataset
 from .sft_dataset import ConversationalDataset as SFTConversationalDataset
+from .decision_dataset import StructuralDataset as DecisionStructuralDataset
+from .decision_dataset import ConversationalDataset as DecisionConversationalDataset
 from .dpo_dataset import StructuralDataset as DPOStructuralDataset
 from .dpo_dataset import ConversationalDataset as DPOConversationalDataset
 from .kto_dataset import StructuralDataset as KTOStructuralDataset
@@ -14,6 +16,7 @@ from .grpo_dataset import StructuralDataset as GRPOStructuralDataset
 from .grpo_dataset import ConversationalDataset as GRPOConversationalDataset
 from .test_dataset import StructuralDataset as TestStructuralDataset
 from .test_dataset import ConversationalDataset as TestConversationalDataset
+from .decision_dataset import DecisionCollator, build_decision_candidate_token_ids
 from .image_augmentation import build_image_augmenter
 from .image_io import (
     normalize_image_source,
@@ -46,6 +49,8 @@ from .dataset_loading import (
 __all__ = [
     "SFTStructuralDataset",
     "SFTConversationalDataset",
+    "DecisionStructuralDataset",
+    "DecisionConversationalDataset",
     "DPOStructuralDataset",
     "DPOConversationalDataset",
     "KTOStructuralDataset",
@@ -58,6 +63,8 @@ __all__ = [
     "GRPOConversationalDataset",
     "TestStructuralDataset",
     "TestConversationalDataset",
+    "DecisionCollator",
+    "build_decision_candidate_token_ids",
     "build_image_augmenter",
     "normalize_image_source",
     "normalize_image_payloads",
