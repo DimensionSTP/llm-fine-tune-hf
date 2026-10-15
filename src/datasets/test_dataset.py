@@ -1,7 +1,9 @@
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Union, Optional, Any
 
 import io
 import math
+
+from omegaconf import DictConfig, ListConfig
 
 from PIL import Image
 
@@ -40,10 +42,10 @@ class StructuralDataset(Dataset):
         max_length: int,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[List[str]],
-        dataset_files: Optional[List[Dict[str, Any]]],
+        dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_dataset_file_name_mismatch: bool,
-        dataset_image: Optional[Dict[str, Any]],
+        dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -257,7 +259,7 @@ class StructuralDataset(Dataset):
 
     def _init_image_io(
         self,
-        dataset_image: Optional[Dict[str, Any]],
+        dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
     ) -> None:
         settings = build_image_io_settings(
             dataset_image=dataset_image,
@@ -373,10 +375,10 @@ class ConversationalDataset(StructuralDataset):
         max_length: int,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[List[str]],
-        dataset_files: Optional[List[Dict[str, Any]]],
+        dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_dataset_file_name_mismatch: bool,
-        dataset_image: Optional[Dict[str, Any]],
+        dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir

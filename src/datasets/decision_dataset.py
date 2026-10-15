@@ -1,11 +1,14 @@
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Union, Optional, Callable, Any
 
-import copy
 import importlib
-import math
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
+
+import copy
+import math
+
+from omegaconf import DictConfig, ListConfig
 
 import torch
 from torch.utils.data import Dataset
@@ -56,23 +59,23 @@ class StructuralDataset(Dataset):
         max_length: int,
         padding_strategy: str,
         pad_to_multiple_of: Optional[int],
-        candidate_markers: List[str],
+        candidate_markers: Union[List[str], ListConfig],
         answer_prefix: str,
         option_template: str,
         max_pixels: Optional[int],
         do_resize: bool,
-        image_augmentation: Dict[str, Any],
-        dataset_image: Optional[Dict[str, Any]],
+        image_augmentation: Union[Dict[str, Any], DictConfig],
+        dataset_image: Optional[Union[Dict[str, Any], DictConfig]],
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[List[str]],
-        dataset_files: Optional[List[Dict[str, Any]]],
+        dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
-        val_dataset_file_paths: Optional[List[str]],
-        val_dataset_files: Optional[List[Dict[str, Any]]],
+        val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_val_dataset_file_name_mismatch: bool,
-        dataset_resampling: Dict[str, Any],
+        dataset_resampling: DictConfig,
     ) -> None:
         self.split = split
         self.data_column_name = data_column_name

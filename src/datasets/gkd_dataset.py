@@ -1,9 +1,11 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Union, Optional, Any
 
 import importlib
 
 datasets = importlib.import_module("datasets")
 HFDataset = datasets.Dataset
+
+from omegaconf import DictConfig, ListConfig
 
 from ..helpers.dataset_paths import (
     resolve_dataset_file_specs,
@@ -32,14 +34,14 @@ class StructuralDataset:
         assistant_column_name: str,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[List[str]],
-        dataset_files: Optional[List[Dict[str, Any]]],
+        dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
-        val_dataset_file_paths: Optional[List[str]],
-        val_dataset_files: Optional[List[Dict[str, Any]]],
+        val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_val_dataset_file_name_mismatch: bool,
-        dataset_resampling: Dict[str, Any],
+        dataset_resampling: DictConfig,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
@@ -197,14 +199,14 @@ class ConversationalDataset:
         conversation_column_name: str,
         dataset_subdir: Optional[str],
         dataset_file_path: Optional[str],
-        dataset_file_paths: Optional[List[str]],
-        dataset_files: Optional[List[Dict[str, Any]]],
+        dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_dataset_file_name_mismatch: bool,
         val_dataset_file_path: Optional[str],
-        val_dataset_file_paths: Optional[List[str]],
-        val_dataset_files: Optional[List[Dict[str, Any]]],
+        val_dataset_file_paths: Optional[Union[List[str], ListConfig]],
+        val_dataset_files: Optional[Union[List[Dict[str, Any]], ListConfig]],
         allow_val_dataset_file_name_mismatch: bool,
-        dataset_resampling: Dict[str, Any],
+        dataset_resampling: DictConfig,
     ) -> None:
         self.data_path = data_path
         self.dataset_subdir = dataset_subdir
