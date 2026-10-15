@@ -30,7 +30,7 @@ from .image_io import (
 from .image_augmentation import build_image_augmenter
 
 
-class StructuralDataset(Dataset):
+class DecisionDataset(Dataset):
     def __init__(
         self,
         data_path: str,
@@ -40,7 +40,9 @@ class StructuralDataset(Dataset):
         seed: int,
         dataset_name: str,
         dataset_format: str,
+        data_type: str,
         data_column_name: str,
+        conversation_column_name: str,
         role_column_name: str,
         content_column_name: str,
         options_column_name: str,
@@ -77,8 +79,12 @@ class StructuralDataset(Dataset):
         allow_val_dataset_file_name_mismatch: bool,
         dataset_resampling: DictConfig,
     ) -> None:
+        if data_type not in {"structural", "conversational"}:
+            raise ValueError("data_type must be structural or conversational.")
+        self.data_type = data_type
         self.split = split
         self.data_column_name = data_column_name
+        self.conversation_column_name = conversation_column_name
         self.role_column_name = role_column_name
         self.content_column_name = content_column_name
         self.options_column_name = options_column_name
@@ -416,6 +422,28 @@ class StructuralDataset(Dataset):
         self,
         row: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
+        if self.data_type == "conversational":
+            messages = copy.deepcopy(row[self.conversation_column_name])
+            if not isinstance(messages, list) or not messages:
+                raise ValueError(
+                    "Decision conversational input must be a message list."
+                )
+            if any(
+                not isinstance(message, dict)
+                or message.get(self.role_column_name)
+                not in {"system", "user", "assistant"}
+                or not isinstance(message.get(self.content_column_name), (str, list))
+                or not message[self.content_column_name]
+                for message in messages
+            ):
+                raise ValueError(
+                    "Decision messages require valid roles and non-empty content."
+                )
+            if messages[-1][self.role_column_name] != "user":
+                raise ValueError(
+                    "Decision prompt must end with a user message, not a target."
+                )
+            return messages
         content = row[self.data_column_name]
         if (
             not isinstance(content, (str, list))
@@ -519,31 +547,6 @@ class StructuralDataset(Dataset):
                 *content,
             ]
         return images
-
-
-class ConversationalDataset(StructuralDataset):
-    def _build_messages(
-        self,
-        row: Dict[str, Any],
-    ) -> List[Dict[str, Any]]:
-        messages = copy.deepcopy(row[self.data_column_name])
-        if not isinstance(messages, list) or not messages:
-            raise ValueError("Decision conversational input must be a message list.")
-        if any(
-            not isinstance(message, dict)
-            or message.get(self.role_column_name) not in {"system", "user", "assistant"}
-            or not isinstance(message.get(self.content_column_name), (str, list))
-            or not message[self.content_column_name]
-            for message in messages
-        ):
-            raise ValueError(
-                "Decision messages require valid roles and non-empty content."
-            )
-        if messages[-1][self.role_column_name] != "user":
-            raise ValueError(
-                "Decision prompt must end with a user message, not a target."
-            )
-        return messages
 
 
 class DecisionCollator:
