@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Set, Optional, Any
+from typing import Dict, List, Tuple, Set, Union, Optional, Any
 from difflib import SequenceMatcher
 import json
 import math
@@ -56,7 +56,7 @@ class KVReward(BaseReward):
         empty_value_mismatch_cap: float,
         numeric_punctuation_mismatch_cap: float,
         score_threshold: float,
-        allowed_sibling_keys: List[str],
+        allowed_sibling_keys: Union[List[str], Tuple[str, ...], Set[str], ListConfig],
     ) -> None:
         BaseReward.__init__(
             self,
@@ -303,7 +303,7 @@ class KVReward(BaseReward):
 
     @staticmethod
     def _normalize_allowed_sibling_keys(
-        allowed_sibling_keys: List[str],
+        allowed_sibling_keys: Union[List[str], Tuple[str, ...], Set[str], ListConfig],
     ) -> Set[str]:
         if isinstance(allowed_sibling_keys, (str, bytes)):
             raise ValueError(

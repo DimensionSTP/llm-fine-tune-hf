@@ -1,8 +1,8 @@
-from typing import Dict, List, Tuple, Set, Optional, Any
+from typing import Dict, List, Tuple, Set, Union, Optional, Any
 import json
 import re
 
-from omegaconf import ListConfig
+from omegaconf import DictConfig, ListConfig
 
 from .base import BaseReward
 
@@ -35,8 +35,8 @@ class GroundingBBoxReward(BaseReward):
         positive_duplicate_iou_threshold: float,
         min_reward: float,
         max_reward: float,
-        schema_keys: Optional[Dict[str, List[str]]],
-        status_values: Optional[Dict[str, List[str]]],
+        schema_keys: Optional[Union[Dict[str, List[str]], DictConfig]],
+        status_values: Optional[Union[Dict[str, List[str]], DictConfig]],
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -281,7 +281,7 @@ class GroundingBBoxReward(BaseReward):
 
     def _normalize_schema_keys(
         self,
-        schema_keys: Optional[Dict[str, List[str]]],
+        schema_keys: Optional[Union[Dict[str, List[str]], DictConfig]],
     ) -> Dict[str, List[str]]:
         config = schema_keys or self._default_schema_keys()
         required_keys = self._default_schema_keys().keys()
@@ -300,7 +300,7 @@ class GroundingBBoxReward(BaseReward):
 
     def _normalize_status_values(
         self,
-        status_values: Optional[Dict[str, List[str]]],
+        status_values: Optional[Union[Dict[str, List[str]], DictConfig]],
     ) -> Dict[str, List[str]]:
         config = status_values or self._default_status_values()
         normalized: Dict[str, List[str]] = {}
@@ -812,7 +812,7 @@ class GroundingSelectionReward(BaseReward):
         hard_target_weight: float,
         min_reward: float,
         max_reward: float,
-        schema_keys: Optional[Dict[str, List[str]]],
+        schema_keys: Optional[Union[Dict[str, List[str]], DictConfig]],
     ) -> None:
         super().__init__(
             is_answer_tag=is_answer_tag,
@@ -1439,7 +1439,7 @@ class GroundingSelectionReward(BaseReward):
 
     def _normalize_schema_keys(
         self,
-        schema_keys: Optional[Dict[str, List[str]]],
+        schema_keys: Optional[Union[Dict[str, List[str]], DictConfig]],
     ) -> Dict[str, List[str]]:
         config = schema_keys or self._default_schema_keys()
         required_keys = self._default_schema_keys().keys()
