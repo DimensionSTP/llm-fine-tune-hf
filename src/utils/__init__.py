@@ -72,7 +72,10 @@ from .test_utils import (
     build_sampling_params,
     load_test_dataframe,
 )
-from .trl_runtime import patch_trl_trainer_runtime
+from .trl_runtime import (
+    prepare_trl_trainer_initialization,
+    patch_trl_trainer_runtime,
+)
 from .vllm_sync import (
     prepare_vllm_server_accelerator_device,
     resolve_vllm_lora_name_remap_config,
@@ -148,6 +151,7 @@ __all__ = [
     "build_vllm",
     "build_sampling_params",
     "load_test_dataframe",
+    "prepare_trl_trainer_initialization",
     "patch_trl_trainer_runtime",
     "prepare_vllm_server_accelerator_device",
     "resolve_vllm_lora_name_remap_config",
