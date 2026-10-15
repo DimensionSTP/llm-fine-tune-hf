@@ -1,15 +1,17 @@
-from typing import Dict, List, Tuple, Optional, Protocol, Any
+from typing import Dict, List, Tuple, Union, Optional, Protocol, Any
 import os
 import math
 import random
 from dataclasses import dataclass
 from io import BytesIO
 
+from omegaconf import DictConfig
+
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 
 def build_image_augmenter(
-    config: Dict[str, Any],
+    config: Union[Dict[str, Any], DictConfig],
     seed: int,
 ) -> Optional["_ImageAugmenterProtocol"]:
     _validate_required_keys(
@@ -76,18 +78,18 @@ class _AlbumentationsImageAugmentationConfig:
     enabled: bool
     seed_offset: int
     probability: float
-    resize: Dict[str, Any]
-    rotate: Dict[str, Any]
-    blur: Dict[str, Any]
-    noise: Dict[str, Any]
-    seasoning: Dict[str, Any]
-    coarse_dropout: Dict[str, Any]
-    scan: Dict[str, Any]
-    color: Dict[str, Any]
-    hsv: Dict[str, Any]
-    rgb_shift: Dict[str, Any]
-    jpeg: Dict[str, Any]
-    weather: Dict[str, Any]
+    resize: Union[Dict[str, Any], DictConfig]
+    rotate: Union[Dict[str, Any], DictConfig]
+    blur: Union[Dict[str, Any], DictConfig]
+    noise: Union[Dict[str, Any], DictConfig]
+    seasoning: Union[Dict[str, Any], DictConfig]
+    coarse_dropout: Union[Dict[str, Any], DictConfig]
+    scan: Union[Dict[str, Any], DictConfig]
+    color: Union[Dict[str, Any], DictConfig]
+    hsv: Union[Dict[str, Any], DictConfig]
+    rgb_shift: Union[Dict[str, Any], DictConfig]
+    jpeg: Union[Dict[str, Any], DictConfig]
+    weather: Union[Dict[str, Any], DictConfig]
 
 
 class _PILImageAugmenter:
@@ -1151,7 +1153,7 @@ class _AlbumentationsImageAugmenter:
 
 
 def _build_pil_config(
-    config: Dict[str, Any],
+    config: Union[Dict[str, Any], DictConfig],
 ) -> _PILImageAugmentationConfig:
     _validate_required_keys(
         config=config,
@@ -1213,7 +1215,7 @@ def _build_pil_config(
 
 
 def _build_albumentations_config(
-    config: Dict[str, Any],
+    config: Union[Dict[str, Any], DictConfig],
 ) -> _AlbumentationsImageAugmentationConfig:
     _validate_required_keys(
         config=config,
@@ -1263,7 +1265,7 @@ def _build_albumentations_config(
 
 
 def _validate_albumentations_sections(
-    config: Dict[str, Any],
+    config: Union[Dict[str, Any], DictConfig],
 ) -> None:
     required_by_section = {
         "resize": ["probability", "scale_percent_range"],
@@ -1319,7 +1321,7 @@ def _validate_albumentations_sections(
 
 
 def _validate_required_keys(
-    config: Dict[str, Any],
+    config: Union[Dict[str, Any], DictConfig],
     keys: List[str],
     prefix: str,
 ) -> None:
