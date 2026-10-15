@@ -221,6 +221,17 @@ def _prepare_resume_artifact_config(
     output_dir = _get_resume_output_dir(
         resume_from_checkpoint=resume_from_checkpoint,
     )
+    if config.fine_tune_method == "decision":
+        previous_config = OmegaConf.load(
+            os.path.join(
+                output_dir,
+                "resolved_config.yaml",
+            ),
+        )
+        if previous_config.decision != config.decision:
+            raise ValueError(
+                "Decision resume requires the saved decision configuration."
+            )
     config.output_base_dir = os.path.dirname(output_dir)
     config.run_id = os.path.basename(output_dir)
     config.output_dir = output_dir
