@@ -29,7 +29,7 @@ fine_tune_method: distillation
 
 seed: 2026
 
-data_type: structural
+data_type: conversational
 
 split:
   train: train

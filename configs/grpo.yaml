@@ -33,7 +33,7 @@ fine_tune_method: grpo
 
 seed: 2026
 
-data_type: structural
+data_type: conversational
 
 split:
   train: train
