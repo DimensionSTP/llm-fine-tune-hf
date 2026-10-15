@@ -102,9 +102,11 @@ MLflow is the default tracking backend. Use `tracking=wandb` for W&B or `trackin
 - `bash scripts/test/test_vllm.sh`
 - `bash scripts/test/test_vllm_multi_turn.sh`
 
+All methods default to `data_type=conversational`; select `data_type=structural` explicitly for separate input/target columns. Each dataset config has one target and accepts `data_type` as an argument; override fields directly through `dataset.<field>` or `test_dataset.<field>`.
+
 For multi-node RLOO colocate training, configure the internal node address and GPU settings in `scripts/train/multinode/rloo_train_rank0.sh` and `rloo_train_rank1.sh`, then run the matching script on each node. No command-line experiment arguments are required. RLOO reuses the GRPO dataset contract and reward configuration; its default generation cadence follows `gradient_accumulation_steps`.
 
-Decision multi-node launchers are `scripts/train/multinode/decision_train_rank0.sh` and `decision_train_rank1.sh`; configure their internal topology variables before use. Decision train/test profiles independently select structural or conversational input. See the Decision schema in README; do not feed ordinary SFT response rows without options and a target. Training/validation require hard or soft targets, while inference accepts target-free rows.
+Decision multi-node launchers are `scripts/train/multinode/decision_train_rank0.sh` and `decision_train_rank1.sh`; configure their internal topology variables before use. Decision train/test profiles share `DecisionDataset` but remain separate; configure column names through `decision.columns`. See the Decision schema in README; do not feed ordinary SFT response rows without options and a target. Training/validation require hard or soft targets, while inference accepts target-free rows.
 
 Async GRPO server flow:
 
