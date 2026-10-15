@@ -66,6 +66,19 @@ class DecisionTrainer(Trainer):
                 )
         return super().train(**kwargs)
 
+    def _prepare_inputs(
+        self,
+        inputs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        prepared = super()._prepare_inputs(
+            {key: value for key, value in inputs.items() if key != "labels"},
+        )
+        prepared["labels"] = inputs["labels"].to(
+            device=self.args.device,
+            dtype=torch.float32,
+        )
+        return prepared
+
     def compute_loss(
         self,
         model: torch.nn.Module,
