@@ -2,6 +2,27 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.11.0] - 2026-10-16
+
+- Update the validated CUDA 12.9 training stack to PyTorch 2.13.0, Transformers 5.19.0, TRL 1.15.0, vLLM 0.31.0+cu129, DeepSpeed 0.19.7, Liger 0.8.4, FlashInfer 0.7.0.post1, Accelerate 1.15.0, Datasets 5.1.0, and PEFT 0.21.2.
+- Update MLflow to 3.17.1 and NLTK to 3.10.3, preserve NumPy 2.3.5 and Pandas 3.0.1, and document Python 3.11 or newer with Python 3.12 as the validated installation target.
+- Read base project dependencies directly from `requirements.txt` to eliminate duplicate version declarations in package metadata.
+- Include the validated PyPI FlashAttention 2.8.3.post2 build in base dependencies, remove its separate GPU extra, and update causal-conv1d to 1.7.0 while keeping the selected Torch and CUDA versions unchanged.
+- Install Torch and build tools before CUDA extensions, select the active CUDA compiler and headers, and align guidance with architecture-specific FlashInfer providers, Torch-dependent extension rebuilds, and the explicit Transformers override outside vLLM's declared upper bound; this override does not imply a clean dependency check or universal runtime compatibility.
+- Preserve configured vLLM parameter-name remapping across the updated TRL weight-sync APIs and package-version selectors.
+- Replace the legacy SFT `chunked_nll` option with upstream `nll` and `dft`, both using the fused, tiled language-model head; retain assistant-only masking and Liger layer kernels while documenting output-head adapter and fused cross-entropy restrictions.
+- Add opt-in native SFT assistant masks from generation-tag chat templates while retaining repository masks by default and preserving expanded VLM image-token alignment and image tensors.
+- Add opt-in selective SFT activation checkpointing with explicit non-reentrant and PEFT/ZeRO-3 constraints, without changing the default reentrant checkpointing policy.
+- Add config-driven training Hub kernel selection for supported Hugging Face models, preserving separate inference mappings and explicit Liger compatibility requirements.
+- Extend Distillation with configured synchronous tool calling and preserve its prompt-only text and multimodal dataset contracts.
+- Log enabled GRPO, RLOO, and Distillation completions through the selected tracking backend, preserving structured messages, supported reward and advantage fields, multimodal artifacts, and configured-secret redaction.
+- Add stable RLOO training with shared GRPO-style datasets, rewards, vLLM synchronization, PEFT initialization, run metadata, strict memory preflight, and single-node and multi-node launchers.
+- Add non-generative Decision training and inference with the existing causal LM/VLM head, binary score-difference BCE or multi-candidate cross-entropy, hard or soft targets, candidate probabilities, typed selection and score outputs, and evaluation metrics.
+- Integrate Decision with LoRA, image-aware dynamic or fixed padding, strict memory preflight, checkpoint compatibility checks, distributed question-level loss scaling, FP32 target preservation, and evaluation sharding that handles unequal final batches.
+- Unify structural and conversational inputs within each dataset class, make conversational input the default across methods, flatten dataset config overrides, and separate generative and Decision test profiles by their input and output contracts.
+- Honor configured Async GRPO policy attention during model initialization, default to FA2, support optional FA3 on compatible hardware, and preserve serializable model initialization arguments; document Blackwell FA2 selection and Hub cache/network requirements separately from the vLLM server backend.
+- Document the pinned SDPO asymmetric-mask distributed deadlock limitation and host-specific vLLM runner, sampler, Triton compiler, and native Conv3d compatibility conditions without changing product defaults or claiming those upstream failures are repaired.
+
 ## [v2.10.8] - 2026-08-28
 
 - Add a dedicated MLflow operations guide covering local and remote tracking profiles, environment and authentication setup, training and evaluation launches, preflight checks, and run identity.
