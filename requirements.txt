@@ -6,6 +6,7 @@ causal-conv1d==1.7.0
 datasets==5.1.0
 deepspeed==0.19.7
 faiss-cpu==1.13.2
+flash-attn==2.8.3.post2
 flash-linear-attention==0.5.2
 flashinfer-cubin @ https://github.com/flashinfer-ai/flashinfer/releases/download/v0.7.0.post1/flashinfer_cubin-0.7.0.post1-py3-none-any.whl#sha256=f5b5fbf6e914b358219b845ed3ee586ffc1ae3c9768c8b135115ac14afbceed3
 flashinfer-jit-cache @ https://github.com/flashinfer-ai/flashinfer/releases/download/v0.7.0.post1/flashinfer_jit_cache-0.7.0.post1%2Bcu129-cp39-abi3-manylinux_2_28_x86_64.whl#sha256=314d97ea8c3d288d0afce09e9f3dc823a83d4a219c02b85097de71ee143cf0fb
@@ -37,6 +38,3 @@ transformers==5.19.0
 trl==1.15.0
 vllm @ https://github.com/vllm-project/vllm/releases/download/v0.31.0/vllm-0.31.0%2Bcu129-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=5176ab746f4e736c4a354a11d0620abf0a941de287cad937ac34039293ca6f5f
 wandb==0.25.1
-
-# Optional GPU dependency (install separately due to CUDA/toolchain constraints):
-# python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
