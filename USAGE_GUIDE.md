@@ -10,10 +10,14 @@ Practical runbook for training and inference flows in `llm-fine-tune-hf`.
 conda install -c nvidia "cuda-nvcc=12.9" -y
 conda install -c defaults "libcurand=10.3.10.19" "libcurand-dev=10.3.10.19" -y
 python -m pip install uv==0.10.12
-uv pip install "setuptools>=68" wheel
+uv pip install --torch-backend=cu129 "torch==2.13.0" "setuptools>=68" wheel packaging psutil ninja
+CUDA_HOME="${CONDA_PREFIX}" \
+CUDACXX="${CONDA_PREFIX}/bin/nvcc" \
+CPATH="${CONDA_PREFIX}/targets/x86_64-linux/include${CPATH:+:${CPATH}}" \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     -r requirements.txt
 ```
@@ -26,30 +30,28 @@ or
 conda install -c nvidia "cuda-nvcc=12.9" -y
 conda install -c defaults "libcurand=10.3.10.19" "libcurand-dev=10.3.10.19" -y
 python -m pip install uv==0.10.12
-uv pip install "setuptools>=68" wheel
+uv pip install --torch-backend=cu129 "torch==2.13.0" "setuptools>=68" wheel packaging psutil ninja
+CUDA_HOME="${CONDA_PREFIX}" \
+CUDACXX="${CONDA_PREFIX}/bin/nvcc" \
+CPATH="${CONDA_PREFIX}/targets/x86_64-linux/include${CPATH:+:${CPATH}}" \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     .
+CUDA_HOME="${CONDA_PREFIX}" \
+CUDACXX="${CONDA_PREFIX}/bin/nvcc" \
+CPATH="${CONDA_PREFIX}/targets/x86_64-linux/include${CPATH:+:${CPATH}}" \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
+    --extra-index-url https://flashinfer.ai/whl/cu129 \
     --no-build-isolation \
     -e .
 ```
 
-Optional GPU dependency (`flash-attn`):
-
-```bash
-uv pip install \
-    --override requirements-overrides.txt \
-    --torch-backend=cu129 \
-    --no-build-isolation \
-    ".[gpu]"
-# or
-python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
-```
+Both installation paths include FlashAttention 2 and causal-conv1d from the same `requirements.txt` declarations; `pyproject.toml` reads that file dynamically. Install Torch and the build tools first, then install the full requirements or project with the active Conda CUDA compiler and headers. This build-time ordering is separate from runtime compatibility and does not require an optional GPU extra or separate FA2 installation. See [CUDA extension builds](README.md#cuda-extension-builds) for compiler requirements; rebuild both extensions after changing Torch.
 
 ## Required Environment Variables
 
@@ -167,5 +169,5 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 
 1. Mode command resolves Hydra config without errors.
 2. Output artifacts are created for selected mode.
-3. If using `flash-attn`, installation succeeds in current CUDA/toolchain environment.
+3. FlashAttention 2 and causal-conv1d install against the selected Torch and CUDA toolchain.
 4. Changes are reflected in changelog and release notes before release.

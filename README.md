@@ -19,11 +19,14 @@ conda activate myenv
 conda install -c nvidia "cuda-nvcc=12.9" -y
 conda install -c defaults "libcurand=10.3.10.19" "libcurand-dev=10.3.10.19" -y
 
-# install build requirements
+# install Torch and build requirements before CUDA extensions
 python -m pip install uv==0.10.12
-uv pip install "setuptools>=68" wheel
+uv pip install --torch-backend=cu129 "torch==2.13.0" "setuptools>=68" wheel packaging psutil ninja
 
 # install requirements
+CUDA_HOME="${CONDA_PREFIX}" \
+CUDACXX="${CONDA_PREFIX}/bin/nvcc" \
+CPATH="${CONDA_PREFIX}/targets/x86_64-linux/include${CPATH:+:${CPATH}}" \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
@@ -39,11 +42,14 @@ The CUDA 12.9 compiler and pinned FlashInfer CUDA 12.9 JIT cache keep Blackwell 
 ### Quick setup (pyproject.toml)
 
 ```bash
-# install build requirements
+# install Torch and build requirements before CUDA extensions
 python -m pip install uv==0.10.12
-uv pip install "setuptools>=68" wheel
+uv pip install --torch-backend=cu129 "torch==2.13.0" "setuptools>=68" wheel packaging psutil ninja
 
 # install project dependencies from pyproject.toml
+CUDA_HOME="${CONDA_PREFIX}" \
+CUDACXX="${CONDA_PREFIX}/bin/nvcc" \
+CPATH="${CONDA_PREFIX}/targets/x86_64-linux/include${CPATH:+:${CPATH}}" \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
@@ -52,6 +58,9 @@ uv pip install \
     .
 
 # [OPTIONAL] editable install for development
+CUDA_HOME="${CONDA_PREFIX}" \
+CUDACXX="${CONDA_PREFIX}/bin/nvcc" \
+CPATH="${CONDA_PREFIX}/targets/x86_64-linux/include${CPATH:+:${CPATH}}" \
 uv pip install \
     --override requirements-overrides.txt \
     --torch-backend=cu129 \
@@ -60,20 +69,11 @@ uv pip install \
     -e .
 ```
 
-### Optional GPU dependency (flash-attn)
+Use the same Conda CUDA toolkit preparation as above. Project installation reads its dependencies directly from `requirements.txt`; there is no separate dependency list in `pyproject.toml`.
 
-```bash
-# Option A: install optional GPU extra from pyproject
-uv pip install \
-    --override requirements-overrides.txt \
-    --torch-backend=cu129 \
-    --extra-index-url https://flashinfer.ai/whl/cu129 \
-    --no-build-isolation \
-    ".[gpu]"
+### CUDA extension builds
 
-# Option B: install directly from pinned Git commit
-python -m pip install --no-build-isolation "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git@060c9188beec3a8b62b33a3bfa6d5d2d44975fab"
-```
+FlashAttention 2 and causal-conv1d are included in the base requirements and installed by either setup path above. Install Torch and the build tools first because both extensions import Torch during installation preparation; listing Torch in the same requirements file does not establish that build-time order. The commands select the active Conda CUDA 12.9 compiler and headers, preserve existing include paths, and use `--no-build-isolation` to build against the installed Torch. A compatible C++ compiler is also required when no matching prebuilt extension is available. No separate FA2 install or `gpu` extra is needed.
 
 ### Async GRPO attention kernel
 
@@ -85,7 +85,7 @@ For Hub-backed attention implementations, first startup requires Hub access and 
 
 ### Execution contract
 
-Rebuild Flash Attention and causal-conv1d after changing Torch; an extension built against the previous Torch ABI must not be reused. For Conda CUDA source builds, expose the toolkit headers through `CPATH=${CONDA_PREFIX}/targets/x86_64-linux/include` when the compiler cannot find `cuda_runtime.h`. Keep existing include paths when already configured. Flash Attention remains pinned to the source above; HF Flash Attention and vLLM's bundled attention kernels are separate implementations.
+Rebuild Flash Attention and causal-conv1d after changing Torch; an extension built against the previous Torch ABI must not be reused. Both use the PyPI versions pinned in `requirements.txt`; HF Flash Attention and vLLM's bundled attention kernels are separate implementations.
 
 For a host where the default vLLM V2 runner or FlashInfer sampler fails independently of the training pipeline, the supported compatibility selectors are `VLLM_USE_V2_MODEL_RUNNER=0` and `VLLM_USE_FLASHINFER_SAMPLER=0`. Set only the required selectors through the existing `.env` bootstrap so managed children inherit them. These are host-specific compatibility conditions, not global defaults or proof that the original kernel failure is fixed.
 

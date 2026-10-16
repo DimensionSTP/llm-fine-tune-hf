@@ -52,10 +52,8 @@ Dependency notes:
 - Torch changes require rebuilding Flash Attention and causal-conv1d against the active Torch ABI; Conda CUDA builds may require the toolkit header path described in README.
 - Async GRPO selects the HF policy model's Flash Attention through `attn_implementation`, independently of the vLLM server backend. Use `flash_attention_2` on Blackwell GPUs; this is also the default. The official FA3 Hub kernel is selectable on supported hardware and uses the existing `HF_HOME`. There is no automatic fallback. See [Async GRPO attention kernel](README.md#async-grpo-attention-kernel) for Hub access and offline startup requirements.
 - Host-specific vLLM runner/sampler compatibility selectors belong in the existing environment bootstrap, not product defaults. A standalone cuDNN Conv3d crash is a host runtime issue; disabling cuDNN in a diagnostic process does not qualify the default native path.
-- Base install excludes `flash-attn`.
-- Optional GPU install path:
-  - `uv pip install --override requirements-overrides.txt --torch-backend=cu129 --extra-index-url https://flashinfer.ai/whl/cu129 --no-build-isolation ".[gpu]"`
-  - or pinned Git install command from README.
+- Base dependencies, including FlashAttention 2 and causal-conv1d, are defined in `requirements.txt` and read dynamically by `pyproject.toml` without a separate GPU extra.
+- Install Torch and build tools before the full dependencies, then use the active Conda CUDA compiler and headers with `--no-build-isolation`. See [CUDA extension builds](README.md#cuda-extension-builds); listing Torch in the requirements alone does not guarantee build-time availability.
 
 ## Tracking Contract
 
@@ -105,4 +103,4 @@ When changing mode names, required env vars, or output path schema, update in sa
 1. All supported modes start successfully with valid config.
 2. Invalid mode fails explicitly.
 3. Output artifacts are generated for each tested mode.
-4. Optional `flash-attn` path is documented and tested in GPU environment.
+4. FlashAttention 2 and causal-conv1d match the selected Torch ABI and pass the affected GPU checks.
