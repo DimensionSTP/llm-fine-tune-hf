@@ -8,47 +8,7 @@ version = "2.10.8"
 description = "LLM/VLM fine-tuning and evaluation pipelines"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "absl-py==2.4.0",
-    "accelerate==1.15.0",
-    "albumentations==2.0.8",
-    "bitsandbytes==0.50.2",
-    "causal-conv1d==1.6.2.post1",
-    "datasets==5.1.0",
-    "deepspeed==0.19.7",
-    "faiss-cpu==1.13.2",
-    "flash-linear-attention==0.5.2",
-    "flashinfer-cubin @ https://github.com/flashinfer-ai/flashinfer/releases/download/v0.7.0.post1/flashinfer_cubin-0.7.0.post1-py3-none-any.whl#sha256=f5b5fbf6e914b358219b845ed3ee586ffc1ae3c9768c8b135115ac14afbceed3",
-    "flashinfer-jit-cache @ https://github.com/flashinfer-ai/flashinfer/releases/download/v0.7.0.post1/flashinfer_jit_cache-0.7.0.post1%2Bcu129-cp39-abi3-manylinux_2_28_x86_64.whl#sha256=314d97ea8c3d288d0afce09e9f3dc823a83d4a219c02b85097de71ee143cf0fb",
-    "huggingface-hub==1.33.0",
-    "hydra-core==1.3.2",
-    "kernels==0.17.2",
-    "liger_kernel==0.8.4",
-    "mlflow==3.17.1",
-    "nltk==3.10.3",
-    "num2words==0.5.14",
-    "numpy==2.3.5",
-    "nvidia-ml-py==13.595.45",
-    "omegaconf==2.3.0",
-    "openai==2.25.0",
-    "opencv-python-headless==4.13.0.92",
-    "packaging==26.2",
-    "pandas==3.0.1",
-    "peft==0.21.2",
-    "pillow==12.1.1",
-    "pyarrow==25.0.1",
-    "python-dotenv==1.2.2",
-    "rouge_score==0.1.2",
-    "safetensors==0.8.0",
-    "scikit-learn==1.8.0",
-    "tokenizers==0.23.3",
-    "torch==2.13.0",
-    "tqdm==4.67.3",
-    "transformers==5.19.0",
-    "trl==1.15.0",
-    "vllm @ https://github.com/vllm-project/vllm/releases/download/v0.31.0/vllm-0.31.0%2Bcu129-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=5176ab746f4e736c4a354a11d0620abf0a941de287cad937ac34039293ca6f5f",
-    "wandb==0.25.1",
-]
+dynamic = ["dependencies"]
 
 [project.optional-dependencies]
 gpu = [
@@ -60,3 +20,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
