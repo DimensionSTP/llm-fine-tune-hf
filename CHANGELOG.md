@@ -2,6 +2,11 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.11.1] - 2026-10-20
+
+- Disable Liger layer kernels by default for SFT after an observed hang involving CuTe RoPE execution followed by process fork.
+- Document explicit Liger opt-in with `training_arguments.use_liger_kernel=True` and `LIGER_KERNEL_IMPL_ROPE=triton` set before process startup, including removal of conflicting global CuTe backend overrides.
+
 ## [v2.11.0] - 2026-10-16
 
 - Update the validated CUDA 12.9 training stack to PyTorch 2.13.0, Transformers 5.19.0, TRL 1.15.0, vLLM 0.31.0+cu129, DeepSpeed 0.19.7, Liger 0.8.4, FlashInfer 0.7.0.post1, Accelerate 1.15.0, Datasets 5.1.0, and PEFT 0.21.2.
