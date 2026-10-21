@@ -2,6 +2,14 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.11.2] - 2026-10-21
+
+- Update Liger Kernel to 0.8.5 and DeepSpeed to 0.19.8, with matching dependency pins and installed-package snapshots.
+- Set the shared ZeRO-3 `stage3_param_persistence_threshold` to the official default of `1e5` elements per parameter tensor, with guidance on persistent versus partitioned parameters and memory/communication tradeoffs.
+- Document PEFT LoRA full-checkpoint resume tracing failures under ZeRO-3 and reentrant checkpointing, including representative gradient-accumulation checks where `1e5` passed and `1e6` failed with DeepSpeed 0.19.8 and PEFT 0.21.2; the dependency upgrade alone does not resolve every configuration.
+- Add persistence-tuning and full-state resume guidance covering optimizer, scheduler, RNG, run and tracking identity, new training steps, evaluation, checkpoint saving, and Hydra checkpoint-path escaping.
+- Clarify that the CuTe RoPE/fork hang is environment-dependent, recommend Triton RoPE for Liger opt-in, and retain CuTe in validated environments while keeping Liger disabled by default; Liger 0.8.5 is not established as a fix for the hang.
+
 ## [v2.11.1] - 2026-10-20
 
 - Disable Liger layer kernels by default for SFT after an observed hang involving CuTe RoPE execution followed by process fork.
