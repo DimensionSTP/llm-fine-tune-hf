@@ -58,7 +58,7 @@ dash==4.0.0
 databricks-sdk==0.117.0
 datasets==5.1.0
 decorator==5.2.1
-deepspeed==0.19.7
+deepspeed==0.19.8
 defusedxml==0.7.1
 deprecation==2.1.0
 depyf==0.20.0
