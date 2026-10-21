@@ -4,7 +4,7 @@ albumentations==2.0.8
 bitsandbytes==0.50.2
 causal-conv1d==1.7.0
 datasets==5.1.0
-deepspeed==0.19.7
+deepspeed==0.19.8
 faiss-cpu==1.13.2
 flash-attn==2.8.3.post2
 flash-linear-attention==0.5.2
