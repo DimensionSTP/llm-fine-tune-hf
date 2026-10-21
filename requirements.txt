@@ -13,7 +13,7 @@ flashinfer-jit-cache @ https://github.com/flashinfer-ai/flashinfer/releases/down
 huggingface-hub==1.33.0
 hydra-core==1.3.2
 kernels==0.17.2
-liger_kernel==0.8.4
+liger_kernel==0.8.5
 mlflow==3.17.1
 nltk==3.10.3
 num2words==0.5.14
