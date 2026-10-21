@@ -455,6 +455,8 @@ Adapter continuation is distinct from `resume_from_checkpoint`; it starts a new 
 strategy=deepspeed
 ```
 
+ZeRO-3 defaults to `deepspeed.zero_optimization.stage3_param_persistence_threshold=1e5` elements per parameter tensor. See [ZeRO-3 checkpoint resume](USAGE_GUIDE.md#zero-3-checkpoint-resume) for PEFT resume tracing errors, persistence tuning, and checkpoint verification.
+
 `async_grpo` uses `strategy=none` for the trainer/vLLM split path.
 
 * GRPO vLLM weight sync strategy

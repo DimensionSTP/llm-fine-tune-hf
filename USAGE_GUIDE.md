@@ -152,7 +152,7 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - SFT padding: `sft_padding_strategy=dynamic`; use `max_length` for fixed padding
 - Decision: `decision.padding_strategy`, `decision.candidate_markers`, `decision.answer_prefix`, `decision.option_template`, `decision.columns`, `decision.ece_num_bins`, and inference-only `decision.inference_temperature`. Two candidates use BCE on their score difference; larger sets use CE. LoRA and dynamic padding are defaults; there is no text generation, new head, or automatic probability calibration. Overlong inputs are rejected without truncation.
 - SFT Liger kernels: default `training_arguments.use_liger_kernel=False`. For the recommended Triton RoPE configuration, set `LIGER_KERNEL_IMPL_ROPE=triton` in `.env` before starting a new process and override `training_arguments.use_liger_kernel=True`. Use this configuration in environments affected by the CuTe RoPE/fork hang, and remove conflicting global CuTe overrides from `LIGER_KERNEL_IMPL` or `LIGER_KERNEL_BACKEND`. CuTe remains selectable in validated environments. Explicitly enabling `liger_kernel_config.fused_linear_cross_entropy` is unsupported.
-- Training strategy: `strategy=deepspeed`
+- Training strategy: `strategy=deepspeed`; see [ZeRO-3 checkpoint resume](#zero-3-checkpoint-resume) for persistence tuning and full-state resume checks.
 - Distributed launch: `distributed.enabled`, `distributed.num_machines`, `distributed.num_processes_per_machine`, `distributed.machine_rank`, `distributed.main_process_ip`, `distributed.main_process_port`
 - Tracking backend: `tracking=wandb`, `tracking=mlflow`, `tracking=mlflow_server`
 - PEFT/quantization: `is_quantized`, `is_peft`
@@ -164,6 +164,31 @@ Postprocessing scripts keep `run_id` as a script-local variable. The Python entr
 - Reward extraction: `reward.extraction_profile`
 - Retrieval rewards: `reward_embedding.preserved_env_keys`, `reward_embedding.isolated_env_keys`
 - Model card/upload metadata: `upload_user`, `model_type`
+
+## ZeRO-3 Checkpoint Resume
+
+The shared ZeRO-3 config in `configs/deepspeed/ds_config.yaml` sets `zero_optimization.stage3_param_persistence_threshold: 1e5`, matching the [DeepSpeed default](https://deepspeed.readthedocs.io/en/stable/zero3.html#deepspeed.runtime.zero.config.DeepSpeedZeroConfig.param_persistence_threshold). The unit is the number of elements in one parameter tensor, not bytes or the model's total parameter count. Tensors at or below the threshold can remain replicated on each rank, subject to `stage3_model_persistence_threshold`. Lower values can reduce resident parameter memory but increase gather communication and CPU/GPU transfers with parameter offload; lower peak memory or faster training is not guaranteed.
+
+PEFT LoRA + ZeRO-3 + reentrant checkpointing can raise `RuntimeError: tracing error` during full checkpoint resume. The observed trace expected a LoRA parameter but fetched a frozen base weight, rather than failing to read checkpoint files. With unmodified DeepSpeed 0.19.8 and PEFT 0.21.2, `1e6` reproduced this failure; `1e5` passed representative single-GPU and four-GPU checks with gradient accumulation 4. Upgrading DeepSpeed alone did not eliminate the failure at `1e6`. The lower threshold is a tested configuration, not a source fix or a guarantee for every model, LoRA rank, or offload setting.
+
+Change the existing YAML setting or append this override to the original training command:
+
+```shell
+deepspeed.zero_optimization.stage3_param_persistence_threshold=1e5
+```
+
+LoRA A contains `r * in_features` elements: `r=128` with 4096 input features gives 524288 elements and is no longer persistent at this threshold, whereas `r=16` gives 65536 and may remain persistent. If another configuration fails, inspect the tensor sizes and persistence flags in the trace before tuning the threshold. Do not change unrelated offload, bucket, gradient-accumulation, or checkpointing settings merely to copy a diagnostic setup. ZeRO-2 does not use this setting.
+
+Full resume restores the old optimizer and scheduler, unlike adapter continuation, which starts a new run. Apply these overrides to the original training command when restarting:
+
+```shell
+resume_training=True
+resume_from_checkpoint=/path/to/run-0001/checkpoint-2
+```
+
+1. Create a short checkpoint with the intended model, LoRA, gradient accumulation, world size, and final DeepSpeed settings. Check that model/adapter, optimizer, scheduler, trainer, and per-rank RNG states were saved.
+2. Restart in a new process with the original run settings and the resume overrides above. Keep the original checkpoint unchanged. If a path contains `=`, escape every `=` inside the value as `\=`; shell quoting alone does not escape Hydra syntax.
+3. Confirm the same artifact `run_id` and tracking identity, check the effective DeepSpeed settings in `resolved_config.yaml` and `training_args.json`, and verify new optimizer steps beyond the restored `global_step`, new evaluation if enabled, checkpoint re-saving, and normal termination. Loading weights or replaying historical loss entries alone is not a resume pass. A successful resume from an older threshold's checkpoint does not replace checking a checkpoint created with the final settings.
 
 ## Validation Checklist
 
