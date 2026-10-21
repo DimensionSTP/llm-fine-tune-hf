@@ -17,7 +17,7 @@ zero_optimization:
   overlap_comm: true
   reduce_bucket_size: 5e8
   stage3_prefetch_bucket_size: 5e8
-  stage3_param_persistence_threshold: 1e6
+  stage3_param_persistence_threshold: 1e5
   stage3_gather_16bit_weights_on_model_save: true
 gradient_clipping: ${max_grad_norm}
 prescale_gradients: false
