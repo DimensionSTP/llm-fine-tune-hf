@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Any
 import os
 from contextlib import nullcontext
+from functools import partial
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -20,18 +21,24 @@ def initialize_peft_model(
 
     mode = str(config.peft_initialization.mode)
     if mode == "fresh":
-        return _initialize_fresh_peft_model(
+        model = _initialize_fresh_peft_model(
             model=model,
             config=config,
         )
-    if mode == "continue_from_adapter":
-        return _continue_peft_model_from_adapter(
+    elif mode == "continue_from_adapter":
+        model = _continue_peft_model_from_adapter(
             model=model,
             config=config,
             pretrained_model_name=pretrained_model_name,
         )
+    else:
+        raise ValueError(f"Unsupported peft_initialization.mode: {mode}")
 
-    raise ValueError(f"Unsupported peft_initialization.mode: {mode}")
+    model.load_adapter = partial(
+        model.load_adapter,
+        autocast_adapter_dtype=config.peft_initialization.autocast_adapter_dtype,
+    )
+    return model
 
 
 def build_peft_initialization_metadata(
@@ -122,6 +129,11 @@ def validate_peft_continuation_base_resolution(
 def validate_peft_initialization_config(
     config: DictConfig,
 ) -> None:
+    if not isinstance(config.peft_initialization.autocast_adapter_dtype, bool):
+        raise ValueError(
+            "peft_initialization.autocast_adapter_dtype must be a boolean."
+        )
+
     mode = str(config.peft_initialization.mode)
     if mode not in ["fresh", "continue_from_adapter"]:
         raise ValueError(
@@ -225,6 +237,7 @@ def _initialize_fresh_peft_model(
         peft_model = get_peft_model(
             model=model,
             peft_config=peft_config,
+            autocast_adapter_dtype=config.peft_initialization.autocast_adapter_dtype,
         )
     _validate_trainable_lora_parameters(model=peft_model)
     return peft_model
@@ -265,6 +278,7 @@ def _continue_peft_model_from_adapter(
             model_id=adapter_path,
             adapter_name=str(config.peft_initialization.adapter_name),
             is_trainable=bool(config.peft_initialization.is_trainable),
+            autocast_adapter_dtype=config.peft_initialization.autocast_adapter_dtype,
         )
     _validate_trainable_lora_parameters(model=peft_model)
     return peft_model
