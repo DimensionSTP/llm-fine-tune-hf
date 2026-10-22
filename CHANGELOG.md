@@ -2,6 +2,13 @@
 
 All notable changes to this repository are documented in this file.
 
+## [v2.11.3] - 2026-10-22
+
+- Add shared `peft_initialization.autocast_adapter_dtype=false` defaults to skip PEFT's FP32 adapter promotion and preserve BF16 LoRA weights on non-quantized BF16 backbones, with explicit `true` opt-in for FP32 promotion.
+- Apply the configured policy to fresh adapter initialization and adapter continuation, and retain it for subsequent adapter loading during standard Trainer checkpoint resume and best-checkpoint loading.
+- Validate the boolean policy, preserve it in resolved configuration, and document its scope without forcing backbone, optimizer, or gradient-accumulation precision or rewriting existing adapter files.
+- Verify single-GPU training and separate-process checkpoint resume with native training and ZeRO-3 CPU offload, including BF16 adapter weights and gradients, actual weight updates, optimizer and scheduler restoration, and preserved run and tracking identity.
+
 ## [v2.11.2] - 2026-10-21
 
 - Update Liger Kernel to 0.8.5 and DeepSpeed to 0.19.8, with matching dependency pins and installed-package snapshots.
