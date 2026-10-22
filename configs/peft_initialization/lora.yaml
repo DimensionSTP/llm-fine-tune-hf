@@ -4,4 +4,5 @@ peft_initialization:
   adapter_path: null
   adapter_name: default
   is_trainable: true
+  autocast_adapter_dtype: false
   require_base_model_match: true
