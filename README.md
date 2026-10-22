@@ -436,6 +436,14 @@ PEFT training uses fresh LoRA initialization by default:
 peft_initialization.mode=fresh
 ```
 
+Shared training-model PEFT initialization defaults to `peft_initialization.autocast_adapter_dtype=false`. This skips PEFT's FP32 adapter promotion so a non-quantized BF16 backbone keeps BF16 LoRA weights. The same configured policy is passed to adapter continuation and retained for later `load_adapter()` calls, including standard Trainer checkpoint resume and best-checkpoint loading. To explicitly enable PEFT's FP32 promotion, use:
+
+```shell
+peft_initialization.autocast_adapter_dtype=true
+```
+
+This option does not force a dtype or change optimizer precision, DeepSpeed autocast, or gradient accumulation dtype. The policy is preserved in `resolved_config.yaml`; use the same policy when resuming full training state. Changing the policy does not rewrite existing adapters or establish optimizer-state compatibility across dtype changes. Inference loading and trainer-owned initialization are separate paths.
+
 To continue training an existing adapter without merging it into the base model, use:
 
 ```shell
