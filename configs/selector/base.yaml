@@ -1,0 +1,30 @@
+version: hidden_state_selection_v1
+pooling: record_end
+projection:
+  kind: ffn
+  hidden_ratio: 0.25
+  output_ratio: 0.125
+  activation: gelu
+  dropout: 0.0
+kv:
+  order_mode: learned_rank_preserve_source_order
+  selection_threshold: 0.5
+  end_threshold: 0.5
+  rank_margin: 1.0
+  loss_weights:
+    selection: 1.0
+    end: 1.0
+    rank: 1.0
+table:
+  request_mode: input_row_and_cell_candidates
+  row_request_contract: input_geometry_row_contexts_v1
+  record_request_contract: input_row_cell_candidates_v1
+  row_pooling: mean_cell_vectors
+  loss_association: post_forward_cell_nll_and_record_bce_delta
+  candidate_hard_mask: false
+  record_head_enabled: true
+  record_threshold: 0.5
+  loss_weights:
+    cell: 1.0
+    record: 1.0
+confidence_enabled: false

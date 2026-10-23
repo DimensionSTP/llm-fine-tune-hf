@@ -1,0 +1,6 @@
+_target_: src.datasets.SelectionDataset
+task: ${selection_task}
+split: ${split.train}
+data_files:
+  train: ${dataset_file_path}
+  val: ${val_dataset_file_path}

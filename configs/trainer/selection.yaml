@@ -1,0 +1,4 @@
+_target_: src.trainers.SelectionTrainer
+input_contract: ${input_contract}
+model_reference: ${model_reference}
+head_learning_rate: ${head_lr}
