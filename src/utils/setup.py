@@ -1,4 +1,6 @@
 from typing import Dict, List, Union, Optional, Protocol, Callable, Any
+import os
+from pathlib import Path
 import re
 
 from omegaconf import DictConfig, OmegaConf
@@ -27,6 +29,7 @@ from transformers import (
 from peft import PeftModel, prepare_model_for_kbit_training
 
 from ..datasets import *
+from ..models import VLMSelector
 from .distributed_runtime import build_distributed_runtime_snapshot
 from .dataloader_runtime import resolve_dataloader_runtime
 from .model_loading import ModelLoadPlanner
@@ -83,7 +86,7 @@ class SetUp:
                 "train": None,
                 "val": None,
             }
-        if self.config.fine_tune_method in {"sft", "decision"}:
+        if self.config.fine_tune_method in {"sft", "decision", "selection"}:
             return {
                 "train": self._get_train_dataset(),
                 "val": self._get_val_dataset() if self.config.use_validation else None,
@@ -198,7 +201,34 @@ class SetUp:
     def get_data_collator(
         self,
         data_encoder: Union[PreTrainedTokenizer, ProcessorMixin],
-    ) -> Optional[Callable[..., Dict[str, torch.Tensor]]]:
+    ) -> Optional[Callable[..., Dict[str, Any]]]:
+        if self.config.fine_tune_method == "selection":
+            processor_path = Path(
+                self.config.custom_data_encoder_path
+                if self.config.is_preprocessed
+                else self.config.selection_inputs.processor_path
+            )
+            return SelectionCollator(
+                processor=data_encoder,
+                lengths=ModelLengths(
+                    root=processor_path,
+                    backend=CachedTokenizer(
+                        root=processor_path,
+                        cache_size=self.config.selection_inputs.tokenizer_cache_size,
+                    ),
+                    processor=data_encoder,
+                    config=OmegaConf.to_container(
+                        self.config.selection_inputs.chat_template,
+                        resolve=True,
+                    ),
+                ),
+                model_name=self.config.selection_inputs.model_name,
+                selection_config=OmegaConf.to_container(
+                    self.config.selector,
+                    resolve=True,
+                ),
+                max_length=self.config.max_length,
+            )
         if self.config.fine_tune_method == "decision":
             tokenizer = (
                 data_encoder
@@ -340,7 +370,15 @@ class SetUp:
             ),
         }
 
-    def get_model(self) -> PreTrainedModel:
+    def get_model(
+        self,
+    ) -> Union[PreTrainedModel, VLMSelector]:
+        if self.config.fine_tune_method == "selection":
+            validate_training_arguments_config(
+                config=self.config,
+            )
+            if os.environ.get("LIGER_KERNEL_IMPL_ROPE") != "triton":
+                raise ValueError("Keep LIGER_KERNEL_IMPL_ROPE=triton for selection.")
         is_inference = self.config.mode in [
             "test",
             "test_large",
@@ -510,6 +548,20 @@ class SetUp:
                 f"[router-with-lora] Unfroze router={unfrozen_router}, lora={unfrozen_lora} / {total} parameters (tensors). "
             )
 
+        if self.config.fine_tune_method == "selection":
+            model = VLMSelector(
+                vlm=model,
+                task=self.config.selection_task,
+                config=OmegaConf.to_container(
+                    self.config.selector,
+                    resolve=True,
+                ),
+                peft_wrapped=self.config.is_peft,
+            )
+            model.selector.to(
+                device=model.get_input_embeddings().weight.device,
+                dtype=torch.float32,
+            )
         return model
 
     def get_reward_manager(self) -> RewardManager:
@@ -573,19 +625,31 @@ class SetUp:
             "dataloader_prefetch_factor": self.dataloader_runtime["prefetch_factor"],
         }
 
-    def _get_train_dataset(self) -> HFDataset:
-        train_dataset: _SFTDataset = instantiate(
+    def _get_train_dataset(
+        self,
+    ) -> Union[Dataset, HFDataset]:
+        train_dataset: Union[_SFTDataset, SelectionDataset] = instantiate(
             self.config.dataset,
             split=self.config.split.train,
         )
-        return train_dataset.to_hf_dataset()
+        return (
+            train_dataset
+            if self.config.fine_tune_method == "selection"
+            else train_dataset.to_hf_dataset()
+        )
 
-    def _get_val_dataset(self) -> HFDataset:
-        val_dataset: _SFTDataset = instantiate(
+    def _get_val_dataset(
+        self,
+    ) -> Union[Dataset, HFDataset]:
+        val_dataset: Union[_SFTDataset, SelectionDataset] = instantiate(
             self.config.dataset,
             split=self.config.split.val,
         )
-        return val_dataset.to_hf_dataset()
+        return (
+            val_dataset
+            if self.config.fine_tune_method == "selection"
+            else val_dataset.to_hf_dataset()
+        )
 
     def _get_dataset(
         self,

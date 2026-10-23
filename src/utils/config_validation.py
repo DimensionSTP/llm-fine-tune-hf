@@ -18,6 +18,10 @@ def validate_training_arguments_config(
     _validate_grpo_dataset_streaming_config(config=config)
     _validate_agentic_config(config=config)
     _validate_completion_logging_config(config=config)
+    if config.fine_tune_method == "selection":
+        _validate_selection_config(
+            config=config,
+        )
 
     if config.fine_tune_method == "async_grpo" and config.strategy == "deepspeed":
         raise ValueError(
@@ -94,6 +98,50 @@ def validate_distributed_runtime_config(
 
     for message in messages:
         print(f"[distributed][warn] {message}")
+
+
+def _validate_selection_config(
+    config: DictConfig,
+) -> None:
+    if config.selection_task not in {"kv", "table"}:
+        raise ValueError("selection_task must be kv or table.")
+    if config.modality == "text" or not config.is_peft or config.is_quantized:
+        raise ValueError("Selection requires the native non-quantized VLM and LoRA.")
+    if (
+        config.training_arguments.use_liger_kernel
+        or config.model_loading.train.use_kernels
+    ):
+        raise ValueError("Selection requires Liger and Hub kernels to remain disabled.")
+    if (
+        config.dataloader_runtime.num_workers_per_process != 0
+        or config.dataloader_runtime.persistent_workers
+        or config.dataloader_runtime.prefetch_factor is not None
+    ):
+        raise ValueError(
+            "Selection requires workers=0, persistent=false and prefetch=null."
+        )
+    if config.memory_preflight.enabled or config.vision_patch_embedding.mode == "auto":
+        raise ValueError("Selection does not enable runtime probes.")
+    if config.strategy == "fsdp" or config.training_arguments.fsdp:
+        raise ValueError("Use DDP or DeepSpeed for distributed selection.")
+    if type(config.max_length) is not int or config.max_length < 1:
+        raise ValueError(
+            "Set the validated selection max_length; truncation is forbidden."
+        )
+    if config.lr is None or config.epoch is None:
+        raise ValueError("Set the selection learning rate and epochs explicitly.")
+    if config.lr <= 0 or config.head_lr <= 0 or config.epoch <= 0:
+        raise ValueError("Selection learning rates and epochs must be positive.")
+    if config.use_validation != (config.eval_strategy != "no"):
+        raise ValueError("Selection use_validation and eval_strategy must agree.")
+    if config.dataset_file_path is None:
+        raise ValueError("Selection requires an explicit frozen dataset_file_path.")
+    if config.use_validation and (
+        config.val_dataset_file_path is None
+        or os.path.realpath(config.dataset_file_path)
+        == os.path.realpath(config.val_dataset_file_path)
+    ):
+        raise ValueError("Selection validation requires a separate frozen file.")
 
 
 def _build_distributed_validation_messages(
