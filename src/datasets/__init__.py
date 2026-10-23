@@ -1,5 +1,8 @@
 from .sft_dataset import SFTDataset
 from .decision_dataset import DecisionDataset
+from .selection_dataset import SelectionDataset
+from .selection_collator import SelectionCollator
+from .selection_lengths import CachedTokenizer, ModelLengths
 from .dpo_dataset import DPODataset
 from .kto_dataset import KTODataset
 from .gkd_dataset import GKDDataset
@@ -39,6 +42,10 @@ from .dataset_loading import (
 __all__ = [
     "SFTDataset",
     "DecisionDataset",
+    "SelectionDataset",
+    "SelectionCollator",
+    "CachedTokenizer",
+    "ModelLengths",
     "DPODataset",
     "KTODataset",
     "GKDDataset",
